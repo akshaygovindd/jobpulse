@@ -1,6 +1,8 @@
 # GitHub Actions -> AWS via OIDC. No access keys exist anywhere.
-# Trust is pinned to the `prod` environment of this repo; the GitHub `prod` environment is
-# restricted to the `main` branch by a deployment-branch rule (configured in GitHub, not here).
+# Trust is pinned to the exact OIDC subject of this repo's `prod` environment
+# (var.github_oidc_subject; see variables.tf for why it contains numeric IDs). The GitHub `prod`
+# environment is restricted to the `main` branch by a deployment-branch rule (configured in
+# GitHub, not here).
 
 locals {
   oidc_host         = "token.actions.githubusercontent.com"
@@ -34,7 +36,7 @@ data "aws_iam_policy_document" "github_trust" {
     condition {
       test     = "StringEquals"
       variable = "${local.oidc_host}:sub"
-      values   = ["repo:${var.github_repo}:environment:${var.github_environment}"]
+      values   = [var.github_oidc_subject]
     }
   }
 }

@@ -44,3 +44,7 @@ uv run jobpulse validate-employers
 Source attribution:
 - [Greenhouse Job Board API](https://developers.greenhouse.io/job-board.html)
 - [Lever Postings API](https://github.com/lever/postings-api)
+
+---
+
+Developed with AI-assisted tooling (Claude Code). Architecture, evaluation design, and technical decisions are my own.

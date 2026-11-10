@@ -115,3 +115,22 @@ P1 isn't done until those steps and the remaining done-when checks pass on the r
 **Checks run**
 - `make check`: all green.
 - The debug step's claim decoder was tested locally against a fake JWT. It printed only sub, aud and iss.
+
+---
+
+## 2026-11-10: OIDC trust policy fix
+
+**What changed**
+- Confirmed the real token `sub`: `repo:akshaygovindd@97725846/jobpulse@1451951419:environment:prod`, with `aud` `sts.amazonaws.com`. The repo uses GitHub's immutable subject format, which embeds the owner and repo IDs.
+- Terraform: the trust policy's `sub` condition now uses the new variable `github_oidc_subject` (`StringEquals`), with that exact value as the default and the reason documented in `variables.tf`.
+- ARCHITECTURE.md: the trust policy section matches the new `sub` and explains the immutable subject format.
+- Removed the temporary DEBUG step from `daily_ingest.yml`.
+- README: added the AI-assisted tooling statement.
+- From now on, commits no longer carry a Co-Authored-By trailer (owner request).
+
+**Checks run**
+- `make check`: all green.
+
+**Owner steps**
+- `terraform plan`/`apply` in `infra/terraform/main`. Expect a single in-place update to the role's trust policy.
+- Re-run Daily ingest.

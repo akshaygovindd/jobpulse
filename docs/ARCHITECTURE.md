@@ -173,7 +173,7 @@ Trust policy on the ingest role (exact):
       "Condition": {
         "StringEquals": {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-          "token.actions.githubusercontent.com:sub": "repo:akshaygovindd/jobpulse:environment:prod"
+          "token.actions.githubusercontent.com:sub": "repo:akshaygovindd@97725846/jobpulse@1451951419:environment:prod"
         }
       }
     }
@@ -183,7 +183,12 @@ Trust policy on the ingest role (exact):
 
 - **Workflow side.** The `daily_ingest` job declares `environment: prod` and `permissions: { id-token: write, contents: read }`.
 - **Environment protection.** The GitHub `prod` environment's deployment-branch rule allows only `main`. A branch or PR workflow therefore can't get a `prod` token.
-- **Subject claim.** The repo keeps GitHub's default OIDC subject template; customizing it would change the `sub` claim and break this trust policy.
+- **Subject claim.** This repo uses GitHub's **immutable subject format**, so the `sub` claim embeds the numeric owner and repo IDs: `repo:<owner>@<owner_id>/<repo>@<repo_id>:environment:<env>`.
+  - The plain form `repo:akshaygovindd/jobpulse:environment:prod` never matches. The first ingest run failed with `AssumeRoleWithWebIdentity` denied because of it.
+  - The exact value was confirmed on 2026-11-10 in two ways: from a decoded token, and from `GET /repos/akshaygovindd/jobpulse/actions/oidc/customization/sub` (`use_default: true`, `use_immutable_subject: true`).
+  - Terraform holds it in `var.github_oidc_subject`, matched with `StringEquals`.
+  - Because the IDs survive renames, a repo that is deleted and re-created under the same name can't assume the role.
+  - Changing the subject template would change `sub` and break this trust policy.
 - **Role permissions.**
   - Allowed: `s3:PutObject` and `s3:GetObject` on `raw/*`, `snapshots/*`, and `ops/*`, plus `s3:ListBucket` on the bucket.
   - Not allowed: anything else, including budgets or IAM.
