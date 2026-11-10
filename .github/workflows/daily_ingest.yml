@@ -25,6 +25,7 @@ jobs:
     timeout-minutes: 45
     env:
       JOBPULSE_BUCKET: ${{ vars.JOBPULSE_BUCKET }}
+      UV_NO_SYNC: "1" # the explicit `uv sync` step below picks the dependency groups; `uv run` must not re-sync
     steps:
       - name: Validate snapshot_date (must be today, UTC)
         env:
@@ -54,7 +55,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - run: uv sync --frozen --no-dev
+      - run: uv sync --frozen --no-default-groups
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -62,9 +63,59 @@ jobs:
           aws-region: us-east-1
           role-session-name: jobpulse-ingest-${{ github.run_id }}-${{ github.run_attempt }}
 
-      - name: Ingest (Greenhouse, Lever)
+      - name: Ingest (Greenhouse, Lever, Ashby)
         run: uv run jobpulse ingest --snapshot-date "$SNAPSHOT_DATE"
 
       - name: Freshness check
         if: ${{ !cancelled() }}
         run: uv run jobpulse check-freshness
+
+  # Bronze/silver run as a separate job so a MotherDuck problem can never fail or block ingest.
+  # S3 is the source of truth: if this job fails, the next run catches up from the pointers.
+  warehouse:
+    needs: ingest
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    environment: prod
+    timeout-minutes: 30
+    env:
+      JOBPULSE_BUCKET: ${{ vars.JOBPULSE_BUCKET }}
+      UV_NO_SYNC: "1" # the explicit `uv sync` step below picks the dependency groups; `uv run` must not re-sync
+    steps:
+      - name: Check required configuration
+        env:
+          AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+        run: |
+          [[ -n "$AWS_ROLE_ARN" ]] || { echo "::error::prod environment variable AWS_ROLE_ARN is not set"; exit 1; }
+          [[ -n "$JOBPULSE_BUCKET" ]] || { echo "::error::prod environment variable JOBPULSE_BUCKET is not set"; exit 1; }
+          [[ -n "$MOTHERDUCK_TOKEN" ]] || { echo "::error::prod environment secret MOTHERDUCK_TOKEN is not set"; exit 1; }
+
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+
+      - run: uv sync --frozen --no-default-groups --group dbt
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: jobpulse-warehouse-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Load ops JSON into MotherDuck
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+        run: uv run jobpulse load-ops
+
+      - name: Load bronze (authoritative pointers only)
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+        run: uv run jobpulse load-bronze
+
+      - name: Build silver (dbt models + tests)
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+        run: uv run jobpulse build-silver
