@@ -35,8 +35,8 @@ budget:
 
 cost_model:                   # used by the pre-call estimate, the cap check and --dry-run
   chars_per_token: 4.0
-  prompt_overhead_tokens: 600
-  expected_output_tokens: 550 # structured JSON plus reasoning tokens at effort=low
+  prompt_overhead_tokens: 250 # calibrated 2026-11-10 on 20 postings: avg input 1865 tokens
+  expected_output_tokens: 300 # calibrated: avg 271 (min 133, max 454) incl. reasoning at effort=low
   max_output_tokens: 2000     # hard limit sent to the API; also the worst case for the cap check
   cap_safety_factor: 1.25     # multiplies the worst-case estimate in the cap check (tokenizer error)
   escalation_rate: 0.12       # share of postings expected to escalate (projection only)
@@ -50,7 +50,13 @@ title_filter:
     - {name: analytics_engineer, pattern: 'analytics engineer'}
     - {name: data_scientist, pattern: 'data scien|decision scien|statistician|quantitative (analyst|researcher)'}
     - {name: data_engineer, pattern: 'data engineer|data platform|data infrastructure|data architect|dataops|data ops|\betl\b|data pipeline'}
-    - {name: ml_ai_engineer, pattern: 'machine learning|\bML\b|\bAI\b|artificial intelligence|\bLLM\b|applied scientist|research scientist|deep learning|\bNLP\b|computer vision'}
+    # ML/AI, narrowed 2026-11-10. Rule 1: explicit ML terms (kept even for "ML Software Engineer").
+    # Rule 2: "AI" counts only next to data/analytics/research, and generic engineering titles
+    # that merely mention AI are dropped. Rule-level exclude, so other families are unaffected.
+    - {name: ml_ai_engineer, pattern: 'machine learning|\bML\b|\bMLOps\b|applied scientist'}
+    - name: ml_ai_engineer
+      pattern: '\bAI\b.*\b(data|analytics|research)\b|\b(data|analytics|research)\b.*\bAI\b'
+      exclude: '\b(software|backend|back-end|frontend|front-end|full[- ]?stack|infrastructure|platform|product|program|designer|sales|solutions?)\b'
     - {name: bi, pattern: 'business intelligence|\bBI\b|insights? analyst|reporting analyst'}
     - {name: business_analyst, pattern: 'business analyst|business systems analyst|business operations analyst'}
     - {name: data_analyst, pattern: 'data analyst|analytics|product analyst|data governance|data quality'}

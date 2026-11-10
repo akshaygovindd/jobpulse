@@ -20,7 +20,7 @@ vars:
   closure_consecutive_absences: 2
   extraction_exclude: ''
   extraction_families:
-    - {name: data_engineer, pattern: 'data engineer'}
+    - {name: data_engineer, pattern: 'data engineer', exclude: ''}
 
 models:
   jobpulse:

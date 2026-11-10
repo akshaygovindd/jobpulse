@@ -16,7 +16,9 @@ with tagged as (
         content_hash,
         case
             {% for f in families %}
-            when regexp_matches(title, '{{ f.pattern }}', 'i') then '{{ f.name }}'
+            when regexp_matches(title, '{{ f.pattern }}', 'i')
+                {% if f.exclude %}and not regexp_matches(title, '{{ f.exclude }}', 'i'){% endif %}
+                then '{{ f.name }}'
             {% endfor %}
         end as title_family
     from {{ ref('dim_postings') }}

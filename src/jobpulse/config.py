@@ -159,13 +159,19 @@ class CostModelConfig(_Strict):
 
 
 class TitleFamily(_Strict):
+    """One title rule. Several rules may share a name (they map to the same family). `exclude`
+    applies to this rule only, so a generic-title exclusion cannot remove other families."""
+
     name: str = Field(pattern=r"^[a-z_]+$")
     pattern: str
+    exclude: str = ""
 
     @model_validator(mode="after")
     def _compiles(self) -> TitleFamily:
         re.compile(self.pattern)
-        if "'" in self.pattern:
+        if self.exclude:
+            re.compile(self.exclude)
+        if "'" in self.pattern or "'" in self.exclude:
             raise ValueError("title patterns may not contain a single quote")
         return self
 
@@ -180,9 +186,6 @@ class TitleFilterConfig(_Strict):
             re.compile(self.exclude)
             if "'" in self.exclude:
                 raise ValueError("title exclude may not contain a single quote")
-        names = [f.name for f in self.families]
-        if len(set(names)) != len(names):
-            raise ValueError("duplicate title family name")
         return self
 
 

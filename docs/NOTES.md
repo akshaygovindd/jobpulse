@@ -277,3 +277,28 @@ Daily ingest #5 (`gha-42738644998-1`) verified read-only on S3 and MotherDuck. A
 1. Add `OPENAI_API_KEY=...` to your local `.env` yourself (editor; do not paste it into chat or source the file). Confirm the OpenAI project has the prepaid budget and auto-recharge off.
 2. Tell me when it is set. I will run the 20-posting calibration (`jobpulse extract --limit 20 --cap 0.05`, about a cent), show real tokens and cost per posting, and re-project the backfill. Then you approve `extract --batch submit --backfill`.
 3. After the backfill: `uv run python eval/sample.py`, copy `eval/labels_template.csv` to `eval/labels.csv`, label it blind (see `eval/README.md`), then `export_predictions.py` and `score.py`.
+
+---
+
+## 2026-11-10: ML/AI family narrowed; 20-posting calibration run
+
+**Filter change (owner request).** `ml_ai_engineer` was two thirds of the candidates and included product managers, designers and "Software Engineer, AI" titles. It is now two rules in `config/extraction.yaml`: (1) `machine learning | ML | MLOps | applied scientist`; (2) "AI" only next to data/analytics/research, minus generic software/backend/frontend/full-stack/infrastructure/platform/product/program/designer/sales/solutions titles. `data scientist` stays its own family. Title rules gained an optional per-rule `exclude` (a global exclude would also have removed "Data Infrastructure Engineer"). I dropped `research scientist`, `deep learning`, `NLP`, `computer vision` and `LLM` because they were not in the list you gave; say if you want any back.
+
+**Counts (`scripts/extraction_counts.py`, silver rebuilt on MotherDuck: 8 models, 54 tests, 0 failures).** 495 of 8,296 active postings pass (6.0%), down from 776. ml_ai_engineer 231 (greenhouse 195, ashby 26, lever 10), data_scientist 94, data_analyst 77, data_engineer 67, analytics_engineer 14, business_analyst 8, bi 4.
+
+**Calibration run (paid, gpt-6-luna, sync, cap $0.05).** 20 postings, `jobpulse extract --limit 20 --cap 0.05`:
+- 20/20 valid on the first pass: 0 escalations, 0 quarantined, 0 errors.
+- Tokens: input avg 1,865 (1,303-2,547), output avg 271 (133-454), cached 0. Latency avg 3.0 s, max 5.1 s.
+- Cost $0.0064 total, **$0.00032 per posting, $0.32 per 1k postings** (from `scripts/report_extraction_cost.py`).
+- Sanity look: sponsorship 19 unspecified / 1 not_offered; 13/20 with a salary; mean confidence 0.95. Quality is not judged until the 200 labels exist.
+- Total OpenAI spend so far: about $0.006.
+
+**Cost model recalibrated** (`prompt_overhead_tokens` 600 -> 250, `expected_output_tokens` 550 -> 300). `escalation_rate` stays 0.12: 0 of 20 cannot support lowering it.
+
+**Re-projected backfill** (`jobpulse extract --dry-run --backfill`): 475 postings left (20 cached), avg 6,194 chars.
+- Batch first pass $0.078 + escalations $0.188 at the assumed 12% = **about $0.27**. Fully synchronous: $0.34.
+- Range by escalation rate: 0% -> $0.08, 5% -> $0.15, 12% -> $0.27, 25% -> $0.47. All far below the $3 limit and the $1.50 run cap.
+- Batch saves only about $0.08 versus sync, at the price of up to 24 h latency. Sync would finish in roughly 6-8 minutes. Both are cheap; your call.
+- Daily incremental at 20-50 new filtered postings: about $0.01-0.02.
+
+**Not done / waiting.** Batch not submitted (per instruction). The `extract` job in `daily_ingest.yml` is not added yet; it goes in after the backfill is verified.
