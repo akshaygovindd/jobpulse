@@ -119,3 +119,38 @@ jobs:
         env:
           MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
         run: uv run jobpulse build-silver
+
+  # LLM extraction runs last and only when the warehouse job succeeded (it reads silver). A failure
+  # here can never affect ingest or the warehouse. Postings are extracted once (content-hash cache);
+  # a daily run only pays for new or changed postings in the target role families. The spend cap
+  # comes from config/extraction.yaml (budget.run_cap_usd = $0.25); postings over the cap are queued.
+  extract:
+    needs: warehouse
+    if: ${{ !cancelled() && needs.warehouse.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment: prod
+    timeout-minutes: 30
+    env:
+      UV_NO_SYNC: "1" # the explicit `uv sync` step below picks the dependency groups; `uv run` must not re-sync
+    steps:
+      - name: Check required configuration
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+        run: |
+          [[ -n "$MOTHERDUCK_TOKEN" ]] || { echo "::error::prod environment secret MOTHERDUCK_TOKEN is not set"; exit 1; }
+
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+
+      - run: uv sync --frozen --no-default-groups
+
+      # OPENAI_API_KEY is set on this step only (the CLI fails with a clear error if it is empty).
+      # No AWS credentials are needed or configured.
+      - name: Extract (cheap model first, escalate on invalid, cap $0.25)
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: uv run jobpulse extract --cap 0.25
