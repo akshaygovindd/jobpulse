@@ -325,3 +325,18 @@ Daily ingest #5 (`gha-42738644998-1`) verified read-only on S3 and MotherDuck. A
 **Open for the owner**
 - Run **Daily ingest** by dispatch once to see the `extract` job green on GitHub (needs `OPENAI_API_KEY` in the `prod` environment, which you said is set).
 - P3 done-when boxes still open: `score.py` on your 200 labels (needs your labeling).
+
+---
+
+## 2026-11-10: Sponsorship sample, prefix-balanced label order
+
+**Main sample unchanged, order changed.** The same 200 postings (verified: identical `posting_key` set, all label cells empty). The old order was a seeded random shuffle, which was not tight (first 50 rows: 0 analytics_engineer vs 1.5 expected, ml_ai 27 vs 23.2). `eval/sample.py` now uses a seeded **prefix-balanced** order and `sample.py --reorder` re-applied it to the existing sheet (refused if any label exists). After reorder, the first 50 rows are within about 1.5 of the proportional count for every family, and the first 100 within 1.5 (e.g. ml_ai 45 vs 46.5, data_analyst 15 vs 15.5). You can score after 100 rows.
+
+**Targeted sponsorship sample.** `eval/sponsorship_sample.py` -> `eval/sponsorship_labels_template.csv` (blind: id, title, company, description text, one empty column `sponsorship_statement`) and `eval/sponsorship_manifest.json`. Selection is by posting text only (`sponsor|visa|work authori[sz]ation|h-?1b`, in `config/extraction.yaml`), never by model output.
+- **Only 23 of the 495 candidates match** (sponsor 20, visa 10, work authorization 9, H-1B 0). 10 of them are already in the main 200 and are excluded to avoid double labeling, so the sample has **13 rows, not the 60 requested**. Between the main sheet and these 13, every in-scope posting that mentions the terms is labeled exactly once.
+- In the targeted sheet a blank cell means "not labeled yet": write `offered`, `not_offered` or `unspecified` explicitly.
+- Reaching 60 would require extracting postings outside the approved role-family title filter (more LLM spend and a scope change). Not done; needs the owner's call.
+
+**Scoring.** `score.py` includes the targeted labels only in `sponsorship_report.md`: a random-sample section, a targeted-sample section and a pooled view, with a note that the targeted sample is enriched and says nothing about prevalence. It never enters the per-field report. It rejects invalid values (anything other than the three labels) and any posting that is also in the main labels. `export_predictions.py` writes `eval/sponsorship_predictions.csv` (gitignored) next to `predictions.csv`. I did not run it for real, so no predictions file exists yet.
+
+**Checks.** `make check`: ruff, format, mypy strict (36 files), pytest **131 passed**, terraform fmt + validate both roots; gitleaks not installed locally. New tests (6): balanced-order proportionality and determinism; sponsorship sheet is blind, has one label column, is disjoint from main and leaves the main sample untouched; reorder keeps the postings, follows in the manifest, and refuses after labeling; sponsorship predictions go to a separate file; targeted rows feed only the sponsorship report; invalid values and overlap are rejected.

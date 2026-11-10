@@ -1,0 +1,63 @@
+{
+ "seed": 20261110,
+ "pattern": "sponsor|visa|work authori[sz]ation|h-?1b",
+ "requested": 60,
+ "size": 13,
+ "created_at": "2026-11-10T02:54:00.325528+00:00",
+ "matching_candidates": 23,
+ "already_in_main_sample": 10,
+ "items": [
+  {
+   "posting_key": "641698d140321a3ce9ca9c7b635d75dab1d149561d3117f9a7eb26a40038fc40",
+   "content_hash": "67bf7b6a059ae8967ad5de822573647574623060679e94879ba8f78186df79fe"
+  },
+  {
+   "posting_key": "e2564d3be12c8cbb9ebeb81615b0628d6a9f32bcd87eeca68fb902cb1652df18",
+   "content_hash": "29d8551e748315601738477fc3863ef200326efc39448ce0bee795db16f44039"
+  },
+  {
+   "posting_key": "122a533f0133d5b5531cf98547ac7ab2e7ef4b6b0c6a497f4fe343dca578bd26",
+   "content_hash": "1b9d8e187544465430351b9224cf7a5bb6ecec6759f45116cf36018e4690085a"
+  },
+  {
+   "posting_key": "de0afba41daf65edf8a2593f1469b435a6a60e75465ccb72744a6bfa45dcdf05",
+   "content_hash": "161f2b19278e3d2f6508a6ca157baa416daf62b746dd79d232fcff0f66b6ace6"
+  },
+  {
+   "posting_key": "84bd81210435ed0114ca242805774b205c5e952f5b85e5e83826ad0315bf9e45",
+   "content_hash": "d1598c9a3afbcaba2b76d6d66f8b6a4f376cf5b678de33479ea7af620994f8cd"
+  },
+  {
+   "posting_key": "72658414edce62f7c15eea8acdaf312f0d6be5b6cf44c24c17c12b8a09ade31b",
+   "content_hash": "7ed88aa0c94e6f4e9651b3f9cf22d6c3bc0b9df4e7e2697886d87f11da8f8a51"
+  },
+  {
+   "posting_key": "ea26bd4a84b2f00d8c3c346fb5df56f5bce5f4ab4fd8807d284135fd67498a7c",
+   "content_hash": "f65556b03f2f1652fa941045d73c5c538eeba7d7e552c678d72744ebc71fdf07"
+  },
+  {
+   "posting_key": "0c7d779997b0cf5d3a50b2c885eaaaef3a343c2b05623b34ab272d11732831bc",
+   "content_hash": "2de9e5dcb6a733184584e42d54dbc1fd155a2e4a6ff20d786aba21ea41bd717a"
+  },
+  {
+   "posting_key": "f186769b74197eb7f95e5807f20a29a1a7b524681fdf25ad95147bafd367280a",
+   "content_hash": "ff9083a7e0d069f40be760bfb576afa3fe656f423f9084ca921644e30b717258"
+  },
+  {
+   "posting_key": "795e3289fceb1d295f64a141a77175e8d6768fc341edbcecb8ea0d4bbf2d2917",
+   "content_hash": "1a4030220143e175ca5e169ae8f4526a7cda0060893b20083ff621275c7efa82"
+  },
+  {
+   "posting_key": "05bd1ba10cc712b4851c1abdc21903a75f5fbc231584b684d540e0bf3cd89455",
+   "content_hash": "7305acfaf160e987a629ce242551fa0757b0db9fbda53449073c4b1385c6191d"
+  },
+  {
+   "posting_key": "bacbf5f8525033d49c6ae436eb68ee3a8b8dad1ce31636dee926a82276623fe5",
+   "content_hash": "c3ff5098788eb80dbc769dab25de93298481fb1bff1e656d4e8601c9decaa502"
+  },
+  {
+   "posting_key": "2170dc383a8fddea96970d9e9901930c63dfa66bda2ab0283cdee7151f2bfec5",
+   "content_hash": "a7a8797d00b6091b400e475ed4ebb31f014a71e50b79c555dc20e3eda2407db1"
+  }
+ ]
+}

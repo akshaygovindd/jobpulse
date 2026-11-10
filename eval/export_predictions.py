@@ -13,7 +13,14 @@ import json
 import sys
 from pathlib import Path
 
-from common import MANIFEST_PATH, PREDICTION_COLUMNS, PREDICTIONS_PATH
+from common import (
+    MANIFEST_PATH,
+    PREDICTION_COLUMNS,
+    PREDICTIONS_PATH,
+    SPONSOR_MANIFEST_PATH,
+    SPONSOR_PREDICTION_COLUMNS,
+    SPONSOR_PREDICTIONS_PATH,
+)
 
 from jobpulse.config import load_extraction, load_pipeline
 from jobpulse.extract.schema import prompt_version
@@ -68,6 +75,36 @@ def main() -> int:
         w.writerow(PREDICTION_COLUMNS)
         w.writerows(out_rows)
     print(f"wrote {args.out}: {counts}")
+
+    if SPONSOR_MANIFEST_PATH.exists():  # targeted sponsorship sample: separate predictions file
+        sm = json.loads(SPONSOR_MANIFEST_PATH.read_text(encoding="utf-8"))
+        sp_rows: list[list[object]] = []
+        sp_counts = {"extracted": 0, "quarantined": 0, "missing": 0}
+        for item in sm["items"]:
+            h = item["content_hash"]
+            e = con.execute(
+                f"""SELECT model, sponsorship_statement, sponsorship_original_text
+                    FROM "{s}"."extractions"
+                    WHERE content_hash = ? AND schema_version = ? AND prompt_version = ?""",
+                [h, *params],
+            ).fetchone()
+            if e is not None:
+                sp_counts["extracted"] += 1
+                sp_rows.append([item["posting_key"], h, "extracted", *e])
+                continue
+            q = con.execute(
+                f'SELECT 1 FROM "{s}"."quarantine" WHERE content_hash = ? '
+                "AND schema_version = ? AND prompt_version = ?",
+                [h, *params],
+            ).fetchone()
+            status = "quarantined" if q else "missing"
+            sp_counts[status] += 1
+            sp_rows.append([item["posting_key"], h, status, "", "", ""])
+        with SPONSOR_PREDICTIONS_PATH.open("w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            w.writerow(SPONSOR_PREDICTION_COLUMNS)
+            w.writerows(sp_rows)
+        print(f"wrote {SPONSOR_PREDICTIONS_PATH}: {sp_counts}")
     return 0
 
 

@@ -64,3 +64,11 @@ title_filter:
 sample:
   size: 200
   seed: 20261109
+
+# Second, targeted sample used ONLY in the sponsorship report. Selection is by posting text alone
+# (never by model output). Postings already in the main sample are excluded so nothing is labeled
+# twice. If fewer than `size` candidates match, all remaining matches are taken.
+sponsorship_sample:
+  size: 60
+  seed: 20261110
+  pattern: 'sponsor|visa|work authori[sz]ation|h-?1b'

@@ -43,3 +43,20 @@ PREDICTION_COLUMNS = [
     "sponsorship_original_text",
     "skills",
 ]
+
+# Targeted sponsorship sample (separate files; used only by the sponsorship report).
+SPONSOR_TEMPLATE_PATH = EVAL_DIR / "sponsorship_labels_template.csv"
+SPONSOR_LABELS_PATH = EVAL_DIR / "sponsorship_labels.csv"
+SPONSOR_MANIFEST_PATH = EVAL_DIR / "sponsorship_manifest.json"
+SPONSOR_PREDICTIONS_PATH = EVAL_DIR / "sponsorship_predictions.csv"
+# Here a blank cell means "not labeled yet"; write offered, not_offered or unspecified explicitly.
+SPONSOR_LABEL_COLUMNS = ["sponsorship_statement"]
+SPONSOR_VALUES = ("offered", "not_offered", "unspecified")
+SPONSOR_PREDICTION_COLUMNS = [
+    "posting_key",
+    "content_hash",
+    "status",
+    "model",
+    "sponsorship_statement",
+    "sponsorship_original_text",
+]

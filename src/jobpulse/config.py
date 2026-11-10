@@ -194,6 +194,17 @@ class SampleConfig(_Strict):
     seed: int
 
 
+class SponsorshipSampleConfig(_Strict):
+    size: int = Field(ge=1)
+    seed: int
+    pattern: str
+
+    @model_validator(mode="after")
+    def _compiles(self) -> SponsorshipSampleConfig:
+        re.compile(self.pattern)
+        return self
+
+
 class ExtractionConfig(_Strict):
     provider: Literal["openai"]
     api_key_env_var: str
@@ -210,6 +221,7 @@ class ExtractionConfig(_Strict):
     cost_model: CostModelConfig
     title_filter: TitleFilterConfig
     sample: SampleConfig
+    sponsorship_sample: SponsorshipSampleConfig
 
 
 def load_extraction(path: Path | None = None) -> ExtractionConfig:

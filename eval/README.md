@@ -2,7 +2,9 @@
 
 1. `uv run python eval/sample.py` draws 200 postings (stratified, seeded) from the title-filtered
    set and writes `labels_template.csv` and `sample_manifest.json`. It refuses to redraw without
-   `--force`.
+   `--force`. Rows are in a seeded, prefix-balanced order: any first N rows hold every stratum in
+   about its full-sample share, so scoring after 100 rows is still representative.
+   `sample.py --reorder` re-applies the order without redrawing (refused once labels exist).
 2. Copy `labels_template.csv` to `labels.csv` and label it **blind**: the sheet contains only the
    posting id, title, company and description text. Do not open `predictions.csv` meanwhile.
 3. Label columns (leave a cell empty when the posting does not say):
@@ -20,3 +22,14 @@
    (separate file, gitignored).
 5. `uv run python eval/score.py` joins labels and predictions by `posting_key` and writes
    `reports/extraction_report.md` and `reports/sponsorship_report.md`.
+
+## Targeted sponsorship sample (separate file)
+
+Only about 2.6% of postings state a sponsorship position, so the random 200 holds few positives.
+`uv run python eval/sponsorship_sample.py` adds a second blind sheet,
+`sponsorship_labels_template.csv`, with the in-scope postings whose text mentions sponsor, visa,
+work authorization or H-1B (pattern in `config/extraction.yaml`), excluding anything already in
+the main 200. It has ONE label column, `sponsorship_statement`. Here a blank cell means "not
+labeled yet", so write `offered`, `not_offered` or `unspecified` explicitly. Copy it to
+`sponsorship_labels.csv`. `score.py` uses it only in the sponsorship report (random-sample
+section, targeted-sample section, pooled view) and never in the per-field report.

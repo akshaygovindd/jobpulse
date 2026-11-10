@@ -239,3 +239,4 @@ dbt/dbt_packages/
 
 # Benchmark predictions (kept apart from the blind labeling sheet)
 eval/predictions.csv
+eval/sponsorship_predictions.csv
