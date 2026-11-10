@@ -54,8 +54,10 @@ def test_ops_json_written(s3_storage: S3Storage, clock: TickingClock) -> None:
     assert registry["greenhouse"]["last_success_at"] is not None
     assert registry["greenhouse"]["last_failure_at"] is not None
     assert registry["lever"]["last_failure_at"] is None
-    assert registry["ashby"]["enabled"] is False
-    assert registry["adzuna"]["attribution_url"] == "https://www.adzuna.com"
+    assert registry["ashby"]["enabled"] is True
+    assert registry["ashby"]["last_success_at"] is None  # no ashby company in this run
+    assert registry["ashby"]["attribution_url"].startswith("https://developers.ashbyhq.com")
+    assert "adzuna" not in registry  # deferred
 
 
 def test_registry_carries_forward_previous_state(

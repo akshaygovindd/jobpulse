@@ -32,7 +32,8 @@ def test_pipeline_and_sources_load() -> None:
     sources = load_sources().by_id()
     assert sources["greenhouse"].enabled
     assert sources["lever"].enabled
-    assert not sources["adzuna"].supports_closure
+    assert sources["ashby"].enabled
+    assert "adzuna" not in sources  # deferred: see docs/ROADMAP.md "Later"
 
 
 @pytest.mark.parametrize("bad", ["2026-11-09", "2026-11-11", "not-a-date"])

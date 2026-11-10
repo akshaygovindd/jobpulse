@@ -50,19 +50,16 @@
 
 - [ ] **Tracked separately (still open; does not block P2).** The scheduled run succeeds on 2 consecutive days. Record the dates in NOTES.md when this happens.
 
-## P2: Ashby, Adzuna, bronze/silver, dedup, observation tracking
+## P2: Ashby, bronze/silver, dedup, observation tracking
+
+> Adzuna was moved to [Later](#later-deferred) on 2026-11-09 because it now requires a paid plan.
 
 **Build**
-- Ashby connector.
-- Adzuna connector:
-  - API credentials
-  - pagination
-  - daily quota budget from config, with a clean stop when it's reached
-  - attribution
-  - snapshot unit = search slice
+- Ashby connector, with the 5 `phase2_ashby` employers moved into `employers`.
 - MotherDuck, plus `load_ops.py` to load the S3 ops JSON.
 - Bronze loader that reads authoritative pointers only.
-- dbt project with silver models: identity, observations, versions, closure, and the cross-source `probable_duplicate_of` flag.
+- dbt project with silver models: identity, observations, versions, closure, and the cross-source `probable_duplicate_of` flag. The column stays even though only ATS sources with distinct employers are live; it matters once more sources are added.
+- `daily_ingest.yml` runs ops load, bronze load and silver build after ingest.
 
 **Done when**
 - [ ] dbt tests pass:
@@ -73,7 +70,6 @@
   - (a) absent from 1 authoritative snapshot → still active
   - (b) absent from 2 consecutive authoritative snapshots → closed
   - (c) a date with no pointer between them → not closed
-  - (d) absent from Adzuna → never closed
   - (e) content change → new version row, same posting_key
   - (f) pointer replaced on the same day → bronze and silver row counts unchanged
 - [ ] Running the full pipeline twice for the same date leaves row counts unchanged.
@@ -151,6 +147,18 @@
 - [ ] The benchmark script reports accuracy and refusal correctness.
 - [ ] Red-team prompts are refused: DDL/DML, tables not on the allow-list, PII.
 
+## Later (deferred)
+
+### Adzuna (deferred 2026-11-09: now requires a paid plan)
+Design notes kept for when it is revisited. Adzuna is used for market breadth only, never for closure.
+- API credentials as GitHub `prod` environment secrets.
+- Pagination.
+- Daily quota budget from config, with a clean stop when it is reached.
+- Attribution.
+- Snapshot unit = search slice, so the logical snapshot is (source, search slice, `snapshot_date`).
+- `supports_closure: false` in `config/sources.yaml`.
+- Fixture test to add with it: (d) absent from Adzuna → never closed.
+
 ---
 
 ## Risks and mitigations
@@ -162,8 +170,8 @@
 | Duplicate or competing attempts on the same day | Attempts are append-only. Each (source, company, date) has a single authoritative pointer, guarded by a concurrency group and a `completed_at` check. Covered by tests (i)–(iii) and (f). |
 | Board id changes or employer switches ATS vendor | Validation script; per-company isolation; reason codes in the run report |
 | API schema drift | Raw payloads are always preserved. Drop reasons are counted. Each connector has fixture tests. |
-| False closures | A posting closes only after 2 consecutive authoritative snapshots without it. Dates without a pointer are skipped. Adzuna is excluded. Covered by tests (a)–(d). |
-| Adzuna quota or terms | Quota budget from config, clean stop, attribution. Used for market breadth only. |
+| False closures | A posting closes only after 2 consecutive authoritative snapshots without it. A date without a pointer breaks the streak and is never counted as an absence. Covered by tests (a)–(c). Adzuna, when added later, is excluded from closure. |
+| Adzuna quota, terms or cost (deferred) | Now requires a paid plan, so it is deferred. When revisited: quota budget from config, clean stop, attribution, market breadth only. |
 | LLM cost overrun or hallucinated fields | Per-run spend cap; content-hash cache; cheap model first; original text preserved; confidence field; quarantine; precision/recall eval |
 | AWS cost surprise | $10/month Budgets alert (an alert, not a cap). Small footprint. No Standard-IA transitions. |
 | Sponsorship misread as a promise | Evidence classes; disclaimer on every visa view; sponsorship excluded from match score; LCA match confidence shown |

@@ -64,8 +64,9 @@ Every metric is produced by a script in `scripts/` or `eval/`. No number is type
 
 | | Scope |
 |---|---|
-| **MVP (P1–P5)** | Greenhouse, Lever, Ashby, Adzuna ingestion; silver identity and observation tracking; LLM extraction with eval; dbt gold and snapshots; visa enrichment. **Five MVP pages:** Market Overview, Hiring Trends, Salary, Visa Intelligence, Pipeline Health. |
+| **MVP (P1–P5)** | Greenhouse, Lever, Ashby ingestion; silver identity and observation tracking; LLM extraction with eval; dbt gold and snapshots; visa enrichment. **Five MVP pages:** Market Overview, Hiring Trends, Salary, Visa Intelligence, Pipeline Health. |
 | **P6** | **Resume Match** page; deploy to Streamlit Community Cloud |
+| **Later** | Adzuna (deferred 2026-11-09: now requires a paid plan; design notes in ROADMAP) |
 | **Later (P7)** | USAJobs (federal flag), Remotive (required attribution), Neon Postgres + pgvector RAG, guarded text-to-SQL, 50-question agent benchmark with refusals |
 
 Phase details and "done when" checks are in [ROADMAP.md](ROADMAP.md).

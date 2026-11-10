@@ -10,11 +10,12 @@ flowchart LR
     GH[Greenhouse]
     LV[Lever]
     AS[Ashby]
-    AZ[Adzuna]
+    AZ[Adzuna - later]:::later
   end
   CFG[config/employers.yaml] --> RUN
   GHA["GitHub Actions cron<br/>env prod → OIDC role"] --> RUN
   AF["Airflow (local demo)"] -.same CLI tasks.-> RUN
+  classDef later stroke-dasharray: 4 4
   Sources --> RUN["Ingest runner<br/>retry/backoff, per-company isolation"]
   RUN --> RAW[("S3 raw/<br/>append-only attempts<br/>pages + _MANIFEST")]
   RAW --> PTR[("S3 snapshots/<br/>authoritative pointer<br/>per source/company/date")]
@@ -37,7 +38,7 @@ jobpulse/
 │                      sources.yaml  pipeline.yaml  extraction.yaml
 ├── src/jobpulse/
 │   ├── config.py  logging.py  http.py  cli.py
-│   ├── connectors/    base.py  greenhouse.py  lever.py  ashby.py  adzuna.py
+│   ├── connectors/    base.py  greenhouse.py  lever.py  ashby.py  (adzuna.py: later)
 │   ├── ingest/        runner.py  manifest.py  pointer.py  s3_writer.py  report.py
 │   ├── ops/           s3_ops.py (P1: JSON to S3)  load_ops.py (P2: → MotherDuck)
 │   ├── bronze/        loader.py
@@ -64,7 +65,7 @@ The design keeps the *logical* daily snapshot separate from the *execution* that
 |---|---|
 | `snapshot_date` | Logical UTC date. Taken from the `workflow_dispatch` input, or the scheduled run's date by default. |
 | `attempt_id` | `gha-<run_id>-<run_attempt>` in Actions, `local-<ulid>` elsewhere. A "Re-run job" on the same workflow run increments `run_attempt`, so every execution has a distinct id. |
-| Logical snapshot | (source, company, `snapshot_date`). For Adzuna, (source, search slice, `snapshot_date`). |
+| Logical snapshot | (source, company, `snapshot_date`). For Adzuna (deferred), (source, search slice, `snapshot_date`). |
 | Authoritative pointer | Exactly one per logical snapshot; it names the attempt whose data downstream uses. |
 
 Rules:
@@ -76,7 +77,7 @@ Rules:
 5. **No overlap.** `daily_ingest.yml` uses `concurrency: {group: daily-ingest, cancel-in-progress: false}`.
 6. **Live runs record today only.** `snapshot_date` must equal the current UTC date. This is enforced in three places: the workflow input check, the CLI (`resolve_snapshot_date`), and the runner. Past and future dates are rejected, so a fetch is never assigned to a missed day.
 7. **Downstream reads pointers only.** Bronze is keyed on (source_id, board_id, snapshot_date, external_posting_id). When a pointer changes, the loader replaces that company-day's rows in one transaction, so row counts don't change.
-8. **Closure.** A posting is closed only when it is absent from 2 consecutive authoritative snapshot dates for that company, or the source reports an authoritative closed status. A date with no pointer is skipped; it never counts as an absence. Adzuna is never used for closure.
+8. **Closure.** A posting is closed only when it is absent from 2 consecutive authoritative snapshot dates for that company, or the source reports an authoritative closed status. The two absences must fall on calendar-adjacent dates that both have pointers. A date with no pointer never counts as an absence and breaks the streak. Adzuna (deferred) is never used for closure.
 
 ## S3 layout
 
@@ -208,7 +209,7 @@ Trust policy on the ingest role (exact):
 | Scheduler | GitHub Actions `daily_ingest.yml` (cron `17 9 * * *` + `workflow_dispatch` with `snapshot_date` input) | Airflow in Docker Compose (`airflow/`) |
 | AWS auth | OIDC, `prod` environment, `main` only | Owner's local AWS profile against a dev S3 prefix |
 | Warehouse | MotherDuck (from P2) | Dev MotherDuck DB or local DuckDB file |
-| Secrets | GitHub `prod` environment secrets (MotherDuck from P2, Adzuna, LLM) | `.env` (gitignored), template in `.env.example` |
+| Secrets | GitHub `prod` environment secrets (MotherDuck from P2, LLM; Adzuna if revived) | `.env` (gitignored), template in `.env.example` |
 | Status | **The real daily pipeline.** | Runs the same CLI tasks (`jobpulse ingest`, `load-bronze`, `dbt`, `extract`) to show orchestration; it is **not** the production scheduler. |
 
 Terraform: `infra/terraform/bootstrap` creates the state bucket (local state, S3 native lockfile for the main root). `infra/terraform/main` holds the data bucket, OIDC provider, role, and budget. The owner runs `plan` and `apply` locally.

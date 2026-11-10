@@ -14,13 +14,8 @@ sources:
     attribution_url: "https://github.com/lever/postings-api"
   - source_id: ashby
     source_name: Ashby Job Postings API
-    enabled: false
+    enabled: true
     phase: 2
     supports_closure: true
     attribution_url: "https://developers.ashbyhq.com/docs/public-job-posting-api"
-  - source_id: adzuna
-    source_name: Adzuna API
-    enabled: false
-    phase: 2
-    supports_closure: false   # aggregator: never used for closure
-    attribution_url: "https://www.adzuna.com"
+# Adzuna is deferred (requires a paid plan); design notes live in docs/ROADMAP.md under "Later".
