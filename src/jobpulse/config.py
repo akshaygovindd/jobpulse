@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_DIR = REPO_ROOT / "config"
 
-Phase1Source = Literal["greenhouse", "lever"]
+EmployerSource = Literal["greenhouse", "lever", "ashby"]
 
 
 class _Strict(BaseModel):
@@ -21,15 +21,7 @@ class _Strict(BaseModel):
 
 class Employer(_Strict):
     company: str
-    source: Phase1Source
-    board_id: str = Field(pattern=r"^[A-Za-z0-9_.-]+$")
-    validated_at: datetime
-    open_job_count: int = Field(ge=0)
-
-
-class AshbyEmployer(_Strict):
-    company: str
-    source: Literal["ashby"]
+    source: EmployerSource
     board_id: str = Field(pattern=r"^[A-Za-z0-9_.-]+$")
     validated_at: datetime
     open_job_count: int = Field(ge=0)
@@ -43,7 +35,6 @@ class SkippedEmployer(_Strict):
 class EmployersFile(_Strict):
     version: int
     employers: list[Employer]
-    phase2_ashby: list[AshbyEmployer] = []
     skipped: list[SkippedEmployer] = []
 
     @model_validator(mode="after")
@@ -87,6 +78,8 @@ class IngestConfig(_Strict):
     lever_page_size: int = Field(ge=1, le=1000)
     max_pages: int = Field(ge=1)
     greenhouse_include_content: bool
+    ashby_include_compensation: bool
+    ashby_allow_empty: bool  # False: an empty Ashby board is reported as truncated
     min_success_ratio: float = Field(ge=0, le=1)
 
 

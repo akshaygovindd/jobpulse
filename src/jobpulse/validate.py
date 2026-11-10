@@ -61,18 +61,12 @@ def dump_employers_yaml(f: EmployersFile) -> str:
         "# Refresh validated_at / open_job_count with: uv run jobpulse validate-employers --write",
         f"version: {f.version}",
         "",
-        "employers:  # Phase 1 sources (Greenhouse, Lever)",
+        "employers:  # Greenhouse, Lever, Ashby",
     ]
     out += [
         f"  - {{company: {_q(e.company)}, source: {e.source}, board_id: {e.board_id}, "
         f'validated_at: "{_ts(e.validated_at)}", open_job_count: {e.open_job_count}}}'
         for e in f.employers
-    ]
-    out += ["", "phase2_ashby:  # found on Ashby; ingested from P2"]
-    out += [
-        f"  - {{company: {_q(e.company)}, source: ashby, board_id: {e.board_id}, "
-        f'validated_at: "{_ts(e.validated_at)}", open_job_count: {e.open_job_count}}}'
-        for e in f.phase2_ashby
     ]
     out += ["", "skipped:  # no public Greenhouse/Lever/Ashby board found"]
     out += [f"  - {{company: {_q(s.company)}, reason: {_q(s.reason)}}}" for s in f.skipped]

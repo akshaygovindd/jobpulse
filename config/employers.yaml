@@ -2,7 +2,7 @@
 # open_job_count / validated_at are a point-in-time snapshot; re-run scripts/validate_employers.py (P1) to refresh.
 version: 1
 
-employers:  # Phase 1 sources (Greenhouse, Lever)
+employers:  # Greenhouse, Lever, Ashby
   - {company: "HubSpot", source: greenhouse, board_id: hubspotjobs, validated_at: "2026-11-10T00:18:07Z", open_job_count: 127}
   - {company: "Toast", source: greenhouse, board_id: toast, validated_at: "2026-11-10T00:18:07Z", open_job_count: 335}
   - {company: "Klaviyo", source: greenhouse, board_id: klaviyo, validated_at: "2026-11-10T00:18:07Z", open_job_count: 150}
@@ -41,8 +41,6 @@ employers:  # Phase 1 sources (Greenhouse, Lever)
   - {company: "Wealthfront", source: lever, board_id: wealthfront, validated_at: "2026-11-10T00:18:12Z", open_job_count: 23}
   - {company: "Spotify", source: lever, board_id: spotify, validated_at: "2026-11-10T00:18:13Z", open_job_count: 85}
   - {company: "Palantir", source: lever, board_id: palantir, validated_at: "2026-11-10T00:18:15Z", open_job_count: 304}
-
-phase2_ashby:  # found on Ashby; ingested from P2
   - {company: "Whoop", source: ashby, board_id: whoop, validated_at: "2026-11-10T00:18:15Z", open_job_count: 120}
   - {company: "Snowflake", source: ashby, board_id: snowflake, validated_at: "2026-11-10T00:18:15Z", open_job_count: 368}
   - {company: "Plaid", source: ashby, board_id: plaid, validated_at: "2026-11-10T00:18:15Z", open_job_count: 141}

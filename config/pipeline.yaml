@@ -12,6 +12,8 @@ ingest:
   lever_page_size: 100            # Lever postings per page (skip/limit pagination)
   max_pages: 50                   # guard: more pages than this => snapshot is truncated
   greenhouse_include_content: true
+  ashby_include_compensation: true
+  ashby_allow_empty: false        # an empty Ashby board is "truncated", never a complete empty snapshot
   min_success_ratio: 0.5          # below this share of complete snapshots the job exits non-zero (alerting)
 
 freshness:

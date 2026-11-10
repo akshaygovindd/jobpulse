@@ -13,10 +13,10 @@ from tests.conftest import TickingClock
 
 def test_employers_yaml_counts() -> None:
     f = load_employers()
-    assert len(f.employers) == 38
+    assert len(f.employers) == 43
     assert sum(e.source == "greenhouse" for e in f.employers) == 35
     assert sum(e.source == "lever" for e in f.employers) == 3
-    assert len(f.phase2_ashby) == 5
+    assert sum(e.source == "ashby" for e in f.employers) == 5
     assert len(f.skipped) == 7
 
 
@@ -56,7 +56,11 @@ def test_cli_ingest_today_local_end_to_end(
     monkeypatch.setattr(
         cli,
         "build_connectors",
-        lambda http, cfg: {"greenhouse": FakeConnector(), "lever": FakeConnector("lever")},
+        lambda http, cfg: {
+            "greenhouse": FakeConnector(),
+            "lever": FakeConnector("lever"),
+            "ashby": FakeConnector("ashby"),
+        },
     )
     monkeypatch.delenv("GITHUB_RUN_ID", raising=False)
     summary = tmp_path / "summary.md"
@@ -68,9 +72,9 @@ def test_cli_ingest_today_local_end_to_end(
     )
     assert code == cli.EXIT_OK
     pointers = list((data / "snapshots").rglob("_AUTHORITATIVE.json"))
-    assert len(pointers) == 38
+    assert len(pointers) == 43
     assert (data / "ops" / "source_registry" / "latest.json").is_file()
-    assert "Complete snapshots: **38/38**" in summary.read_text()
+    assert "Complete snapshots: **43/43**" in summary.read_text()
 
     code = cli.main(["check-freshness", "--local-dir", str(data)], clock=clock)
     assert code == cli.EXIT_OK
@@ -87,6 +91,7 @@ def test_cli_ingest_low_success_ratio_exits_alert(
         lambda http, cfg: {
             "greenhouse": FakeConnector(fail_after=0),
             "lever": FakeConnector("lever", fail_after=0),
+            "ashby": FakeConnector("ashby", fail_after=0),
         },
     )
     clock = TickingClock(datetime(2026, 11, 10, 9, 0, tzinfo=UTC))

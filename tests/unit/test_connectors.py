@@ -6,6 +6,7 @@ from typing import Any
 import httpx
 import pytest
 
+from jobpulse.connectors.ashby import AshbyConnector
 from jobpulse.connectors.greenhouse import GreenhouseConnector
 from jobpulse.connectors.lever import LeverConnector
 from jobpulse.http import FetchError, HttpClient, ReasonCode
@@ -116,3 +117,67 @@ def test_lever_unknown_board(make_http: MakeHttp) -> None:
     with pytest.raises(FetchError) as e:
         list(LeverConnector(http).fetch_company("nope"))
     assert e.value.reason is ReasonCode.BOARD_NOT_FOUND
+
+
+# --- Ashby -------------------------------------------------------------------------------
+
+
+def test_ashby_complete(make_http: MakeHttp) -> None:
+    fixture = load_fixture("ashby_jobs.json")
+    http, _ = make_http(json_handler(fixture))
+    pages = list(AshbyConnector(http).fetch_company("ramp"))
+    assert len(pages) == 1
+    assert pages[0].payload == fixture
+    assert pages[0].external_ids == tuple(str(j["id"]) for j in fixture["jobs"])
+
+
+def test_ashby_requests_compensation_from_config(make_http: MakeHttp) -> None:
+    seen: list[httpx.URL] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url)
+        return httpx.Response(200, json=load_fixture("ashby_jobs.json"))
+
+    http, _ = make_http(handler)
+    list(AshbyConnector(http).fetch_company("ramp"))
+    list(AshbyConnector(http, include_compensation=False).fetch_company("ramp"))
+    assert seen[0].path == "/posting-api/job-board/ramp"
+    assert seen[0].params["includeCompensation"] == "true"
+    assert "includeCompensation" not in seen[1].params
+
+
+def test_ashby_empty_board_is_truncated_by_default(make_http: MakeHttp) -> None:
+    http, _ = make_http(json_handler({"jobs": [], "apiVersion": "1"}))
+    with pytest.raises(FetchError) as exc:
+        list(AshbyConnector(http).fetch_company("ramp"))
+    assert exc.value.reason is ReasonCode.TRUNCATED
+
+
+def test_ashby_empty_board_allowed_by_config(make_http: MakeHttp) -> None:
+    http, _ = make_http(json_handler({"jobs": [], "apiVersion": "1"}))
+    pages = list(AshbyConnector(http, allow_empty=True).fetch_company("ramp"))
+    assert pages[0].external_ids == ()
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        [],
+        {"nope": 1},
+        {"jobs": "x"},
+        {"jobs": [{"title": "no id"}]},
+        {"jobs": [{"id": "a"}, {"id": "a"}]},
+    ],
+)
+def test_ashby_bad_shape_is_parse_error(make_http: MakeHttp, payload: Any) -> None:
+    http, _ = make_http(json_handler(payload))
+    with pytest.raises(FetchError) as exc:
+        list(AshbyConnector(http).fetch_company("ramp"))
+    assert exc.value.reason is ReasonCode.PARSE_ERROR
+
+
+def test_ashby_unknown_board_is_board_not_found(make_http: MakeHttp) -> None:
+    http, _ = make_http(lambda request: httpx.Response(404))
+    with pytest.raises(FetchError) as exc:
+        list(AshbyConnector(http).fetch_company("nope"))
+    assert exc.value.reason is ReasonCode.BOARD_NOT_FOUND
