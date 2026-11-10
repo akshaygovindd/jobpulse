@@ -230,3 +230,50 @@ Daily ingest #5 (`gha-42738644998-1`) verified read-only on S3 and MotherDuck. A
 **Still open:** the P1 tracking check (two consecutive successful scheduled runs). First possible closures appear after the second consecutive daily snapshot.
 
 **Next:** P3, extraction + benchmark.
+
+---
+
+## 2026-11-10: Phase 3 built (extraction + benchmark), paid run not started
+
+**Decisions (owner)**
+- Provider is **OpenAI**, not Anthropic. First pass `gpt-6-luna` ($0.10/$0.50 per 1M tokens; Batch $0.05/$0.25), escalation `gpt-6.1-terra` ($1/$5). Prices and Structured Outputs/Batch support checked on developers.openai.com on 2026-11-09 and copied into `config/extraction.yaml`. `gpt-5-nano` is cheaper but an older generation; not chosen.
+- Scope for cost: only target role families are extracted, selected by a config title filter in silver (`int_extraction_candidates`) before any LLM call.
+- Budget $4.96 prepaid. Backfill must stay under $3. Per-run caps: $0.25 daily, $1.50 backfill/batch.
+- Labeling is **blind**: `eval/labels_template.csv` has only posting id, title, company, description text and empty label columns. Predictions are exported to a separate gitignored file (`eval/export_predictions.py`) and `eval/score.py` joins them by `posting_key`.
+
+**What changed**
+- `config/extraction.yaml`, `config/extraction_prompt.md`; Pydantic `ExtractionConfig`.
+- Shared HTTP client gained POST, multipart upload, per-call headers and timeouts (still the only HTTP path; no new dependency, no `openai` SDK).
+- `jobpulse/secrets.py`: reads named keys from `.env` inside Python, never overrides existing env, redacts key shapes from error text. The shell never sources `.env`. `_warehouse()` now uses it for the MotherDuck token too.
+- `jobpulse/extract/`: strict schema with grounding checks (quoted salary/sponsorship text must appear in the posting), cost maths, store (extractions = cache keyed on content_hash + schema_version + prompt_version, quarantine, queue, llm_calls, batches), spend-cap budget with reservations, runner (cheap first, one escalation, quarantine, per-posting isolation), Batch submit/collect.
+- CLI: `jobpulse extract [--limit N] [--cap USD] [--backfill] [--dry-run] [--batch submit|collect]`. `--dry-run` makes no API call and needs no key.
+- Eval: `sample.py` (seeded, stratified by title family x source, refuses to redraw without `--force`), `export_predictions.py`, `score.py` (per-field precision/recall; separate sponsorship report with confusion matrix), `eval/README.md`.
+- Scripts: `scripts/extraction_counts.py` (filter pass counts), `scripts/report_extraction_cost.py` (cost per 1k postings, escalation and quarantine rates).
+- Docs updated for the provider change: CLAUDE.md stack line, ARCHITECTURE.md, ROADMAP.md, SPEC.md, `.env.example`.
+
+**Numbers (from scripts, live MotherDuck, read-only plus a silver rebuild)**
+- `scripts/extraction_counts.py`: **776 of 8,296 active postings pass the title filter (9.4%)**. By family: ml_ai_engineer 515, data_scientist 94, data_analyst 77, data_engineer 67, analytics_engineer 14, business_analyst 8, bi 1. By source: greenhouse 636, ashby 107, lever 33. The ML/AI family is two thirds of the set because `\bAI\b` and "applied/research scientist" match many "Software Engineer, AI" titles; tell me if that is too broad.
+- `jobpulse extract --dry-run --backfill`: 776 to extract, avg 6,240 characters. Projected cost **$0.65 with Batch first pass** (first pass $0.19 + escalation $0.46 at the assumed 12% escalation rate), $0.84 fully synchronous. Daily incremental is estimated at $0.02-0.04. These are projections from config assumptions (2,200 input / 550 output tokens, 12% escalation), **not measured**. The calibration run replaces them with real token counts.
+- Silver rebuild on MotherDuck: 8 models, 54 tests, 0 failures.
+
+**Checks run**
+- `make check` after each change; final: ruff, ruff format, mypy strict (36 files), pytest **125 passed** (3 live deselected), terraform fmt + validate both roots. gitleaks not installed locally (runs in CI).
+- New tests (29): title filter; second run = 0 calls; prompt/schema change misses cache; invalid -> escalation -> success; invalid -> escalation -> quarantine and not retried; transport error isolated, not quarantined; truncated output escalates; cap stops the run, queues the rest, bronze/silver counts unchanged, queue drains next run; grounding and structural validation; strict JSON schema; batch submit/collect idempotency incl. escalation and a blocked second submit; batch discount; API error text never contains the key; `.env` loader; blind sheet columns; sample script output and no-redraw guard; scoring and sponsorship report.
+
+**Not verified**
+- **No paid OpenAI call has been made.** The local `.env` has no `OPENAI_API_KEY` (only `MOTHERDUCK_TOKEN`), so the 20-posting calibration run could not start. The request/response shapes (Responses API, strict `json_schema`, Batch via `/v1/responses`) follow OpenAI's documented API but are only exercised against mocks until the calibration run.
+- The pricing page does not say whether reasoning tokens are billed as output; the estimate assumes they are.
+- Done-when items for P3 that need real data are still open: cache re-run on live data, cap run on live data, `score.py` on the owner's 200 labels, cost per 1k from `llm_calls`.
+
+**Known limits**
+- If the cap is hit between a first-pass failure and its escalation, the posting is queued and the first-pass spend is repeated next run (rare, cheap).
+- A crash between creating a batch and recording it would orphan that batch; the open-batch guard only knows recorded batches.
+
+**Open questions for owner**
+- Is the ML/AI family (about two thirds of candidates) too broad? Narrowing is a config change.
+- Add an `extract` job to `daily_ingest.yml` after the backfill is verified? Not done; needs your OK.
+
+**Owner steps**
+1. Add `OPENAI_API_KEY=...` to your local `.env` yourself (editor; do not paste it into chat or source the file). Confirm the OpenAI project has the prepaid budget and auto-recharge off.
+2. Tell me when it is set. I will run the 20-posting calibration (`jobpulse extract --limit 20 --cap 0.05`, about a cent), show real tokens and cost per posting, and re-project the backfill. Then you approve `extract --batch submit --backfill`.
+3. After the backfill: `uv run python eval/sample.py`, copy `eval/labels_template.csv` to `eval/labels.csv`, label it blind (see `eval/README.md`), then `export_predictions.py` and `score.py`.
