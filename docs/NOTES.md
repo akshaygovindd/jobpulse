@@ -29,7 +29,9 @@ Plain-English log, appended at the end of every working session (see CLAUDE.md).
 **Checks run**
 - None needed. Only docs changed, and no code exists yet.
 
+**Decisions after review**
+- The budget alert uses direct email subscribers, not SNS. Because AWS Budgets direct email has no opt-in step, P1 verifies the subscriber in the console or with the CLI.
+- Docs were committed on `docs/planning`, merged into `main`, and pushed. From now on, work happens directly on `main`.
+
 **Open questions for owner**
-- AWS Budgets direct-email subscribers get no confirmation email, so P1 verifies the subscriber in the console or CLI instead. Should we switch to an SNS topic with an email subscription (one extra resource) to get a click-to-confirm step?
 - Waiting on the seed employer list to build `config/employers.yaml`.
-- Not committed yet, pending owner review.
