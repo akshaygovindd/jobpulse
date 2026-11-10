@@ -151,7 +151,19 @@ def test_score_main_writes_two_reports(tmp_path: Path, monkeypatch: pytest.Monke
             w.writeheader()
             w.writerows(rows)
     out = tmp_path / "reports"
-    argv = ["score.py", "--labels", str(lab), "--predictions", str(pred), "--out-dir", str(out)]
+    argv = [
+        "score.py",
+        "--labels",
+        str(lab),
+        "--predictions",
+        str(pred),
+        "--sponsorship-labels",
+        str(tmp_path / "none.csv"),
+        "--sponsorship-predictions",
+        str(tmp_path / "none_pred.csv"),
+        "--out-dir",
+        str(out),
+    ]  # explicit paths: never depend on files that may exist in eval/
     monkeypatch.setattr(sys, "argv", argv)
     assert score.main() == 0
     main_md = (out / "extraction_report.md").read_text()
@@ -430,3 +442,31 @@ def test_targeted_sample_rejects_invalid_values_and_overlap(
         tmp_path, monkeypatch, [_targeted_label("a", "offered")], [_targeted_pred("a", "offered")]
     )
     assert code == 2  # posting 'a' is already in the main labels
+
+
+def test_blank_targeted_sheet_is_skipped_without_predictions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Scoring the main sheet alone must work while the sponsorship sheet is still unlabeled."""
+    lab, pred = tmp_path / "labels.csv", tmp_path / "pred.csv"
+    _write(lab, common.BLIND_COLUMNS + common.LABEL_COLUMNS, [_lab("a", seniority="senior")])
+    _write(pred, common.PREDICTION_COLUMNS, [_pred("a", seniority="senior")])
+    tl = tmp_path / "sp_labels.csv"
+    _write(tl, [*common.BLIND_COLUMNS, "sponsorship_statement"], [_targeted_label("t1", "")])
+    out = tmp_path / "reports"
+    argv = [
+        "score.py",
+        "--labels",
+        str(lab),
+        "--predictions",
+        str(pred),
+        "--sponsorship-labels",
+        str(tl),
+        "--sponsorship-predictions",
+        str(tmp_path / "missing.csv"),
+        "--out-dir",
+        str(out),
+    ]
+    monkeypatch.setattr(sys, "argv", argv)
+    assert score.main() == 0
+    assert "## Targeted sample" not in (out / "sponsorship_report.md").read_text()

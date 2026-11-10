@@ -1,5 +1,17 @@
 # Benchmark workflow
 
+**Labeling app (recommended):** from the repo root, after copying the two templates to
+`eval/labels.csv` and `eval/sponsorship_labels.csv`:
+
+    uv run streamlit run eval/label_app.py
+
+It shows one posting at a time (keywords highlighted), dropdowns for the enum fields, text inputs
+for salary and skills, and **Save & Next** (writes the row back with `done=y`, atomically, keeping
+`<file>.bak` of the previous version). The sidebar has a progress counter, a "first 100 rows"
+counter, Prev/Next, "Go to next unlabeled", and a jump list (✓ = labeled) to reopen any row. It
+reads only the two label sheets and refuses any file with "prediction" in its name. Do not have the
+CSV open in a spreadsheet at the same time.
+
 1. `uv run python eval/sample.py` draws 200 postings (stratified, seeded) from the title-filtered
    set and writes `labels_template.csv` and `sample_manifest.json`. It refuses to redraw without
    `--force`. Rows are in a seeded, prefix-balanced order: any first N rows hold every stratum in

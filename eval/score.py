@@ -296,7 +296,9 @@ def main() -> int:
     sp_random = score_sponsorship(pairs)
     sp_md = render_sponsorship(sp_random)
     sl, spred = Path(args.sponsorship_labels), Path(args.sponsorship_predictions)
-    if sl.exists():
+    if sl.exists() and any(
+        r.get("sponsorship_statement", "").strip() for r in read_csv(sl)
+    ):  # a sheet with no labels yet is skipped, so scoring the main sheet alone still works
         if not spred.exists():
             print(f"error: {spred} not found (run eval/export_predictions.py)")
             return 2

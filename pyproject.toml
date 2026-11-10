@@ -19,6 +19,9 @@ dependencies = [
 jobpulse = "jobpulse.cli:main"
 
 [dependency-groups]
+app = [
+    "streamlit>=1.67.0",
+]
 dbt = [
     "dbt-duckdb>=1.11.1",
 ]
@@ -61,6 +64,6 @@ addopts = "-ra --strict-markers -m 'not live'"
 markers = ["live: hits real public APIs; run with `pytest -m live`"]
 
 [tool.uv]
-# dbt is a default group so CI and `make check` can run the silver fixture tests.
-# Production jobs choose groups explicitly (--no-default-groups [--group dbt]).
-default-groups = ["dev", "dbt"]
+# dbt and app are default groups so CI and `make check` can run the silver fixture tests and the
+# labeling-app test. Production jobs choose groups explicitly (--no-default-groups [--group dbt]).
+default-groups = ["dev", "dbt", "app"]

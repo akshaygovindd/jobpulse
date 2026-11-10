@@ -1,0 +1,3 @@
+# Local labeling app settings. No telemetry.
+[browser]
+gatherUsageStats = false

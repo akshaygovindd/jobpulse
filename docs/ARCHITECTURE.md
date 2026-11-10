@@ -50,7 +50,8 @@ jobpulse/
 │   └── resume/        parse.py  match.py
 ├── dbt/               models/{staging,silver,gold}/  snapshots/  tests/generic/  macros/  profiles.yml
 ├── app/               Home.py  pages/   (5 MVP pages; Resume Match added in P6)
-├── eval/              sample.py  export_predictions.py  score.py  README.md  reports/
+├── eval/              sample.py  sponsorship_sample.py  export_predictions.py  score.py  README.md  reports/
+│                      label_app.py + label_io.py (local Streamlit labeling app; never reads predictions)
 │                      labels_template.csv (BLIND: id, title, company, text only)  predictions.csv (separate, gitignored)
 ├── scripts/           validate_employers.py  check_freshness.py  warehouse_counts.py
 │                      extraction_counts.py  report_extraction_cost.py
