@@ -1,0 +1,22 @@
+# Runtime settings for the ingestion pipeline. Validated by jobpulse.config.PipelineConfig.
+http:
+  timeout_s: 30            # per-request timeout
+  max_attempts: 5          # total tries per request (1 + retries)
+  backoff_initial_s: 1.0   # exponential backoff base
+  backoff_max_s: 60.0      # cap for computed backoff
+  retry_after_cap_s: 120.0 # cap for honoured Retry-After headers
+  user_agent: "JobPulse/0.1"
+
+ingest:
+  max_workers: 4                  # companies fetched concurrently
+  lever_page_size: 100            # Lever postings per page (skip/limit pagination)
+  max_pages: 50                   # guard: more pages than this => snapshot is truncated
+  greenhouse_include_content: true
+  min_success_ratio: 0.5          # below this share of complete snapshots the job exits non-zero (alerting)
+
+freshness:
+  max_age_hours: 30   # a source is stale when its newest authoritative snapshot is older than this
+  lookback_days: 3    # how many snapshot dates back to look for pointers
+
+storage:
+  bucket_env_var: JOBPULSE_BUCKET

@@ -1,0 +1,26 @@
+# Source registry seed. Runtime state (last_success_at, ...) lives in S3 ops/source_registry/.
+sources:
+  - source_id: greenhouse
+    source_name: Greenhouse Job Board API
+    enabled: true
+    phase: 1
+    supports_closure: true
+    attribution_url: "https://developers.greenhouse.io/job-board.html"
+  - source_id: lever
+    source_name: Lever Postings API
+    enabled: true
+    phase: 1
+    supports_closure: true
+    attribution_url: "https://github.com/lever/postings-api"
+  - source_id: ashby
+    source_name: Ashby Job Postings API
+    enabled: false
+    phase: 2
+    supports_closure: true
+    attribution_url: "https://developers.ashbyhq.com/docs/public-job-posting-api"
+  - source_id: adzuna
+    source_name: Adzuna API
+    enabled: false
+    phase: 2
+    supports_closure: false   # aggregator: never used for closure
+    attribution_url: "https://www.adzuna.com"

@@ -1,0 +1,101 @@
+{
+ "jobs": [
+  {
+   "absolute_url": "https://careers.everquote.com/job/?gh_jid=8179301003",
+   "data_compliance": [
+    {
+     "type": "gdpr",
+     "requires_consent": false,
+     "requires_processing_consent": false,
+     "requires_retention_consent": false,
+     "retention_period": null,
+     "demographic_data_consent_applies": false
+    }
+   ],
+   "internal_job_id": 5904610003,
+   "location": {
+    "name": "Belfast, Northern Ireland, United Kingdom"
+   },
+   "metadata": null,
+   "id": 8179301003,
+   "updated_at": "2026-11-06T05:05:19-05:00",
+   "requisition_id": "REC-314",
+   "title": "AI Enablement Lead",
+   "company_name": "EverQuote",
+   "first_published": "2026-11-03T11:48:28-05:00",
+   "language": "en",
+   "application_deadline": null,
+   "content": "&lt;h2&gt;&lt;span style=&quot;font-size: 12pt;&quot;&gt;&lt;strong&gt;AI Enablement Lead&lt;/strong&gt;&lt;/span&gt;&lt;/h2&gt;\n&lt;p&gt;&lt;strong&gt;Location…",
+   "departments": [
+    {
+     "id": 4167635003,
+     "name": "Engineering",
+     "child_ids": [],
+     "parent_id": null
+    }
+   ],
+   "offices": [
+    {
+     "id": 4009360003,
+     "name": "Belfast, Northern Ireland",
+     "location": "Belfast, Northern Ireland, United Kingdom",
+     "child_ids": [],
+     "parent_id": null
+    }
+   ],
+   "ai_disclaimer": null,
+   "include_ai_disclaimer": false,
+   "ai_opt_out_request_url": "http://app3.greenhouse.io/ai_opt_out_request/job_post/8179301003/ai_opt_out"
+  },
+  {
+   "absolute_url": "https://careers.everquote.com/job/?gh_jid=8037139003",
+   "data_compliance": [
+    {
+     "type": "gdpr",
+     "requires_consent": false,
+     "requires_processing_consent": false,
+     "requires_retention_consent": false,
+     "retention_period": null,
+     "demographic_data_consent_applies": false
+    }
+   ],
+   "internal_job_id": 5904605003,
+   "location": {
+    "name": "Remote"
+   },
+   "metadata": null,
+   "id": 8037139003,
+   "updated_at": "2026-10-28T11:50:24-04:00",
+   "requisition_id": "REC-313",
+   "title": "AI Product Lead (Principal Product Manager)",
+   "company_name": "EverQuote",
+   "first_published": "2026-10-27T15:41:26-04:00",
+   "language": "en",
+   "application_deadline": null,
+   "content": "&lt;p&gt;&lt;strong&gt;Location&lt;/strong&gt;&lt;/p&gt;\n&lt;p&gt;Remote&lt;/p&gt;\n&lt;p&gt;&lt;strong&gt;About Us&lt;/strong&gt;&lt;/p&gt;\n&lt;p&gt;EverQuote i…",
+   "departments": [
+    {
+     "id": 4167635003,
+     "name": "Engineering",
+     "child_ids": [],
+     "parent_id": null
+    }
+   ],
+   "offices": [
+    {
+     "id": 4002551003,
+     "name": "Cambridge HQ",
+     "location": "Cambridge, Massachusetts, United States",
+     "child_ids": [],
+     "parent_id": null
+    }
+   ],
+   "ai_disclaimer": null,
+   "include_ai_disclaimer": false,
+   "ai_opt_out_request_url": "http://app3.greenhouse.io/ai_opt_out_request/job_post/8037139003/ai_opt_out"
+  }
+ ],
+ "meta": {
+  "total": 2
+ }
+}

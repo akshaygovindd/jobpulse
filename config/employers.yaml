@@ -1,0 +1,59 @@
+# JobPulse seed employers. Board ids discovered 2026-11-10 by probing public ATS APIs.
+# open_job_count / validated_at are a point-in-time snapshot; re-run scripts/validate_employers.py (P1) to refresh.
+version: 1
+
+employers:  # Phase 1 sources (Greenhouse, Lever)
+  - {company: "HubSpot", source: greenhouse, board_id: hubspotjobs, validated_at: "2026-11-10T00:18:07Z", open_job_count: 127}
+  - {company: "Toast", source: greenhouse, board_id: toast, validated_at: "2026-11-10T00:18:07Z", open_job_count: 335}
+  - {company: "Klaviyo", source: greenhouse, board_id: klaviyo, validated_at: "2026-11-10T00:18:07Z", open_job_count: 150}
+  - {company: "CarGurus", source: greenhouse, board_id: cargurus, validated_at: "2026-11-10T00:18:07Z", open_job_count: 43}
+  - {company: "EverQuote", source: greenhouse, board_id: everquote, validated_at: "2026-11-10T00:18:07Z", open_job_count: 16}
+  - {company: "SimpliSafe", source: greenhouse, board_id: simplisafe, validated_at: "2026-11-10T00:18:07Z", open_job_count: 34}
+  - {company: "Formlabs", source: greenhouse, board_id: formlabs, validated_at: "2026-11-10T00:18:08Z", open_job_count: 239}
+  - {company: "Datadog", source: greenhouse, board_id: datadog, validated_at: "2026-11-10T00:18:08Z", open_job_count: 400}
+  - {company: "Databricks", source: greenhouse, board_id: databricks, validated_at: "2026-11-10T00:18:08Z", open_job_count: 915}
+  - {company: "MongoDB", source: greenhouse, board_id: mongodb, validated_at: "2026-11-10T00:18:08Z", open_job_count: 375}
+  - {company: "Stripe", source: greenhouse, board_id: stripe, validated_at: "2026-11-10T00:18:08Z", open_job_count: 772}
+  - {company: "Robinhood", source: greenhouse, board_id: robinhood, validated_at: "2026-11-10T00:18:08Z", open_job_count: 154}
+  - {company: "Coinbase", source: greenhouse, board_id: coinbase, validated_at: "2026-11-10T00:18:09Z", open_job_count: 285}
+  - {company: "Affirm", source: greenhouse, board_id: affirm, validated_at: "2026-11-10T00:18:09Z", open_job_count: 221}
+  - {company: "Chime", source: greenhouse, board_id: chime, validated_at: "2026-11-10T00:18:09Z", open_job_count: 67}
+  - {company: "SoFi", source: greenhouse, board_id: sofi, validated_at: "2026-11-10T00:18:09Z", open_job_count: 48}
+  - {company: "Brex", source: greenhouse, board_id: brex, validated_at: "2026-11-10T00:18:09Z", open_job_count: 265}
+  - {company: "Mercury", source: greenhouse, board_id: mercury, validated_at: "2026-11-10T00:18:09Z", open_job_count: 76}
+  - {company: "Carta", source: greenhouse, board_id: carta, validated_at: "2026-11-10T00:18:09Z", open_job_count: 78}
+  - {company: "Betterment", source: greenhouse, board_id: betterment, validated_at: "2026-11-10T00:18:09Z", open_job_count: 25}
+  - {company: "Airbnb", source: greenhouse, board_id: airbnb, validated_at: "2026-11-10T00:18:10Z", open_job_count: 202}
+  - {company: "DoorDash", source: greenhouse, board_id: doordashusa, validated_at: "2026-11-10T00:18:10Z", open_job_count: 437}
+  - {company: "Instacart", source: greenhouse, board_id: instacart, validated_at: "2026-11-10T00:18:10Z", open_job_count: 90}
+  - {company: "Reddit", source: greenhouse, board_id: reddit, validated_at: "2026-11-10T00:18:10Z", open_job_count: 154}
+  - {company: "Pinterest", source: greenhouse, board_id: pinterest, validated_at: "2026-11-10T00:18:10Z", open_job_count: 170}
+  - {company: "Duolingo", source: greenhouse, board_id: duolingo, validated_at: "2026-11-10T00:18:10Z", open_job_count: 61}
+  - {company: "Figma", source: greenhouse, board_id: figma, validated_at: "2026-11-10T00:18:10Z", open_job_count: 146}
+  - {company: "Asana", source: greenhouse, board_id: asana, validated_at: "2026-11-10T00:18:11Z", open_job_count: 111}
+  - {company: "Dropbox", source: greenhouse, board_id: dropbox, validated_at: "2026-11-10T00:18:11Z", open_job_count: 33}
+  - {company: "Lyft", source: greenhouse, board_id: lyft, validated_at: "2026-11-10T00:18:11Z", open_job_count: 156}
+  - {company: "Squarespace", source: greenhouse, board_id: squarespace, validated_at: "2026-11-10T00:18:11Z", open_job_count: 21}
+  - {company: "Twilio", source: greenhouse, board_id: twilio, validated_at: "2026-11-10T00:18:11Z", open_job_count: 129}
+  - {company: "Okta", source: greenhouse, board_id: okta, validated_at: "2026-11-10T00:18:11Z", open_job_count: 378}
+  - {company: "Peloton", source: greenhouse, board_id: peloton, validated_at: "2026-11-10T00:18:11Z", open_job_count: 43}
+  - {company: "Scale AI", source: greenhouse, board_id: scaleai, validated_at: "2026-11-10T00:18:11Z", open_job_count: 170}
+  - {company: "Wealthfront", source: lever, board_id: wealthfront, validated_at: "2026-11-10T00:18:12Z", open_job_count: 23}
+  - {company: "Spotify", source: lever, board_id: spotify, validated_at: "2026-11-10T00:18:13Z", open_job_count: 85}
+  - {company: "Palantir", source: lever, board_id: palantir, validated_at: "2026-11-10T00:18:15Z", open_job_count: 304}
+
+phase2_ashby:  # found on Ashby; ingested from P2
+  - {company: "Whoop", source: ashby, board_id: whoop, validated_at: "2026-11-10T00:18:15Z", open_job_count: 120}
+  - {company: "Snowflake", source: ashby, board_id: snowflake, validated_at: "2026-11-10T00:18:15Z", open_job_count: 368}
+  - {company: "Plaid", source: ashby, board_id: plaid, validated_at: "2026-11-10T00:18:15Z", open_job_count: 141}
+  - {company: "Ramp", source: ashby, board_id: ramp, validated_at: "2026-11-10T00:18:15Z", open_job_count: 171}
+  - {company: "Notion", source: ashby, board_id: notion, validated_at: "2026-11-10T00:18:16Z", open_job_count: 153}
+
+skipped:  # no public Greenhouse/Lever/Ashby board found
+  - {company: "Flywire", reason: "Workday (careers page links myworkdayjobs.com/flywirecareers)"}
+  - {company: "Wayfair", reason: "No public GH/Lever/Ashby board; careers site JS-rendered, ATS not confirmed"}
+  - {company: "DraftKings", reason: "No public GH/Lever/Ashby board; careers site JS-rendered, ATS not confirmed"}
+  - {company: "Marqeta", reason: "No public GH/Lever/Ashby board; careers site JS-rendered, ATS not confirmed"}
+  - {company: "Zillow", reason: "No public GH/Lever/Ashby board; careers site JS-rendered, ATS not confirmed"}
+  - {company: "Rapid7", reason: "Careers page references Greenhouse, but no public board found under tried slugs (rapid7, rapid7inc, rapid7careers, rapid7jobs)"}
+  - {company: "Etsy", reason: "Careers page references Greenhouse, but no public board found under tried slugs (etsy, etsyinc, etsycareers, etsyjobs)"}

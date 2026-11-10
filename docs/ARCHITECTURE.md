@@ -74,8 +74,9 @@ Rules:
 3. **Pointer only on complete.** The pointer is written only after the attempt's manifest has `status="complete"` and every page hash checks out. Incomplete, failed, truncated, or rate-limited attempts never write or replace the pointer.
 4. **Later complete attempt wins.** If a second complete attempt runs on the same day, it replaces the pointer. The write is guarded so the new manifest's `completed_at` must be later than the current pointer's. S3 versioning keeps the pointer's history.
 5. **No overlap.** `daily_ingest.yml` uses `concurrency: {group: daily-ingest, cancel-in-progress: false}`.
-6. **Downstream reads pointers only.** Bronze is keyed on (source_id, board_id, snapshot_date, external_posting_id). When a pointer changes, the loader replaces that company-day's rows in one transaction, so row counts don't change.
-7. **Closure.** A posting is closed only when it is absent from 2 consecutive authoritative snapshot dates for that company, or the source reports an authoritative closed status. A date with no pointer is skipped; it never counts as an absence. Adzuna is never used for closure.
+6. **Live runs record today only.** `snapshot_date` must equal the current UTC date. This is enforced in three places: the workflow input check, the CLI (`resolve_snapshot_date`), and the runner. Past and future dates are rejected, so a fetch is never assigned to a missed day.
+7. **Downstream reads pointers only.** Bronze is keyed on (source_id, board_id, snapshot_date, external_posting_id). When a pointer changes, the loader replaces that company-day's rows in one transaction, so row counts don't change.
+8. **Closure.** A posting is closed only when it is absent from 2 consecutive authoritative snapshot dates for that company, or the source reports an authoritative closed status. A date with no pointer is skipped; it never counts as an absence. Adzuna is never used for closure.
 
 ## S3 layout
 
@@ -105,7 +106,7 @@ In P1 these are JSON files under `ops/` in S3. From P2 they are loaded into the 
 |---|---|
 | `source_registry` | source_id (PK), source_name, enabled, last_success_at, last_failure_at, last_cursor, records_fetched, attribution_url |
 | `pipeline_runs` | attempt_id, snapshot_date, task (ingest/bronze/silver/extract/gold), source_id, started_at, finished_at, duration_s, status, rows_in, rows_kept, rows_dropped_json (reason → count), llm_cost_usd, env (gha/airflow/local) |
-| `company_snapshots` | attempt_id, snapshot_date, source_id, board_id, status (complete/incomplete/failed), reason_code (`http_4xx`, `http_5xx`, `rate_limited`, `timeout`, `truncated`, `parse_error`, `board_not_found`), pages, record_count, manifest_key, is_authoritative |
+| `company_snapshots` | attempt_id, snapshot_date, source_id, board_id, status (complete/incomplete/failed), reason_code (`http_4xx`, `http_5xx`, `rate_limited`, `timeout`, `network_error`, `truncated`, `parse_error`, `board_not_found`, `storage_error`, `unexpected_error`), pages, record_count, manifest_key, is_authoritative |
 
 ### bronze (from P2)
 | Table | Key columns |

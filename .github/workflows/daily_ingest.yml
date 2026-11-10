@@ -1,0 +1,70 @@
+name: Daily ingest
+
+on:
+  schedule:
+    - cron: "17 9 * * *" # 09:17 UTC daily (off the top of the hour to reduce cron drops)
+  workflow_dispatch:
+    inputs:
+      snapshot_date:
+        description: "Must equal today's UTC date (YYYY-MM-DD). Leave blank for today. Missed days stay gaps."
+        required: false
+        default: ""
+
+permissions:
+  id-token: write # OIDC token for AWS
+  contents: read
+
+concurrency:
+  group: daily-ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    environment: prod # OIDC sub = repo:akshaygovindd/jobpulse:environment:prod; prod is main-only
+    timeout-minutes: 45
+    env:
+      JOBPULSE_BUCKET: ${{ vars.JOBPULSE_BUCKET }}
+    steps:
+      - name: Validate snapshot_date (must be today, UTC)
+        env:
+          INPUT_SNAPSHOT_DATE: ${{ inputs.snapshot_date }}
+        run: |
+          today="$(date -u +%F)"
+          requested="${INPUT_SNAPSHOT_DATE:-$today}"
+          if ! [[ "$requested" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+            echo "::error::snapshot_date '$requested' is not YYYY-MM-DD"; exit 1
+          fi
+          if [[ "$requested" != "$today" ]]; then
+            echo "::error::snapshot_date $requested != current UTC date $today. Live runs only record today; missed days stay gaps."
+            exit 1
+          fi
+          echo "SNAPSHOT_DATE=$requested" >> "$GITHUB_ENV"
+
+      - name: Check required environment variables
+        env:
+          AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+        run: |
+          [[ -n "$AWS_ROLE_ARN" ]] || { echo "::error::prod environment variable AWS_ROLE_ARN is not set"; exit 1; }
+          [[ -n "$JOBPULSE_BUCKET" ]] || { echo "::error::prod environment variable JOBPULSE_BUCKET is not set"; exit 1; }
+
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+
+      - run: uv sync --frozen --no-dev
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: jobpulse-ingest-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Ingest (Greenhouse, Lever)
+        run: uv run jobpulse ingest --snapshot-date "$SNAPSHOT_DATE"
+
+      - name: Freshness check
+        if: ${{ !cancelled() }}
+        run: uv run jobpulse check-freshness

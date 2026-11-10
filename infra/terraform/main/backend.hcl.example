@@ -1,0 +1,2 @@
+# Copy to backend.hcl (gitignored); use the `state_bucket` output from infra/terraform/bootstrap.
+bucket = "jobpulse-tfstate-<ACCOUNT_ID>"
