@@ -79,12 +79,14 @@
 
 **Build**
 - Pydantic extraction schema.
-- Haiku 5.5 runs first and escalates to Sonnet 5.5 when validation fails. Model ids live in `config/extraction.yaml`.
+- **Provider changed to OpenAI (2026-11-09):** `gpt-6-luna` runs first and escalates once to `gpt-6.1-terra` when validation fails. Provider, model ids and prices live in `config/extraction.yaml`.
+- **Scope for cost:** only postings in target role families (title filter in config, applied in silver before any LLM call) are extracted. The pass count is reported by `scripts/extraction_counts.py`.
+- Batch API for the first-pass backfill (50% off). Budget: $4.96 prepaid; backfill capped at $1.50 per run.
 - Content-hash cache.
 - Quarantine.
 - `llm_calls` logging.
 - Per-run spend cap. Once the cap is hit, remaining postings go to the queue.
-- `eval/labels_template.csv`, stratified `eval/sample.py` (200 postings), `eval/score.py`.
+- `eval/labels_template.csv` (**blind**: id, title, company, description only, no predictions), stratified `eval/sample.py` (200 postings from the filtered set), `eval/export_predictions.py` (predictions in a separate file), `eval/score.py` (joins the two by posting_key).
 
 **Done when**
 - [ ] A second run over the same postings makes 0 LLM calls (all cache hits).

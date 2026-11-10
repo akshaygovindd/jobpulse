@@ -236,3 +236,6 @@ crash.log
 dbt/target/
 dbt/logs/
 dbt/dbt_packages/
+
+# Benchmark predictions (kept apart from the blind labeling sheet)
+eval/predictions.csv

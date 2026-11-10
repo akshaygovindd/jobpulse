@@ -44,7 +44,7 @@ Every metric is produced by a script in `scripts/` or `eval/`. No number is type
 | Run success | % of scheduled runs succeeding; % of seeded companies with an authoritative snapshot per day | Failures listed by company + reason code |
 | Duplicates | Duplicate active postings per (source_id, external_posting_id); duplicate daily snapshots per (source, company, date) | 0. Enforced by tests. |
 | Closure precision | Spot audit of closed postings against live boards | Reported by script |
-| Extraction quality | Per-field precision/recall on 200 hand-labeled postings (`eval/score.py`); **sponsorship reported separately** | Baseline set in P3 |
+| Extraction quality | Per-field precision/recall on 200 hand-labeled postings from the target-role-family set, labeled blind (`eval/score.py`); **sponsorship reported separately** | Baseline set in P3 |
 | Extraction ops | Quarantine rate, escalation rate, cost per 1k postings | From `llm_calls` |
 | Coverage | % postings with advertised salary; % with a sponsorship statement; % employers with an LCA match ≥ confidence threshold | Always shown next to the related chart |
 | Cloud cost | AWS Budgets alert at $10/month | An alert, not a cap |

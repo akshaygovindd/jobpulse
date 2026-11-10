@@ -8,7 +8,7 @@ Read first: [docs/SPEC.md](docs/SPEC.md), [docs/ARCHITECTURE.md](docs/ARCHITECTU
 
 ## Stack
 Python 3.12 · `uv` (env + lockfile) · `httpx` · `tenacity` · `pydantic` v2 · `structlog` (JSON) · `boto3` · `duckdb` / `dbt-duckdb` + MotherDuck (from P2) · `streamlit` · `pytest` · `ruff` · `mypy --strict` on `src/` · Terraform · `gitleaks` in CI.
-LLM: Claude Haiku 5.5 first, escalating to Sonnet 5.5 on validation failure. Model ids live in `config/extraction.yaml`, never in code.
+LLM: OpenAI. A cheap small model first (`gpt-6-luna`), escalating once to a stronger one (`gpt-6.1-terra`) on validation failure, with Structured Outputs. Provider, model ids, prices and spend caps live in `config/extraction.yaml`, never in code. `OPENAI_API_KEY` is read from the environment (GitHub `prod` secret in CI; `.env` loaded from Python only locally, never sourced in a shell, never printed or logged). Only postings in the target role families (title filter in config) are sent to the LLM.
 
 ## After every change
 1. Run `make check`. It runs `ruff check`, `ruff format --check`, `mypy`, and `pytest`. When `infra/` changed, it also runs `terraform fmt -check -recursive` and `terraform init -backend=false && terraform validate` in each root.

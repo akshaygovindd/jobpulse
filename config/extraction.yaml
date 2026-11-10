@@ -1,0 +1,60 @@
+# LLM extraction settings (P3). Validated by jobpulse.config.ExtractionConfig.
+# Provider: OpenAI. The key is read from the environment variable named below; it never
+# appears in this repo. Prices are USD per 1M tokens, copied from the OpenAI pricing page
+# (developers.openai.com/api/docs/pricing, checked 2026-11-09). Re-check before changing models.
+provider: openai
+api_key_env_var: OPENAI_API_KEY
+base_url: https://api.openai.com/v1
+request_timeout_s: 120
+max_workers: 4                # concurrent synchronous calls
+extract_schema: extract       # warehouse schema for extractions/quarantine/queue/llm_calls/batches
+schema_version: 1             # bump when the Extraction model changes meaning
+max_description_chars: 20000  # longer descriptions are cut before the call (bounds cost)
+
+first_pass:                   # cheap model, runs on every posting
+  id: gpt-6-luna
+  reasoning_effort: low
+  input_usd_per_mtok: 0.10
+  cached_input_usd_per_mtok: 0.01
+  output_usd_per_mtok: 0.50
+
+escalation:                   # runs once, only when the first pass fails validation
+  id: gpt-6.1-terra
+  reasoning_effort: low
+  input_usd_per_mtok: 1.00
+  cached_input_usd_per_mtok: 0.05
+  output_usd_per_mtok: 5.00
+
+batch:
+  discount: 0.5               # Batch API price multiplier (50% off Standard)
+  completion_window: 24h
+
+budget:
+  run_cap_usd: 0.25           # default per-run spend cap (daily incremental)
+  backfill_cap_usd: 1.50      # cap used with --backfill and for batch submission
+
+cost_model:                   # used by the pre-call estimate, the cap check and --dry-run
+  chars_per_token: 4.0
+  prompt_overhead_tokens: 600
+  expected_output_tokens: 550 # structured JSON plus reasoning tokens at effort=low
+  max_output_tokens: 2000     # hard limit sent to the API; also the worst case for the cap check
+  cap_safety_factor: 1.25     # multiplies the worst-case estimate in the cap check (tokenizer error)
+  escalation_rate: 0.12       # share of postings expected to escalate (projection only)
+
+# Role-family title filter. A posting is a candidate when its title matches one family
+# (first match wins; the family name is only used for stratified sampling) and does not
+# match `exclude`. Regexes are case-insensitive and run in DuckDB (RE2 syntax).
+title_filter:
+  exclude: '\b(sales|account executive|account manager|recruit\w*|talent|marketing|customer success|solutions? (engineer|architect)|counsel|paralegal|attorney)\b'
+  families:
+    - {name: analytics_engineer, pattern: 'analytics engineer'}
+    - {name: data_scientist, pattern: 'data scien|decision scien|statistician|quantitative (analyst|researcher)'}
+    - {name: data_engineer, pattern: 'data engineer|data platform|data infrastructure|data architect|dataops|data ops|\betl\b|data pipeline'}
+    - {name: ml_ai_engineer, pattern: 'machine learning|\bML\b|\bAI\b|artificial intelligence|\bLLM\b|applied scientist|research scientist|deep learning|\bNLP\b|computer vision'}
+    - {name: bi, pattern: 'business intelligence|\bBI\b|insights? analyst|reporting analyst'}
+    - {name: business_analyst, pattern: 'business analyst|business systems analyst|business operations analyst'}
+    - {name: data_analyst, pattern: 'data analyst|analytics|product analyst|data governance|data quality'}
+
+sample:
+  size: 200
+  seed: 20261109

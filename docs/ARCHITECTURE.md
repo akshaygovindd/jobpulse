@@ -23,7 +23,7 @@ flowchart LR
   PTR --> BR[bronze loader] --> MD[(MotherDuck)]
   OPS -->|from P2| MD
   MD --> SIL["dbt silver<br/>identity, observations, closure"]
-  SIL --> EX["LLM extraction<br/>Haiku→Sonnet, cache, budget, quarantine"] --> MD
+  SIL --> FLT["title filter<br/>target role families"] --> EX["LLM extraction (OpenAI)<br/>luna→terra, cache, spend cap, quarantine"] --> MD
   LCA[DOL OFLC LCA files] --> VM[employer name match] --> MD
   SIL --> GOLD[dbt gold + snapshots] --> APP["Streamlit<br/>5 MVP pages + Resume Match (P6)"]
   BUD["AWS Budgets $10/mo alert"] -.email.-> OWN[Owner]
@@ -44,13 +44,16 @@ jobpulse/
 │   ├── bronze/        loader.py  normalize.py
 │   ├── silver.py      (runs the dbt project with vars from config)
 │   ├── warehouse.py   (MotherDuck / local DuckDB connection)
-│   ├── extract/       schema.py  llm.py  cache.py  budget.py  runner.py
+│   ├── extract/       schema.py  llm.py  cost.py  store.py (cache, queue, quarantine)  budget.py  runner.py
+│   ├── secrets.py     (.env reader, Python only; redaction)
 │   ├── visa/          lca_loader.py  employer_match.py
 │   └── resume/        parse.py  match.py
 ├── dbt/               models/{staging,silver,gold}/  snapshots/  tests/generic/  macros/  profiles.yml
 ├── app/               Home.py  pages/   (5 MVP pages; Resume Match added in P6)
-├── eval/              labels_template.csv  sample.py  score.py  reports/
-├── scripts/           validate_employers.py  check_freshness.py  report_metrics.py
+├── eval/              sample.py  export_predictions.py  score.py  README.md  reports/
+│                      labels_template.csv (BLIND: id, title, company, text only)  predictions.csv (separate, gitignored)
+├── scripts/           validate_employers.py  check_freshness.py  warehouse_counts.py
+│                      extraction_counts.py  report_extraction_cost.py
 ├── infra/terraform/   bootstrap/  (state bucket)
 │                      main/       (data bucket, OIDC provider, role, budget)
 ├── airflow/           dags/jobpulse_daily.py  docker-compose.yml
@@ -134,13 +137,24 @@ The bronze loader lists `snapshots/` only (never `raw/`), re-verifies manifest a
 
 Closure uses `warehouse.closure_consecutive_absences` (config, default 2), passed to dbt as a var. The absences must fall on **calendar-adjacent dates that both have a pointer**: a date without a pointer breaks the streak instead of counting. Only absences after a posting's last sighting count, so a reappearing posting is active again.
 
-### extraction
+### extraction (schema `extract`, written by `jobpulse extract`)
+Scope: only postings that pass the config-driven **title filter** (`silver.int_extraction_candidates`, built from `config/extraction.yaml` `title_filter`) are sent to the LLM. `title_family` there is a title heuristic used for stratified sampling only.
+
 | Table | Key columns |
 |---|---|
-| `extractions` | content_hash (PK, cache key), posting_key, schema_version, model, skills[], seniority, role_family, salary_min, salary_max, salary_currency, salary_period, salary_original_text, remote_policy, sponsorship_statement, sponsorship_original_text, confidence, extracted_at |
-| `quarantine` | content_hash, posting_key, raw_output, validation_errors, model_chain, attempts |
-| `queue` | posting_key, content_hash, enqueued_at, reason (new/changed/budget_exhausted) |
-| `llm_calls` | call_id, attempt_id, content_hash, model, input_tokens, output_tokens, cost_usd, latency_ms, outcome (ok/invalid/error/escalated) |
+| `extractions` | PK (content_hash, schema_version, prompt_version), the **cache key**. posting_key, model, escalated, skills[], seniority, role_family, salary_min, salary_max, salary_currency, salary_period, salary_original_text, remote_policy, sponsorship_statement (`offered`/`not_offered`/`unspecified`), sponsorship_original_text, confidence, extracted_at. `prompt_version` is a hash of the prompt text + JSON schema, so any change misses the cache. |
+| `quarantine` | PK as above. raw_output, validation_errors, model_chain (`luna>terra`), attempts. Not retried until the prompt/schema version changes. |
+| `queue` | content_hash (PK), posting_key, enqueued_at, reason (`budget_exhausted`), attempt_id. Cleared when the posting is extracted or quarantined. |
+| `llm_calls` | call_id, attempt_id, content_hash, model, mode (`sync`/`batch`), input_tokens, output_tokens, cached_tokens, cost_usd, latency_ms, outcome (ok/invalid/error/escalated), created_at |
+| `batches` | batch_id, attempt_id, input_file_id, model, request_count, est_cost_usd, schema_version, prompt_version, status, created_at, collected_at. A new batch is refused while one is uncollected. |
+
+Flow per posting: cache lookup (content hash) → first-pass model with Structured Outputs → Pydantic validation plus grounding checks (quoted salary/sponsorship text must appear in the posting) → on failure, **one** escalation call → on failure, quarantine. Transport errors are recorded and retried next run (never quarantined). Failures are isolated per posting.
+
+**Spend cap.** Before each call the runner reserves its worst-case cost (estimated input + `max_output_tokens`, times `cap_safety_factor`) against the per-run cap; if it does not fit, the posting goes to `queue`. Defaults: $0.25 per daily run, $1.50 for `--backfill`/`--batch`. Raw bronze/silver data is never touched.
+
+**Batch API.** `extract --batch submit` sends the first pass of the backlog as one batch (50% off, up to 24h); `extract --batch collect` parses results, runs escalations synchronously, and quarantines failures. Daily incremental runs are synchronous.
+
+**Provider.** OpenAI (`gpt-6-luna` first pass, `gpt-6.1-terra` escalation), Responses API with `json_schema` strict output, called through the shared HTTP client; no provider SDK. Prices in `config/extraction.yaml` come from the OpenAI pricing page (checked 2026-11-09). The key is never printed, logged, or committed; error text is scrubbed.
 
 ### ref (visa)
 | Table | Key columns |
@@ -230,7 +244,7 @@ DuckDB is pinned to 1.5.6 because MotherDuck refuses newer clients; bump it only
 | Scheduler | GitHub Actions `daily_ingest.yml` (cron `17 9 * * *` + `workflow_dispatch` with `snapshot_date` input) | Airflow in Docker Compose (`airflow/`) |
 | AWS auth | OIDC, `prod` environment, `main` only | Owner's local AWS profile against a dev S3 prefix |
 | Warehouse | MotherDuck (from P2) | Dev MotherDuck DB or local DuckDB file |
-| Secrets | GitHub `prod` environment secrets (MotherDuck from P2, LLM; Adzuna if revived) | `.env` (gitignored), template in `.env.example` |
+| Secrets | GitHub `prod` environment secrets (MotherDuck from P2, `OPENAI_API_KEY` for extraction; Adzuna if revived) | `.env` (gitignored), template in `.env.example` |
 | Status | **The real daily pipeline.** | Runs the same CLI tasks (`jobpulse ingest`, `load-ops`, `load-bronze`, `build-silver`, `extract`) to show orchestration; it is **not** the production scheduler. |
 
 Terraform: `infra/terraform/bootstrap` creates the state bucket (local state, S3 native lockfile for the main root). `infra/terraform/main` holds the data bucket, OIDC provider, role, and budget. The owner runs `plan` and `apply` locally.
