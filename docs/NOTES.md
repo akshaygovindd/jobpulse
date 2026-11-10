@@ -302,3 +302,26 @@ Daily ingest #5 (`gha-42738644998-1`) verified read-only on S3 and MotherDuck. A
 - Daily incremental at 20-50 new filtered postings: about $0.01-0.02.
 
 **Not done / waiting.** Batch not submitted (per instruction). The `extract` job in `daily_ingest.yml` is not added yet; it goes in after the backfill is verified.
+
+---
+
+## 2026-11-10: Phase 3 backfill done, daily extract job added, blind label sheet created
+
+**Backfill (synchronous, `jobpulse extract --backfill`, cap $1.50).** 475 postings processed (20 were already cached from the calibration): 475 extracted, 11 escalated, 0 quarantined, 0 queued, 0 errors, $0.1866 for the run.
+
+**Verification**
+- **Second run makes 0 LLM calls:** `extract --backfill` again reported cache hits 495, processed 0, LLM calls 0, cost $0.0000.
+- **`scripts/report_extraction_cost.py` (all runs, 495 postings):** 506 calls (495 gpt-6-luna, 11 gpt-6.1-terra); tokens in/out 921,020 / 138,999; total **$0.1931** (luna $0.1579, terra $0.0352); **cost per 1k postings $0.39**; **escalation rate 2.2%**; **quarantine rate 0.0%**. This replaces the 12% escalation assumption (projected $0.27 for the batch route) with a measured 2.2% (actual $0.19 for everything, calibration included).
+- Queue and quarantine tables are both empty. Bronze (8,296) and silver (8,296) counts are unchanged by extraction. `ops.pipeline_runs` has `extract_filter` (8,296 in, 495 kept) and `extract` rows per run, with cost.
+- Total OpenAI spend for P3 so far: **$0.1931** of the $4.96 budget.
+- Extraction outputs, for orientation only (quality is not judged until the 200 labels exist): sponsorship 482 unspecified / 11 not_offered / 2 offered; 360 of 495 have an advertised salary; mean model confidence 0.956.
+
+**Daily workflow.** `daily_ingest.yml` has a third job, `extract` (`needs: warehouse`, runs only when the warehouse job succeeded, `environment: prod`). It runs `jobpulse extract --cap 0.25`. `OPENAI_API_KEY` and `MOTHERDUCK_TOKEN` are set on that single step only, with no AWS credentials and no dbt. If extraction fails it cannot affect ingest or the warehouse. Postings over the cap go to `extract.queue` and are picked up the next day. The workflow file is parse-checked locally, **not yet run in GitHub Actions**.
+
+**Benchmark sheet.** `uv run python eval/sample.py` drew 200 of the 495 candidates (seed 20261109, 17 strata: title family x source) into `eval/labels_template.csv` and `eval/sample_manifest.json`. The sheet has only posting_key, title, company, description_text and empty label columns (checked: all label cells empty, 200 unique keys). Predictions are only in `eval/predictions.csv`, which does not exist yet and is gitignored.
+
+**Caveat for the sponsorship report.** Only 13 of 495 postings (about 2.6%) have an explicit sponsorship statement according to the model, so a 200-row sample will contain few positive examples. The sponsorship report flags classes with fewer than 5 labeled examples as low support. If you want a real sponsorship benchmark, a second targeted sample of postings that mention "sponsor" or "visa" would be needed (needs your OK, since it changes the stratified-200 definition).
+
+**Open for the owner**
+- Run **Daily ingest** by dispatch once to see the `extract` job green on GitHub (needs `OPENAI_API_KEY` in the `prod` environment, which you said is set).
+- P3 done-when boxes still open: `score.py` on your 200 labels (needs your labeling).
