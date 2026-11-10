@@ -206,3 +206,27 @@ All P1 done-when checks pass. The results below were verified on AWS using read-
 1. (Recommended) Rotate the MotherDuck token, then update the `prod` secret `MOTHERDUCK_TOKEN` and your local `.env`.
 2. After the push, run **Daily ingest** by dispatch. Check that both jobs are green, the run report shows Ashby 5/5, and the `warehouse` job summary lists bronze loaded and silver tests passed. Then P2's last box is done.
 3. The P1 tracking check (two consecutive successful scheduled runs) is still open.
+
+---
+
+## 2026-11-10: Phase 2 complete
+
+Daily ingest #5 (`gha-42738644998-1`) verified read-only on S3 and MotherDuck. All P2 done-when checks pass.
+
+| Check | Result |
+|---|---|
+| Ingest | 43/43 complete, 0 failed, 43 authoritative, 8,296 postings. Ashby 5/5 (956 postings). |
+| S3 pointers for 2026-11-10 | Exactly 43 (35 greenhouse, 3 lever, 5 ashby), all naming `gha-42738644998-1`. Record counts sum to 8,296 (6,928 + 412 + 956). |
+| Bronze | `snapshot_pointers` 43 (one attempt only), `raw_postings` 8,296, matching S3 per source. Replaced the earlier attempt's rows rather than appending. |
+| Warehouse job | `ops.pipeline_runs` has the run's `bronze` rows (success, per source) and a `silver` row (success, 8,296 rows). The silver step only reports success when every dbt model and test passes. |
+| Silver | `dim_postings` 8,296 (ashby 956, lever 412, greenhouse 6,928); observations 8,296; versions 8,296. |
+| Ops | `company_snapshots` has 43 complete rows for the run; `source_registry` has 3 sources (Adzuna gone). |
+| Closure / duplicates | 0 closed, 0 flagged, as expected with one day of history and no overlapping sources. |
+
+- MotherDuck database size: **54.7 MiB** with 8,296 postings of one day. I'll re-measure after a week of daily loads; the mitigation stays "keep bronze payloads only when `content_hash` changes" if growth is too fast.
+- `ashby_allow_empty` stays `false` (owner decision).
+- Not verified here: the GitHub job log itself, since `gh` isn't installed locally. The green state is inferred from the rows the job wrote and the owner's report.
+
+**Still open:** the P1 tracking check (two consecutive successful scheduled runs). First possible closures appear after the second consecutive daily snapshot.
+
+**Next:** P3, extraction + benchmark.

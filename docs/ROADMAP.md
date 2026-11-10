@@ -50,7 +50,7 @@
 
 - [ ] **Tracked separately (still open; does not block P2).** The scheduled run succeeds on 2 consecutive days. Record the dates in NOTES.md when this happens.
 
-## P2: Ashby, bronze/silver, dedup, observation tracking
+## P2: Ashby, bronze/silver, dedup, observation tracking. ✅ Done 2026-11-10
 
 > Adzuna was moved to [Later](#later-deferred) on 2026-11-09 because it now requires a paid plan.
 
@@ -73,7 +73,7 @@
   - (e) content change → new version row, same posting_key
   - (f) pointer replaced on the same day → bronze and silver row counts unchanged
 - [x] Running the full pipeline twice for the same date leaves row counts unchanged (fixture test, plus a live double run on MotherDuck checked with `scripts/warehouse_counts.py`; only `ops.pipeline_runs` grows, because each run records itself).
-- [ ] The dispatched Daily ingest run has a green `warehouse` job, with Ashby companies in bronze. Owner step. P2 is done when this passes.
+- [x] The dispatched Daily ingest run (#5, `gha-42738644998-1`) has a green `warehouse` job, with Ashby companies in bronze (verified 2026-11-10).
 
 ## P3: Extraction + benchmark
 
