@@ -164,3 +164,45 @@ All P1 done-when checks pass. The results below were verified on AWS using read-
 **Tracking check (still open; doesn't block P2):** the first scheduled run is at 09:17 UTC on 2026-11-10. 2 consecutive successful scheduled days still need recording.
 
 **Next:** P2, which adds Ashby, Adzuna, MotherDuck bronze/silver, dedup and observation tracking.
+
+---
+
+## 2026-11-09: Phase 2 build (Ashby, MotherDuck ops/bronze, dbt silver)
+
+**Scope change.** Adzuna is deferred because it now requires a paid plan. It moved to "Later" in ROADMAP.md and SPEC.md, with its design notes kept (credentials, pagination, daily quota budget with a clean stop, attribution, snapshot unit = search slice, never used for closure). Removed from `config/sources.yaml` so it doesn't show up in `source_registry`. P2 fixture test (d) was Adzuna-specific and is dropped; it comes back with Adzuna.
+
+**What changed**
+- **Ashby connector** (`connectors/ashby.py`). The 5 Ashby employers moved from `phase2_ashby` into `employers` (43 boards now). Ashby returns no total, so completeness can't be cross-checked; an empty `jobs` list is reported as `truncated` (config `ashby_allow_empty: false`) so an empty response can never look like "everything closed". Live check: 5/5 boards, 956 postings.
+- **Warehouse code.** `warehouse.py` (MotherDuck or a local file; the token is only read from the environment and scrubbed from errors), `ops/load_ops.py`, `bronze/loader.py`, `bronze/normalize.py`, `silver.py`. New commands: `load-ops`, `load-bronze`, `build-silver`.
+- **Bronze loader** lists `snapshots/` only and follows each pointer to its manifest, re-verifying hashes. It replaces a company-day's rows in one transaction when the pointer moves. A bad snapshot is recorded with a reason and the rest still load. A test found that a corrupted gzip page raised past the loader; fixed, and now covered.
+- **Extra bronze table `snapshot_pointers`.** Closure has to know which dates are authoritative, including empty boards, which have no posting rows.
+- **dbt project** (`dbt/`): `stg_*` views and silver tables `dim_postings`, `fct_posting_observations`, `dim_posting_versions`, `int_posting_closure`, `int_posting_duplicates`. 50 tests on grains and keys, including the two done-when uniqueness tests. A custom `unique_combination` test avoids pulling `dbt_utils`.
+- **Closure rule as built:** N (config, 2) absences on **calendar-adjacent dates that both have pointers**. A date without a pointer breaks the streak. This is the stricter reading, and it is what test (c) requires.
+- **`probable_duplicate_of`:** flag only, same company + normalized title + normalized location in a different source. Will be empty with today's employers; the column and logic stay for new sources.
+- **Workflow:** `daily_ingest.yml` now has a second `warehouse` job (`needs: ingest`) running load-ops, load-bronze, build-silver. `MOTHERDUCK_TOKEN` is set only on those steps. The ingest job installs no dbt.
+- **DuckDB is pinned to 1.5.6.** The first connection attempt with 2.0.0 was refused by MotherDuck ("latest supported version is v1.5.6").
+- `scripts/warehouse_counts.py` produces every warehouse row-count figure quoted here.
+
+**Checks run**
+- `make check` after every change. Final: ruff, ruff format, mypy strict (28 files), pytest **96 passed** (3 live deselected), terraform fmt + validate for both roots: all green. gitleaks isn't installed locally (runs in CI).
+- `pytest -m live`: 3 passed (Greenhouse, Lever, Ashby).
+- Local end to end (scratch dir + local DuckDB): Ashby ingest 5/5, bronze 956 rows, silver 7 models + 50 tests green, run twice with identical data-table counts.
+- **Live MotherDuck** (from the owner's machine, real S3 pointers for 2026-11-10): `load-ops` ok; `load-bronze` 38/38 pointers, 7,339 postings; `build-silver` 7 models, 50 tests, 0 failures. Second full pass: 0 bronze loads, data-table counts identical (`bronze.raw_postings` 7,339, `silver.dim_postings` 7,339); only `ops.pipeline_runs` grew, by the bronze and silver run records.
+- The 38 loaded pointers are the second attempt (#4) of 2026-11-10, matching what the pointers name.
+
+**Numbers worth watching**
+- MotherDuck database size after one day of data: **33.7 MiB** (7,339 postings, no Ashby yet). If every day adds that much, that's roughly 1 GB a month against the free tier. I'll re-measure after a week of daily loads. If it grows linearly, the mitigation is keeping bronze payloads only when `content_hash` changes.
+- With a single day of history nothing can be closed yet; the first closures can appear after the second consecutive daily snapshot.
+- `ops.source_registry` still has the old 4-row registry (includes Adzuna) until the next ingest rewrites `ops/source_registry/latest.json`.
+
+**Security note**
+- While reading `.env` I used shell `source`, which failed on the long value and echoed the `MOTHERDUCK_TOKEN` line into this session's output. Nothing was committed or sent anywhere, and `.env` is gitignored, but the value is now in the session transcript. Recommend rotating the token (see owner steps).
+
+**Open questions for owner**
+- Rotate the MotherDuck token? (see above)
+- OK to leave `ashby_allow_empty: false`? It means an Ashby board that genuinely has zero openings will show as a failed (truncated) company in the run report instead of an empty snapshot.
+
+**Owner steps**
+1. (Recommended) Rotate the MotherDuck token, then update the `prod` secret `MOTHERDUCK_TOKEN` and your local `.env`.
+2. After the push, run **Daily ingest** by dispatch. Check that both jobs are green, the run report shows Ashby 5/5, and the `warehouse` job summary lists bronze loaded and silver tests passed. Then P2's last box is done.
+3. The P1 tracking check (two consecutive successful scheduled runs) is still open.

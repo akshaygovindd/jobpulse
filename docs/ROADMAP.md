@@ -62,17 +62,18 @@
 - `daily_ingest.yml` runs ops load, bronze load and silver build after ingest.
 
 **Done when**
-- [ ] dbt tests pass:
+- [x] dbt tests pass (50 tests; green in pytest and on MotherDuck, 2026-11-09):
   - unique (source_id, external_posting_id) among active postings
   - unique (source_id, board_id, snapshot_date, external_posting_id) in bronze
   - not_null on all keys
-- [ ] Fixture tests prove:
+- [x] Fixture tests prove (`tests/unit/test_bronze_silver.py`):
   - (a) absent from 1 authoritative snapshot → still active
   - (b) absent from 2 consecutive authoritative snapshots → closed
   - (c) a date with no pointer between them → not closed
   - (e) content change → new version row, same posting_key
   - (f) pointer replaced on the same day → bronze and silver row counts unchanged
-- [ ] Running the full pipeline twice for the same date leaves row counts unchanged.
+- [x] Running the full pipeline twice for the same date leaves row counts unchanged (fixture test, plus a live double run on MotherDuck checked with `scripts/warehouse_counts.py`; only `ops.pipeline_runs` grows, because each run records itself).
+- [ ] The dispatched Daily ingest run has a green `warehouse` job, with Ashby companies in bronze. Owner step. P2 is done when this passes.
 
 ## P3: Extraction + benchmark
 

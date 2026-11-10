@@ -41,11 +41,13 @@ jobpulse/
 │   ├── connectors/    base.py  greenhouse.py  lever.py  ashby.py  (adzuna.py: later)
 │   ├── ingest/        runner.py  manifest.py  pointer.py  s3_writer.py  report.py
 │   ├── ops/           s3_ops.py (P1: JSON to S3)  load_ops.py (P2: → MotherDuck)
-│   ├── bronze/        loader.py
+│   ├── bronze/        loader.py  normalize.py
+│   ├── silver.py      (runs the dbt project with vars from config)
+│   ├── warehouse.py   (MotherDuck / local DuckDB connection)
 │   ├── extract/       schema.py  llm.py  cache.py  budget.py  runner.py
 │   ├── visa/          lca_loader.py  employer_match.py
 │   └── resume/        parse.py  match.py
-├── dbt/               models/{bronze,silver,gold}/  snapshots/  tests/  macros/
+├── dbt/               models/{staging,silver,gold}/  snapshots/  tests/generic/  macros/  profiles.yml
 ├── app/               Home.py  pages/   (5 MVP pages; Resume Match added in P6)
 ├── eval/              labels_template.csv  sample.py  score.py  reports/
 ├── scripts/           validate_employers.py  check_freshness.py  report_metrics.py
@@ -112,14 +114,25 @@ In P1 these are JSON files under `ops/` in S3. From P2 they are loaded into the 
 ### bronze (from P2)
 | Table | Key columns |
 |---|---|
-| `raw_postings` | source_id, board_id, snapshot_date, attempt_id, external_posting_id, payload (JSON), content_hash, object_key. **Unique** on (source_id, board_id, snapshot_date, external_posting_id). |
+| `raw_postings` | source_id, board_id, snapshot_date, attempt_id, external_posting_id, title, location_raw, description_text, apply_url, content_hash, payload (JSON), object_key, loaded_at. **Unique** on (source_id, board_id, snapshot_date, external_posting_id). The four content fields come from one tested per-source mapping (`bronze/normalize.py`); `content_hash` covers only them, so volatile API fields never create a new version. |
+| `snapshot_pointers` | source_id, board_id, company, snapshot_date, attempt_id, manifest_key, manifest_sha256, record_count, completed_at, loaded_at. **Unique** on (source_id, board_id, snapshot_date). One row per authoritative logical snapshot, including empty boards, which have no `raw_postings` rows. Closure needs it to know which dates are authoritative. |
 
-### silver
-| Table | Key columns |
+The bronze loader lists `snapshots/` only (never `raw/`), re-verifies manifest and page hashes, and replaces a company-day's rows in one transaction when its pointer moves to a newer attempt. A failing snapshot is recorded with a reason and never stops the others.
+
+### silver (dbt, schema `silver`)
+| Model | Grain / key columns |
 |---|---|
-| `postings` | posting_key = hash(source_id ‖ external_posting_id) (PK), source_id, external_posting_id, company_id, title, location_raw, description_text, apply_url, content_hash, first_seen_at, last_seen_at, last_confirmed_active_at, source_status (active/closed/unknown), closed_at, closure_reason (absent_2_snapshots/authoritative), probable_duplicate_of (cross-source flag only; never merged) |
-| `posting_observations` | posting_key, snapshot_date, attempt_id, observed (bool), content_hash. Unique on (posting_key, snapshot_date). |
-| `posting_versions` | posting_key, content_hash, valid_from. A new row only when content_hash changes. |
+| `stg_raw_postings` (view) | adds `posting_key = sha256(source_id ‖ external_posting_id)` |
+| `stg_snapshot_pointers` (view) | (source_id, board_id, snapshot_date), plus a `company_id` slug |
+| `dim_postings` | posting_key (PK): source_id, external_posting_id, company_id, title, location_raw, description_text, apply_url, content_hash, first_seen_at, last_seen_at, last_confirmed_active_at, source_status (active/closed), closed_at, closure_reason (`absent_<N>_snapshots`; `authoritative` is reserved for sources that report closure), probable_duplicate_of (cross-source flag only; never merged) |
+| `fct_posting_observations` | (posting_key, snapshot_date), observed (bool), attempt_id, content_hash. `observed=false` rows exist only for dates where the company has an authoritative pointer. |
+| `dim_posting_versions` | (posting_key, valid_from), content_hash, valid_to. A new row only when content_hash changes. |
+| `int_posting_closure` | posting_key: closed_date, closed_at, closure_reason |
+| `int_posting_duplicates` | posting_key: probable_duplicate_of |
+
+`probable_duplicate_of` points a posting at the earliest-seen posting with the same company, normalized title and normalized location in a **different** source. It is a flag, never a merge, and is never applied within one source.
+
+Closure uses `warehouse.closure_consecutive_absences` (config, default 2), passed to dbt as a var. The absences must fall on **calendar-adjacent dates that both have a pointer**: a date without a pointer breaks the streak instead of counting. Only absences after a posting's last sighting count, so a reappearing posting is active again.
 
 ### extraction
 | Table | Key columns |
@@ -202,6 +215,14 @@ Trust policy on the ingest role (exact):
 - **This is an alert, not a spending cap.** AWS billing data lags by hours, and nothing is stopped automatically.
 - **No confirmation step.** AWS Budgets email subscribers get no opt-in email. To verify the subscriber, use the console or `aws budgets describe-subscribers-for-notification`.
 
+## Daily workflow
+
+`daily_ingest.yml` has two jobs, both in the `prod` environment:
+1. `ingest`: `jobpulse ingest` then `check-freshness`. Needs no MotherDuck and no dbt (`uv sync --no-default-groups`).
+2. `warehouse` (`needs: ingest`, runs unless cancelled): `load-ops` → `load-bronze` → `build-silver`. `MOTHERDUCK_TOKEN` (a `prod` environment secret) is set only on those three steps. A MotherDuck problem cannot fail ingest, and the next run catches up from the pointers because every step is idempotent.
+
+DuckDB is pinned to 1.5.6 because MotherDuck refuses newer clients; bump it only after MotherDuck announces support.
+
 ## Environments
 
 | | Production | Local demo |
@@ -210,6 +231,6 @@ Trust policy on the ingest role (exact):
 | AWS auth | OIDC, `prod` environment, `main` only | Owner's local AWS profile against a dev S3 prefix |
 | Warehouse | MotherDuck (from P2) | Dev MotherDuck DB or local DuckDB file |
 | Secrets | GitHub `prod` environment secrets (MotherDuck from P2, LLM; Adzuna if revived) | `.env` (gitignored), template in `.env.example` |
-| Status | **The real daily pipeline.** | Runs the same CLI tasks (`jobpulse ingest`, `load-bronze`, `dbt`, `extract`) to show orchestration; it is **not** the production scheduler. |
+| Status | **The real daily pipeline.** | Runs the same CLI tasks (`jobpulse ingest`, `load-ops`, `load-bronze`, `build-silver`, `extract`) to show orchestration; it is **not** the production scheduler. |
 
 Terraform: `infra/terraform/bootstrap` creates the state bucket (local state, S3 native lockfile for the main root). `infra/terraform/main` holds the data bucket, OIDC provider, role, and budget. The owner runs `plan` and `apply` locally.
