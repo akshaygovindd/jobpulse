@@ -146,7 +146,7 @@ All P1 done-when checks pass. The results below were verified on AWS using read-
 | CI | Green, confirmed by the owner. Covers ruff, mypy, pytest, terraform fmt/validate and gitleaks. |
 | Terraform + budget | Applied by the owner. Budget `jobpulse-monthly` lists one `EMAIL` subscriber, checked with `describe-subscribers-for-notification`. |
 | First run, `gha-42732783751-1` (dispatch) | 38/38 complete, 0 failed, 7,337 postings, about 9 s |
-| Rerun, `gha-42733714781-1` (new dispatch, same date) | 38/38 complete, 0 failed, 7,339 postings |
+| Rerun, `gha-42733714781-1` (Daily ingest #4: a new dispatch on the same date) | 38/38 complete, 0 failed, 7,339 postings. Owner confirmed no other run was pending. |
 | Pointers for 2026-11-10 | Exactly 38, one per company, all pointing at the newer `gha-42733714781-1` |
 | Raw history | All 38 companies have 2 append-only attempt prefixes. S3 versioning keeps the previous pointer version. |
 | Ops JSON | `pipeline_runs`, `company_snapshots`, `source_registry` and `run_reports` are present for both attempts, plus `source_registry/latest.json` |
@@ -161,6 +161,6 @@ All P1 done-when checks pass. The results below were verified on AWS using read-
 - **OIDC trust policy:** the repo uses GitHub's immutable subject format, so the trust policy now pins `repo:akshaygovindd@97725846/jobpulse@1451951419:environment:prod`.
 - **Commit attribution:** disabled through `.claude/settings.json` (`attribution.commit`/`pr` empty, `sessionUrl` false). Older commits still carry the trailer; history wasn't rewritten.
 
-**Tracking check (doesn't block P2):** the first scheduled run is at 09:17 UTC on 2026-11-10. 2 consecutive successful scheduled days still need recording.
+**Tracking check (still open; doesn't block P2):** the first scheduled run is at 09:17 UTC on 2026-11-10. 2 consecutive successful scheduled days still need recording.
 
 **Next:** P2, which adds Ashby, Adzuna, MotherDuck bronze/silver, dedup and observation tracking.

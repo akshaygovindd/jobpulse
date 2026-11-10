@@ -48,7 +48,7 @@
   - (ii) **New dispatch on the same date:** same result as (i).
   - (iii) **Incomplete later attempt:** the pointer is unchanged.
 
-**Tracked separately (does not block P2).** The scheduled run succeeds on 2 consecutive days. Record the dates in NOTES.md when this happens.
+- [ ] **Tracked separately (still open; does not block P2).** The scheduled run succeeds on 2 consecutive days. Record the dates in NOTES.md when this happens.
 
 ## P2: Ashby, Adzuna, bronze/silver, dedup, observation tracking
 
