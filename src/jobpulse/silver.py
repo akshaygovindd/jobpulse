@@ -12,7 +12,7 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from jobpulse.config import REPO_ROOT, WarehouseConfig
+from jobpulse.config import REPO_ROOT, ExtractionConfig, WarehouseConfig, load_extraction
 
 DBT_DIR = REPO_ROOT / "dbt"
 
@@ -26,7 +26,12 @@ class SilverResult:
     error: str | None = None
 
 
-def build_silver(cfg: WarehouseConfig, *, db_path: Path | None = None) -> SilverResult:
+def build_silver(
+    cfg: WarehouseConfig,
+    *,
+    db_path: Path | None = None,
+    extraction: ExtractionConfig | None = None,
+) -> SilverResult:
     from dbt.cli.main import dbtRunner  # lazy: ingest-only installs don't have the dbt group
 
     if db_path is not None:
@@ -35,7 +40,10 @@ def build_silver(cfg: WarehouseConfig, *, db_path: Path | None = None) -> Silver
     else:
         os.environ["JOBPULSE_DBT_DB"] = cfg.database
         target = "prod"
+    flt = (extraction or load_extraction()).title_filter
     variables = {
+        "extraction_exclude": flt.exclude,
+        "extraction_families": [f.model_dump() for f in flt.families],
         "bronze_schema": cfg.bronze_schema,
         "silver_schema": cfg.silver_schema,
         "closure_consecutive_absences": cfg.closure_consecutive_absences,

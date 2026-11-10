@@ -18,6 +18,9 @@ vars:
   bronze_schema: bronze
   silver_schema: silver
   closure_consecutive_absences: 2
+  extraction_exclude: ''
+  extraction_families:
+    - {name: data_engineer, pattern: 'data engineer'}
 
 models:
   jobpulse:

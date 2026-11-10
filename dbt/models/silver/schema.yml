@@ -52,3 +52,9 @@ models:
               arguments: {values: [active, closed]}
       - {name: first_seen_at, tests: [not_null]}
       - {name: last_seen_at, tests: [not_null]}
+  - name: int_extraction_candidates
+    description: Active postings whose title matches a target role family (config/extraction.yaml).
+    columns:
+      - {name: posting_key, tests: [unique, not_null]}
+      - {name: content_hash, tests: [not_null]}
+      - {name: title_family, tests: [not_null]}
