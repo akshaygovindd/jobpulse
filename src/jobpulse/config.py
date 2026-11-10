@@ -92,11 +92,22 @@ class StorageConfig(_Strict):
     bucket_env_var: str
 
 
+class WarehouseConfig(_Strict):
+    database: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
+    token_env_var: str
+    ops_schema: str
+    bronze_schema: str
+    silver_schema: str
+    # A posting closes after this many absences on calendar-adjacent, authoritative dates.
+    closure_consecutive_absences: int = Field(ge=1)
+
+
 class PipelineConfig(_Strict):
     http: HttpConfig
     ingest: IngestConfig
     freshness: FreshnessConfig
     storage: StorageConfig
+    warehouse: WarehouseConfig
 
 
 def _load_yaml(path: Path) -> object:

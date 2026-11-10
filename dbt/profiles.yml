@@ -1,0 +1,14 @@
+# prod = MotherDuck (token read from MOTHERDUCK_TOKEN by DuckDB, never written here).
+# ci   = a local DuckDB file, used by fixture tests and local runs.
+# `jobpulse build-silver` sets JOBPULSE_DBT_DB / JOBPULSE_DBT_PATH from config/pipeline.yaml.
+jobpulse:
+  target: prod
+  outputs:
+    prod:
+      type: duckdb
+      path: "md:{{ env_var('JOBPULSE_DBT_DB', 'jobpulse') }}"
+      threads: 4
+    ci:
+      type: duckdb
+      path: "{{ env_var('JOBPULSE_DBT_PATH', 'target/ci.duckdb') }}"
+      threads: 1

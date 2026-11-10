@@ -1,0 +1,30 @@
+version: 2
+
+sources:
+  - name: bronze
+    schema: "{{ var('bronze_schema') }}"
+    tables:
+      - name: raw_postings
+        description: Raw postings from authoritative snapshots only (loaded by jobpulse load-bronze).
+        tests:
+          - unique_combination:
+              arguments:
+                combination_of_columns: [source_id, board_id, snapshot_date, external_posting_id]
+        columns:
+          - {name: source_id, tests: [not_null]}
+          - {name: board_id, tests: [not_null]}
+          - {name: snapshot_date, tests: [not_null]}
+          - {name: attempt_id, tests: [not_null]}
+          - {name: external_posting_id, tests: [not_null]}
+          - {name: content_hash, tests: [not_null]}
+      - name: snapshot_pointers
+        description: One row per authoritative logical snapshot, including empty boards.
+        tests:
+          - unique_combination:
+              arguments:
+                combination_of_columns: [source_id, board_id, snapshot_date]
+        columns:
+          - {name: source_id, tests: [not_null]}
+          - {name: board_id, tests: [not_null]}
+          - {name: snapshot_date, tests: [not_null]}
+          - {name: attempt_id, tests: [not_null]}

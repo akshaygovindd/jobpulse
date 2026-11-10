@@ -231,3 +231,8 @@ crash.log
 
 # JobPulse local outputs
 .local_data/
+
+# dbt
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/

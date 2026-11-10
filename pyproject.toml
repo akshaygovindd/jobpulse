@@ -7,6 +7,7 @@ requires-python = ">=3.12,<3.13"
 license = { text = "MIT" }
 dependencies = [
   "boto3>=1.35",
+  "duckdb==1.5.6",  # pinned: MotherDuck supports DuckDB <= 1.5.6 only (v2.0 refused)
   "httpx>=0.27",
   "pydantic>=2.8",
   "pyyaml>=6.0",
@@ -18,6 +19,9 @@ dependencies = [
 jobpulse = "jobpulse.cli:main"
 
 [dependency-groups]
+dbt = [
+    "dbt-duckdb>=1.11.1",
+]
 dev = [
   "moto[s3]>=5.0",
   "mypy>=1.11",
@@ -55,3 +59,8 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 addopts = "-ra --strict-markers -m 'not live'"
 markers = ["live: hits real public APIs; run with `pytest -m live`"]
+
+[tool.uv]
+# dbt is a default group so CI and `make check` can run the silver fixture tests.
+# Production jobs choose groups explicitly (--no-default-groups [--group dbt]).
+default-groups = ["dev", "dbt"]

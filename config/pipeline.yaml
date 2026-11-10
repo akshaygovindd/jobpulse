@@ -22,3 +22,11 @@ freshness:
 
 storage:
   bucket_env_var: JOBPULSE_BUCKET
+
+warehouse:
+  database: jobpulse               # MotherDuck database (created on first load if missing)
+  token_env_var: MOTHERDUCK_TOKEN  # the token itself is never stored in the repo
+  ops_schema: ops
+  bronze_schema: bronze
+  silver_schema: silver
+  closure_consecutive_absences: 2  # absences on calendar-adjacent authoritative dates before closing

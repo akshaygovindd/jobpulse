@@ -1,0 +1,28 @@
+version: 2
+
+models:
+  - name: stg_snapshot_pointers
+    description: Authoritative logical snapshots (source, company, date) with a company_id slug.
+    tests:
+      - unique_combination:
+          arguments:
+            combination_of_columns: [source_id, board_id, snapshot_date]
+    columns:
+      - {name: source_id, tests: [not_null]}
+      - {name: board_id, tests: [not_null]}
+      - {name: company_id, tests: [not_null]}
+      - {name: snapshot_date, tests: [not_null]}
+      - {name: attempt_id, tests: [not_null]}
+  - name: stg_raw_postings
+    description: Bronze postings with the posting_key identity hash.
+    tests:
+      - unique_combination:
+          arguments:
+            combination_of_columns: [source_id, board_id, snapshot_date, external_posting_id]
+    columns:
+      - {name: posting_key, tests: [not_null]}
+      - {name: source_id, tests: [not_null]}
+      - {name: board_id, tests: [not_null]}
+      - {name: snapshot_date, tests: [not_null]}
+      - {name: external_posting_id, tests: [not_null]}
+      - {name: content_hash, tests: [not_null]}

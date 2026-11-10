@@ -8,6 +8,9 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+import duckdb
+
+from jobpulse.bronze.loader import BronzeResult, load_bronze
 from jobpulse.config import CONFIG_DIR, load_employers, load_pipeline, load_sources
 from jobpulse.connectors import build_connectors
 from jobpulse.freshness import check_freshness
@@ -25,8 +28,12 @@ from jobpulse.ingest.report import build_report, render_markdown
 from jobpulse.ingest.runner import run_ingest
 from jobpulse.ingest.storage import LocalStorage, S3Storage, Storage
 from jobpulse.logging import configure_logging, get_logger
+from jobpulse.ops.load_ops import load_ops, record_pipeline_run
 from jobpulse.ops.s3_ops import write_ops
+from jobpulse.silver import build_silver
 from jobpulse.validate import dump_employers_yaml, refreshed, validate_employers
+from jobpulse.warehouse import WarehouseError
+from jobpulse.warehouse import connect as connect_warehouse
 
 EXIT_OK = 0
 EXIT_ALERT = 1  # run finished, but results need attention (low success ratio, stale data)
@@ -91,6 +98,129 @@ def cmd_ingest(args: argparse.Namespace, clock: Clock) -> int:
     return EXIT_OK
 
 
+def _warehouse(args: argparse.Namespace) -> duckdb.DuckDBPyConnection:
+    path = Path(args.db) if args.db else None
+    return connect_warehouse(load_pipeline().warehouse, db_path=path)
+
+
+def cmd_load_ops(args: argparse.Namespace, clock: Clock) -> int:
+    cfg = load_pipeline().warehouse
+    try:
+        con = _warehouse(args)
+    except WarehouseError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return EXIT_USAGE
+    result = load_ops(_storage(args), con, cfg)
+    get_logger(command="load-ops").info(
+        "ops_loaded",
+        attempts=result.attempts_loaded,
+        pipeline_runs=result.pipeline_runs_loaded,
+        company_snapshots=result.company_snapshots_loaded,
+        registry_rows=result.registry_rows,
+    )
+    return EXIT_OK
+
+
+def _bronze_summary(result: BronzeResult) -> str:
+    lines = [
+        "## Bronze load",
+        "",
+        f"- Pointers seen: **{result.pointers_seen}**",
+        f"- Loaded: **{result.loaded}** ({result.rows_loaded} postings)",
+        f"- Unchanged (same attempt already loaded): **{result.skipped_unchanged}**",
+        f"- Failed: **{len(result.failed)}**",
+    ]
+    if result.failed:
+        lines += ["", "| Pointer | Reason |", "|---|---|"]
+        lines += [f"| `{f.pointer_key}` | `{f.reason}` |" for f in result.failed]
+    return "\n".join(lines) + "\n"
+
+
+def cmd_load_bronze(args: argparse.Namespace, clock: Clock) -> int:
+    cfg = load_pipeline().warehouse
+    try:
+        con = _warehouse(args)
+    except WarehouseError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return EXIT_USAGE
+    now = clock()
+    attempt_id = make_attempt_id(now)
+    result = load_bronze(_storage(args), con, cfg, clock=clock, attempt_id=attempt_id)
+    summary = _bronze_summary(result)
+    print(summary)
+    _append_step_summary(summary)
+    finished = clock()
+    status = "success" if not result.failed else ("partial" if result.loaded else "failed")
+    for source_id in sorted(result.rows_by_source) or ["all"]:
+        record_pipeline_run(
+            con,
+            cfg,
+            {
+                "attempt_id": attempt_id,
+                "snapshot_date": now.date().isoformat(),
+                "task": "bronze",
+                "source_id": source_id,
+                "started_at": now.isoformat(),
+                "finished_at": finished.isoformat(),
+                "duration_s": round((finished - now).total_seconds(), 3),
+                "status": status,
+                "rows_in": result.rows_by_source.get(source_id, 0),
+                "rows_kept": result.rows_by_source.get(source_id, 0),
+                "rows_dropped_json": {f.reason: 1 for f in result.failed},
+                "llm_cost_usd": 0.0,
+                "env": detect_env(),
+            },
+        )
+    return EXIT_ALERT if result.failed else EXIT_OK
+
+
+def cmd_build_silver(args: argparse.Namespace, clock: Clock) -> int:
+    cfg = load_pipeline().warehouse
+    try:
+        con = _warehouse(args)  # also ensures the schemas exist
+    except WarehouseError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return EXIT_USAGE
+    now = clock()
+    attempt_id = make_attempt_id(now)
+    con.close()  # release the file lock before dbt opens its own connection
+    result = build_silver(cfg, db_path=Path(args.db) if args.db else None)
+    finished = clock()
+    con = _warehouse(args)
+    postings = con.execute(f'SELECT count(*) FROM "{cfg.silver_schema}"."dim_postings"').fetchone()
+    n_postings = int(postings[0]) if postings else 0
+    record_pipeline_run(
+        con,
+        cfg,
+        {
+            "attempt_id": attempt_id,
+            "snapshot_date": now.date().isoformat(),
+            "task": "silver",
+            "source_id": "all",
+            "started_at": now.isoformat(),
+            "finished_at": finished.isoformat(),
+            "duration_s": round((finished - now).total_seconds(), 3),
+            "status": "success" if result.success else "failed",
+            "rows_in": None,
+            "rows_kept": n_postings,
+            "rows_dropped_json": {f: 1 for f in result.failures},
+            "llm_cost_usd": 0.0,
+            "env": detect_env(),
+        },
+    )
+    summary = (
+        "## Silver build (dbt)\n\n"
+        f"- Models built: **{result.models_built}**\n"
+        f"- Tests passed: **{result.tests_passed}**\n"
+        f"- Failures: **{len(result.failures)}**\n"
+        + "".join(f"  - `{f}`\n" for f in result.failures)
+        + (f"- Error: `{result.error}`\n" if result.error else "")
+    )
+    print(summary)
+    _append_step_summary(summary)
+    return EXIT_OK if result.success else EXIT_ALERT
+
+
 def cmd_check_freshness(args: argparse.Namespace, clock: Clock) -> int:
     pipeline = load_pipeline()
     sources = load_sources().by_id()
@@ -146,6 +276,17 @@ def build_parser() -> argparse.ArgumentParser:
     ing.add_argument("--board", action="append", help="limit to board id(s); repeatable")
     ing.add_argument("--local-dir", help="write to a local directory instead of S3")
 
+    lo = sub.add_parser("load-ops", help="load S3 ops JSON into the warehouse")
+    lo.add_argument("--local-dir", help="read from a local directory instead of S3")
+    lo.add_argument("--db", help="local DuckDB file instead of MotherDuck")
+
+    lb = sub.add_parser("load-bronze", help="load authoritative snapshots into bronze")
+    lb.add_argument("--local-dir", help="read from a local directory instead of S3")
+    lb.add_argument("--db", help="local DuckDB file instead of MotherDuck")
+
+    bs = sub.add_parser("build-silver", help="run the dbt silver models and tests")
+    bs.add_argument("--db", help="local DuckDB file instead of MotherDuck")
+
     fr = sub.add_parser("check-freshness", help="fail if any source is stale")
     fr.add_argument("--local-dir", help="read from a local directory instead of S3")
 
@@ -160,6 +301,9 @@ def main(argv: Sequence[str] | None = None, clock: Clock | None = None) -> int:
     clock = clock or utc_now
     handlers = {
         "ingest": cmd_ingest,
+        "load-ops": cmd_load_ops,
+        "load-bronze": cmd_load_bronze,
+        "build-silver": cmd_build_silver,
         "check-freshness": cmd_check_freshness,
         "validate-employers": cmd_validate_employers,
     }

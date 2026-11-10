@@ -1,0 +1,28 @@
+name: jobpulse
+version: "0.1.0"
+config-version: 2
+profile: jobpulse
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+target-path: target
+clean-targets: ["target"]
+
+flags:
+  send_anonymous_usage_stats: false
+  use_colors: false
+
+# Defaults only; `jobpulse build-silver` passes the real values from config/pipeline.yaml.
+vars:
+  bronze_schema: bronze
+  silver_schema: silver
+  closure_consecutive_absences: 2
+
+models:
+  jobpulse:
+    +schema: "{{ var('silver_schema') }}"
+    staging:
+      +materialized: view
+    silver:
+      +materialized: table
