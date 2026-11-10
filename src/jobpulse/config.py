@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
@@ -125,3 +126,88 @@ def load_sources(path: Path | None = None) -> SourcesFile:
 
 def load_pipeline(path: Path | None = None) -> PipelineConfig:
     return PipelineConfig.model_validate(_load_yaml(path or CONFIG_DIR / "pipeline.yaml"))
+
+
+# --- extraction (P3) -------------------------------------------------------------------------
+
+
+class ModelConfig(_Strict):
+    id: str
+    reasoning_effort: Literal["none", "low", "medium", "high", "xhigh", "max"]
+    input_usd_per_mtok: float = Field(ge=0)
+    cached_input_usd_per_mtok: float = Field(ge=0)
+    output_usd_per_mtok: float = Field(ge=0)
+
+
+class BatchConfig(_Strict):
+    discount: float = Field(gt=0, le=1)
+    completion_window: Literal["24h"]
+
+
+class BudgetConfig(_Strict):
+    run_cap_usd: float = Field(ge=0)
+    backfill_cap_usd: float = Field(ge=0)
+
+
+class CostModelConfig(_Strict):
+    chars_per_token: float = Field(gt=0)
+    prompt_overhead_tokens: int = Field(ge=0)
+    expected_output_tokens: int = Field(ge=1)
+    max_output_tokens: int = Field(ge=1)
+    cap_safety_factor: float = Field(ge=1)
+    escalation_rate: float = Field(ge=0, le=1)
+
+
+class TitleFamily(_Strict):
+    name: str = Field(pattern=r"^[a-z_]+$")
+    pattern: str
+
+    @model_validator(mode="after")
+    def _compiles(self) -> TitleFamily:
+        re.compile(self.pattern)
+        if "'" in self.pattern:
+            raise ValueError("title patterns may not contain a single quote")
+        return self
+
+
+class TitleFilterConfig(_Strict):
+    exclude: str = ""
+    families: list[TitleFamily] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _valid(self) -> TitleFilterConfig:
+        if self.exclude:
+            re.compile(self.exclude)
+            if "'" in self.exclude:
+                raise ValueError("title exclude may not contain a single quote")
+        names = [f.name for f in self.families]
+        if len(set(names)) != len(names):
+            raise ValueError("duplicate title family name")
+        return self
+
+
+class SampleConfig(_Strict):
+    size: int = Field(ge=1)
+    seed: int
+
+
+class ExtractionConfig(_Strict):
+    provider: Literal["openai"]
+    api_key_env_var: str
+    base_url: str
+    request_timeout_s: float = Field(gt=0)
+    max_workers: int = Field(ge=1)
+    extract_schema: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
+    schema_version: int = Field(ge=1)
+    max_description_chars: int = Field(ge=100)
+    first_pass: ModelConfig
+    escalation: ModelConfig
+    batch: BatchConfig
+    budget: BudgetConfig
+    cost_model: CostModelConfig
+    title_filter: TitleFilterConfig
+    sample: SampleConfig
+
+
+def load_extraction(path: Path | None = None) -> ExtractionConfig:
+    return ExtractionConfig.model_validate(_load_yaml(path or CONFIG_DIR / "extraction.yaml"))

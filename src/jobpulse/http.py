@@ -102,13 +102,33 @@ class HttpClient:
     def __exit__(self, *_: object) -> None:
         self.close()
 
-    def _once(self, url: str, params: Mapping[str, str | int] | None) -> Any:
+    def _once(
+        self,
+        method: str,
+        url: str,
+        params: Mapping[str, str | int] | None,
+        json_body: Any,
+        files: Mapping[str, Any] | None,
+        data: Mapping[str, str] | None,
+        headers: Mapping[str, str] | None,
+        timeout: float | None,
+        expect: str,
+    ) -> Any:
         try:
-            resp = self._client.get(url, params=params)
+            resp = self._client.request(
+                method,
+                url,
+                params=params,
+                json=json_body,
+                files=files,
+                data=data,
+                headers=headers,
+                timeout=timeout if timeout is not None else self._cfg.timeout_s,
+            )
         except httpx.TimeoutException as e:
-            raise _RetryableError(ReasonCode.TIMEOUT, f"timeout: {e}") from e
+            raise _RetryableError(ReasonCode.TIMEOUT, f"timeout: {type(e).__name__}") from e
         except httpx.TransportError as e:
-            raise _RetryableError(ReasonCode.NETWORK_ERROR, f"transport: {e}") from e
+            raise _RetryableError(ReasonCode.NETWORK_ERROR, f"transport: {type(e).__name__}") from e
 
         status = resp.status_code
         if status == 429:
@@ -122,13 +142,33 @@ class HttpClient:
         if status == 404:
             raise FetchError(ReasonCode.BOARD_NOT_FOUND, f"HTTP 404 for {url}")
         if status >= 400:
-            raise FetchError(ReasonCode.HTTP_4XX, f"HTTP {status} for {url}")
+            detail = f"HTTP {status} for {url}"
+            if status in (400, 422):  # request-shape errors; auth errors never echo a body
+                detail += f": {resp.text[:300]}"
+            raise FetchError(ReasonCode.HTTP_4XX, detail)
+        if expect == "text":
+            return resp.text
         try:
             return resp.json()
         except ValueError as e:
             raise FetchError(ReasonCode.PARSE_ERROR, f"invalid JSON from {url}: {e}") from e
 
-    def get_json(self, url: str, params: Mapping[str, str | int] | None = None) -> Any:
+    def request(
+        self,
+        method: str,
+        url: str,
+        *,
+        params: Mapping[str, str | int] | None = None,
+        json_body: Any = None,
+        files: Mapping[str, Any] | None = None,
+        data: Mapping[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+        expect: str = "json",
+    ) -> Any:
+        """Send a request with retries. `headers` are per-call (e.g. Authorization) and are never
+        logged. `expect` is "json" or "text"."""
+
         def _log_retry(state: RetryCallState) -> None:
             exc = state.outcome.exception() if state.outcome else None
             self._log.warning(
@@ -148,6 +188,11 @@ class HttpClient:
             reraise=True,
         )
         try:
-            return retrying(self._once, url, params)
+            return retrying(
+                self._once, method, url, params, json_body, files, data, headers, timeout, expect
+            )
         except _RetryableError as e:
             raise FetchError(e.reason, f"{e.detail} after {self._cfg.max_attempts} attempts") from e
+
+    def get_json(self, url: str, params: Mapping[str, str | int] | None = None) -> Any:
+        return self.request("GET", url, params=params)
