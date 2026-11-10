@@ -90,3 +90,28 @@ P1 isn't done until those steps and the remaining done-when checks pass on the r
 
 **Open questions for owner**
 - None blocking. Optional: install gitleaks locally (`brew install gitleaks`) so `make check` also scans for secrets.
+
+---
+
+## 2026-11-10: OIDC assume-role failure (debugging)
+
+**What happened**
+- The first Daily ingest run failed with "Not authorized to perform sts:AssumeRoleWithWebIdentity".
+
+**What changed**
+- Added a temporary debug step to `daily_ingest.yml`, before `configure-aws-credentials`.
+  - It requests the OIDC token with audience `sts.amazonaws.com` and prints only the decoded `sub`, `aud` and `iss` claims.
+  - The raw token is masked and never printed.
+  - Remove the step once the trust policy is fixed.
+
+**Finding**
+- The unauthenticated GitHub API call `GET /repos/akshaygovindd/jobpulse/actions/oidc/customization/sub` returned:
+  - `use_default: true`
+  - `use_immutable_subject: true`
+  - `sub_claim_prefix: "repo:akshaygovindd@97725846/jobpulse@1451951419"`
+- So the real `sub` probably includes the owner and repo numeric IDs, which doesn't match the `repo:akshaygovindd/jobpulse:environment:prod` in the trust policy.
+- The trust policy is unchanged until the debug step shows the actual `sub`.
+
+**Checks run**
+- `make check`: all green.
+- The debug step's claim decoder was tested locally against a fake JWT. It printed only sub, aud and iss.
