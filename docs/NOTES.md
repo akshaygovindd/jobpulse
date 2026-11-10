@@ -134,3 +134,33 @@ P1 isn't done until those steps and the remaining done-when checks pass on the r
 **Owner steps**
 - `terraform plan`/`apply` in `infra/terraform/main`. Expect a single in-place update to the role's trust policy.
 - Re-run Daily ingest.
+
+---
+
+## 2026-11-10: Phase 1 complete
+
+All P1 done-when checks pass. The results below were verified on AWS using read-only `aws s3` and `aws budgets` calls.
+
+| Check | Result |
+|---|---|
+| CI | Green, confirmed by the owner. Covers ruff, mypy, pytest, terraform fmt/validate and gitleaks. |
+| Terraform + budget | Applied by the owner. Budget `jobpulse-monthly` lists one `EMAIL` subscriber, checked with `describe-subscribers-for-notification`. |
+| First run, `gha-42732783751-1` (dispatch) | 38/38 complete, 0 failed, 7,337 postings, about 9 s |
+| Rerun, `gha-42733714781-1` (new dispatch, same date) | 38/38 complete, 0 failed, 7,339 postings |
+| Pointers for 2026-11-10 | Exactly 38, one per company, all pointing at the newer `gha-42733714781-1` |
+| Raw history | All 38 companies have 2 append-only attempt prefixes. S3 versioning keeps the previous pointer version. |
+| Ops JSON | `pipeline_runs`, `company_snapshots`, `source_registry` and `run_reports` are present for both attempts, plus `source_registry/latest.json` |
+| Failed-company reporting | Neither production run had a failure. A live run against the real Greenhouse API with a fake board id, written to a local directory rather than S3, reported it as `board_not_found` while the rest of the run succeeded. Unit tests cover the same case. |
+
+**Idempotency coverage**
+- **(ii) New dispatch on the same date:** verified on AWS.
+- **(i) "Re-run jobs" on the same workflow run (`run_attempt` 2):** covered by moto unit tests, not repeated on AWS.
+- **(iii) Incomplete later attempt leaves the pointer unchanged:** covered by moto unit tests.
+
+**Other fixes during P1**
+- **OIDC trust policy:** the repo uses GitHub's immutable subject format, so the trust policy now pins `repo:akshaygovindd@97725846/jobpulse@1451951419:environment:prod`.
+- **Commit attribution:** disabled through `.claude/settings.json` (`attribution.commit`/`pr` empty, `sessionUrl` false). Older commits still carry the trailer; history wasn't rewritten.
+
+**Tracking check (doesn't block P2):** the first scheduled run is at 09:17 UTC on 2026-11-10. 2 consecutive successful scheduled days still need recording.
+
+**Next:** P2, which adds Ashby, Adzuna, MotherDuck bronze/silver, dedup and observation tracking.

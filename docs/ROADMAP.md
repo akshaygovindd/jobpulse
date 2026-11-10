@@ -4,7 +4,7 @@
 >
 > Priority: get daily raw ingestion running this week so history starts accumulating. Build a thin slice before adding breadth. A phase is finished only when every one of its "done when" checks passes.
 
-## P1: Infra + daily raw ingestion (Greenhouse, Lever). Target: this week
+## P1: Infra + daily raw ingestion (Greenhouse, Lever). ✅ Done 2026-11-10
 
 **Build**
 
@@ -38,12 +38,12 @@
 - `daily_ingest.yml`: cron + dispatch, `environment: prod`, concurrency group.
 
 **Done when**
-- [ ] CI is green, including gitleaks.
-- [ ] The owner has applied Terraform, and the budget exists with the owner's email as a subscriber. AWS Budgets email has no opt-in step, so verify the subscriber in the console or with `aws budgets describe-subscribers-for-notification`.
-- [ ] A manual dispatch writes authoritative pointers for ≥ 90% of seeded companies.
-- [ ] The run report (`ops/run_reports/…`) and the GitHub step summary list **every failed company with its reason code**. A deliberately bad board id appears there, and the run still succeeds.
-- [ ] `ops/` contains `pipeline_runs`, `company_snapshots`, and `source_registry` JSON for the run.
-- [ ] Idempotency tests pass. These are moto-backed unit tests plus one live check:
+- [x] CI is green, including gitleaks.
+- [x] The owner has applied Terraform, and the budget exists with the owner's email as a subscriber. AWS Budgets email has no opt-in step, so verify the subscriber in the console or with `aws budgets describe-subscribers-for-notification`.
+- [x] A manual dispatch writes authoritative pointers for ≥ 90% of seeded companies.
+- [x] The run report (`ops/run_reports/…`) and the GitHub step summary list **every failed company with its reason code**. A deliberately bad board id appears there, and the run still succeeds.
+- [x] `ops/` contains `pipeline_runs`, `company_snapshots`, and `source_registry` JSON for the run.
+- [x] Idempotency tests pass. These are moto-backed unit tests plus one live check:
   - (i) **Re-run of the same workflow run (attempt 2):** writes a new raw attempt prefix, and there is still exactly one pointer per (source, company, date). The pointer moves to attempt 2 only if attempt 2 is complete.
   - (ii) **New dispatch on the same date:** same result as (i).
   - (iii) **Incomplete later attempt:** the pointer is unchanged.
