@@ -2,8 +2,9 @@
 
     uv run python scripts/report_extraction_cost.py [--db path/to/local.duckdb]
 
-Prints cost per 1k postings, escalation rate and quarantine rate. Every figure comes from
-extract.llm_calls / extractions / quarantine; nothing is estimated.
+Prints cost per 1k postings, escalation rate and quarantine rate. Evaluation-only calls
+(mode='eval', from eval/agreement.py) are excluded from those figures and shown separately.
+Every figure comes from extract.llm_calls / extractions / quarantine; nothing is estimated.
 """
 
 from __future__ import annotations
@@ -42,7 +43,10 @@ def main() -> int:
         (quar,) = one(f'SELECT count(*) FROM "{s}"."quarantine"')
         calls, cost, tin, tout = one(
             f"SELECT count(*), sum(cost_usd), sum(input_tokens), sum(output_tokens) "
-            f'FROM "{s}"."llm_calls"'
+            f'FROM "{s}"."llm_calls" WHERE mode <> \'eval\''
+        )
+        eval_calls, eval_cost = one(
+            f'SELECT count(*), sum(cost_usd) FROM "{s}"."llm_calls" WHERE mode = \'eval\''
         )
     except Exception:
         print("no extraction tables yet (run `jobpulse extract` first)")
@@ -50,6 +54,11 @@ def main() -> int:
     done = ext + quar
     print(f"postings processed: {done:.0f} (extracted {ext:.0f}, quarantined {quar:.0f})")
     print(f"llm calls: {calls:.0f}; tokens in/out: {tin:.0f}/{tout:.0f}; total cost: ${cost:.4f}")
+    if eval_calls:
+        print(
+            f"(excluded: {eval_calls:.0f} evaluation-only calls costing ${eval_cost:.4f}, "
+            "from eval/agreement.py)"
+        )
     if done:
         print(f"cost per 1k postings: ${1000 * cost / done:.2f}")
         print(f"escalation rate: {100 * (esc + quar) / done:.1f}%")

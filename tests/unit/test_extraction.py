@@ -9,25 +9,21 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
-import duckdb
 import httpx
 import pytest
 
-from jobpulse.config import ExtractionConfig, HttpConfig, load_extraction, load_pipeline
+from jobpulse.config import ExtractionConfig, HttpConfig
 from jobpulse.extract.llm import LLMError, LLMRequest, LLMResponse, OpenAIClient
 from jobpulse.extract.runner import ExtractionError, collect_batch, run_extraction, submit_batch
 from jobpulse.extract.schema import (
     Extraction,
     parse_and_check,
-    prompt_version,
     strict_json_schema,
 )
 from jobpulse.extract.store import Store
 from jobpulse.http import HttpClient
-from jobpulse.ingest.storage import LocalStorage
 from jobpulse.secrets import load_env_keys, redact
 from tests.conftest import TickingClock
-from tests.warehouse_helpers import gh_job, ingest_day, run_pipeline
 
 D1 = date(2026, 11, 10)
 DESC = (
@@ -88,27 +84,6 @@ class FakeClient:
         if isinstance(item, LLMError):
             raise item
         return item
-
-
-@pytest.fixture
-def ecfg() -> ExtractionConfig:
-    return load_extraction()
-
-
-@pytest.fixture
-def db(tmp_path: Path) -> Path:
-    storage = LocalStorage(tmp_path / "s3")
-    jobs = [gh_job(i, title=t, content=f"{DESC} #{i}") for i, t in TITLES.items()]
-    ingest_day(storage, D1, "greenhouse", {"acme": jobs})
-    _, silver = run_pipeline(storage, tmp_path / "wh.duckdb")
-    assert silver.success, silver.failures
-    return tmp_path / "wh.duckdb"
-
-
-@pytest.fixture
-def store(db: Path, ecfg: ExtractionConfig) -> Store:
-    con = duckdb.connect(str(db))
-    return Store(con, load_pipeline().warehouse, ecfg, prompt_version(ecfg.schema_version))
 
 
 def clock() -> Callable[[], datetime]:

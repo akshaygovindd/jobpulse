@@ -82,13 +82,17 @@ def _norm(text: str) -> str:
     return _WS.sub(" ", text).strip().casefold()
 
 
+def quote_in_text(quote: str, description: str) -> bool:
+    """True when `quote` appears in the posting text (whitespace- and case-insensitive)."""
+    return _norm(quote) in _norm(description)
+
+
 def grounding_errors(ex: Extraction, description: str) -> list[str]:
     """Quoted evidence must appear (whitespace/case-insensitively) in the posting text."""
-    haystack = _norm(description)
     errors: list[str] = []
     for name in ("salary_original_text", "sponsorship_original_text"):
         quote = getattr(ex, name)
-        if quote and _norm(quote) not in haystack:
+        if quote and not quote_in_text(quote, description):
             errors.append(f"{name} not found in posting text")
     return errors
 

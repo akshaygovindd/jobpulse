@@ -47,6 +47,16 @@ _DDL = {
         cost_usd DOUBLE NOT NULL, latency_ms INTEGER NOT NULL, outcome VARCHAR NOT NULL,
         created_at TIMESTAMPTZ NOT NULL
     """,
+    # Cross-model agreement runs (eval only). Never read by the extraction cache or pipeline.
+    "agreement": """
+        content_hash VARCHAR NOT NULL, schema_version INTEGER NOT NULL,
+        prompt_version VARCHAR NOT NULL, model VARCHAR NOT NULL, skills VARCHAR[],
+        seniority VARCHAR, role_family VARCHAR, salary_min DOUBLE, salary_max DOUBLE,
+        salary_currency VARCHAR, salary_period VARCHAR, salary_original_text VARCHAR,
+        remote_policy VARCHAR, sponsorship_statement VARCHAR, sponsorship_original_text VARCHAR,
+        confidence DOUBLE, created_at TIMESTAMPTZ NOT NULL,
+        PRIMARY KEY (content_hash, schema_version, prompt_version, model)
+    """,
     "batches": """
         batch_id VARCHAR PRIMARY KEY, attempt_id VARCHAR NOT NULL, input_file_id VARCHAR,
         model VARCHAR NOT NULL, request_count INTEGER NOT NULL, est_cost_usd DOUBLE NOT NULL,
@@ -299,6 +309,48 @@ class Store:
     def queue_size(self) -> int:
         row = self.con.execute(f"SELECT count(*) FROM {self.t('queue')}").fetchone()
         return int(row[0]) if row else 0
+
+    # --- agreement (eval only) -------------------------------------------------------------
+    def save_agreement(self, content_hash: str, model: str, ex: Extraction, now: datetime) -> None:
+        self.con.execute(
+            f"INSERT OR REPLACE INTO {self.t('agreement')} VALUES ({', '.join('?' * 17)})",
+            [
+                content_hash,
+                self.schema_version,
+                self.prompt_version,
+                model,
+                ex.skills,
+                ex.seniority,
+                ex.role_family,
+                ex.salary_min,
+                ex.salary_max,
+                ex.salary_currency,
+                ex.salary_period,
+                ex.salary_original_text,
+                ex.remote_policy,
+                ex.sponsorship_statement,
+                ex.sponsorship_original_text,
+                ex.confidence,
+                now,
+            ],
+        )
+
+    def agreement_done(self, model: str) -> set[str]:
+        rows = self.con.execute(
+            f"SELECT content_hash FROM {self.t('agreement')} "
+            "WHERE model = ? AND schema_version = ? AND prompt_version = ?",
+            [model, self.schema_version, self.prompt_version],
+        ).fetchall()
+        return {str(r[0]) for r in rows}
+
+    def eval_spend(self, model: str) -> float:
+        """Dollars already spent on eval-mode calls to `model` (survives restarts)."""
+        row = self.con.execute(
+            f"SELECT coalesce(sum(cost_usd), 0) FROM {self.t('llm_calls')} "
+            "WHERE mode = 'eval' AND model = ?",
+            [model],
+        ).fetchone()
+        return float(row[0]) if row else 0.0
 
     # --- batches ---------------------------------------------------------------------------
     def open_batches(self) -> list[tuple[str, str]]:
