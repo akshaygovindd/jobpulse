@@ -104,6 +104,8 @@
 
 ## P4: dbt gold + snapshots + local Airflow/Docker
 
+**Part A (gold + snapshot + daily job): built 2026-11-11, awaiting the first live run.** Part B (local Airflow in Docker Compose) is planned and not started: it waits for the owner to confirm Docker Desktop works.
+
 **Done when**
 - [ ] All gold models and `snap_postings` build, with grain and `accepted_values` tests.
 - [ ] `dbt build` runs against fixtures in CI.

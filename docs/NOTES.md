@@ -452,3 +452,39 @@ Daily ingest #5 (`gha-42738644998-1`) verified read-only on S3 and MotherDuck. A
 The owner ran `make check` locally with **gitleaks 8.30.1** against commit `e4cb080` (reported by the owner; I did not run it, since gitleaks is not installed in my environment): 198 tests passed, both Terraform roots valid, and gitleaks scanned **32 commits (the whole history: `git rev-list --count HEAD` is 32) and found no leaks**. That full-history scan includes the two commits that earlier made CI #11 and #12 fail (`96efa65`, `6af5a07`, which add the benchmark manifests) and the unit-test commit with the fake keys, so with `.gitleaks.toml` in place the history is clean. This closes the verification gap noted in the previous entry (item 3), which had only a green push that did not touch the manifests.
 
 What this does and does not show: it shows the repository, as configured, has no findings. It does not isolate which findings the allowlist suppressed. A scan with the config bypassed (for example `gitleaks detect --source . --redact --config <a copy of the default config without the allowlist>`) would list the suppressed findings and confirm they are exactly the manifest hashes and the test keys. Optional; not done. The allowlist's trade-off stands: everything inside `eval/*_manifest.json` and `tests/unit/test_extraction.py` is exempt from scanning, so no real credential may ever be put in those files.
+
+---
+
+## 2026-11-11 (afternoon): P4 part A, dbt gold + snap_postings + daily `gold` job
+
+**Plan approved by the owner, then built in four small commits.** Part B (local Airflow in Docker Compose) is **not started**: it waits for Docker Desktop. Nothing in part A has run against live MotherDuck yet (see "What is not proven").
+
+**What changed and why**
+- **Gold layer (dbt, schema `gold`)**: `fct_postings`, `dim_company`, `dim_skill`, `bridge_posting_skill`, `agg_skill_demand_weekly`, `agg_salary_by_role_city`, and the snapshot `snap_postings`, plus `int_latest_extraction` in a separate `gold_stage` schema. Every model has grain and not-null tests; enum columns have `accepted_values`; `bridge_posting_skill.skill_id` has a `relationships` test. Column and grain details are in ARCHITECTURE.md ("gold").
+- **Order in the daily workflow (decision, documented in ARCHITECTURE.md and the workflow comments):** a fourth job `gold` after `extract`, running when `warehouse` succeeded **even if `extract` failed or hit its cap**. Extractions are a persistent cache, so gold then uses what is already stored (at worst yesterday's). New or changed postings show `has_extraction = false` until the next extract. Running gold before extract was rejected because it would always lag a day.
+- **Silver is now scoped** to staging + silver models (`--select`), so `build-silver` no longer needs the `extract` schema. A new `jobpulse build-gold [--db]` stages two mapping tables in Python, then runs `dbt build` on gold + snapshots, and records a `task='gold'` row in `ops.pipeline_runs`.
+- **Skill names:** `norm_skill` moved from `eval/score.py` to `src/jobpulse/skills.py` (score.py imports it; eval behavior is unchanged). `dim_skill` and the bridge use it through `gold_stage.skill_map`.
+- **Config:** `warehouse.gold_schema`, `gold.annualization` (year 1, month 12, week 52, hour 2080; `day` is deliberately not annualized) and `gold.min_salaries_for_percentiles` (5) in `config/pipeline.yaml`; city rules in `config/locations.yaml`.
+- **`scripts/gold_report.py`**: read-only; the source for every gold figure quoted in docs (counts, city share, salary coverage, snapshot rows, database size).
+
+**Decisions that deviate from the earlier ARCHITECTURE table (you approved the plan; flagged again so they are visible)**
+1. Not built until P5: `sponsorship_class`, `country`, `dim_company.lca_match_confidence`/`visa_evidence_class` (they need the LCA loader and employer match). `fct_postings` keeps only the extracted `sponsorship_statement`.
+2. `city` is a heuristic on `location_raw` (no structured location exists). On the live data (8,481 active postings, read-only check before writing the rules) **62.3% get a city**; the rest are remote-only, country-only or multi-location strings, which stay NULL on purpose. I tuned the rules against that data (for example "New York, NY" had wrongly returned NULL because New York is also a state), so the 62.3% is a development figure, not an independent measurement. Known flaw: same-named cities in different countries merge (Dublin, CA and Dublin, Ireland, which together are about 230 active postings). Fixing it needs a country/state field, which is new scope.
+3. `dim_skill.category` omitted (no source for categories).
+4. `agg_salary_by_role_city` has `salary_currency` in the grain so currencies are never blended. Consequence for P5: `n_postings`, `n_with_salary` and `coverage_pct` describe the whole group and repeat on each currency row, so they must not be summed across rows (documented in the model and ARCHITECTURE.md).
+5. Cross-source probable duplicates are excluded from both aggregates so one job is not counted twice. In the first week of data every posting counts as `new_postings` (history starts then), so the first week reads as a baseline.
+
+**MotherDuck storage impact:** not measured yet. The plan's estimate (under about 3 MB, against 54.7 MiB at the Nov 10 reading) is an estimate. Gold tables are rebuilt each run (replace, no growth) except `snap_postings` (one row per posting, then one per change; no description text). The first live `build-gold` will print `database_size` through `scripts/gold_report.py`; run it before and after and I will record the real numbers.
+
+**Checks run (local, `make check`):** ruff check, ruff format --check, mypy (40 source files) all clean; **235 passed** (was 198 at the last entry; +28 city/skill tests, +9 gold tests); both Terraform roots valid; gitleaks 33 commits, no leaks. The gold tests (`tests/unit/test_gold.py`) build silver + gold on a local DuckDB file from synthetic postings and hand-written extractions: 53 gold dbt tests pass in each build, annualization (year/hour/month; day and missing period stay NULL), per-currency separation, coverage math, percentiles NULL below the minimum, skill-name collapsing, weekly demand counts, idempotent rerun, snapshot versioning on a content change, latest extraction wins, gold on an empty `extract.extractions`, and the CLI run record. CI result for the push is recorded below.
+
+**What is not proven**
+- No live run: the gold job has not run in GitHub Actions and `build-gold` has not run against MotherDuck. The workflow file is parse-checked only. A first live run could still hit a MotherDuck-specific difference (for example snapshot DDL).
+- The fixture tests use synthetic extractions; real extractions have messier skills and locations than my tests.
+- ROADMAP P4 boxes stay unticked until the live build and the Airflow demo exist (the fixture-CI box is ticked only once CI is green on this push).
+
+**Open questions for the owner**
+- Run the first live gold build (manual steps in the session reply) and send me the `scripts/gold_report.py` output so I can record real counts and storage.
+- Docker Desktop: when it is installed, run `docker --version`, `docker compose version` and `docker run --rm hello-world`, and tell me; then I build part B.
+- Part B will need a dev S3 prefix setting (the CLI has none today): OK to add it as a config value?
+

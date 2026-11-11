@@ -35,14 +35,16 @@ flowchart LR
 jobpulse/
 ├── CLAUDE.md  README.md  Makefile  pyproject.toml  uv.lock  .env.example
 ├── config/            employers.yaml (converted from owner's seed list)
-│                      sources.yaml  pipeline.yaml  extraction.yaml
+│                      sources.yaml  pipeline.yaml  extraction.yaml  locations.yaml
 ├── src/jobpulse/
 │   ├── config.py  logging.py  http.py  cli.py
 │   ├── connectors/    base.py  greenhouse.py  lever.py  ashby.py  (adzuna.py: later)
 │   ├── ingest/        runner.py  manifest.py  pointer.py  s3_writer.py  report.py
 │   ├── ops/           s3_ops.py (P1: JSON to S3)  load_ops.py (P2: → MotherDuck)
 │   ├── bronze/        loader.py  normalize.py
-│   ├── silver.py      (runs the dbt project with vars from config)
+│   ├── silver.py      (runs the dbt silver models with vars from config; run_dbt shared with gold)
+│   ├── gold.py        (stages skill/city mapping tables, then runs the dbt gold models + snapshot)
+│   ├── skills.py  location.py   (skill-name normalization shared with eval; city heuristic)
 │   ├── warehouse.py   (MotherDuck / local DuckDB connection)
 │   ├── extract/       schema.py  llm.py  cost.py  store.py (cache, queue, quarantine)  budget.py  runner.py
 │   ├── secrets.py     (.env reader, Python only; redaction)
@@ -55,7 +57,7 @@ jobpulse/
 │                      pilot_analysis.py  salary_rules.py  salary_crosscheck.py  grounding_report.py  agreement.py (automated, no human labels)
 │                      labels_template.csv (BLIND: id, title, company, text only)  predictions.csv (separate, gitignored)
 ├── scripts/           validate_employers.py  check_freshness.py  warehouse_counts.py
-│                      extraction_counts.py  report_extraction_cost.py
+│                      extraction_counts.py  report_extraction_cost.py  gold_report.py
 ├── infra/terraform/   bootstrap/  (state bucket)
 │                      main/       (data bucket, OIDC provider, role, budget)
 ├── airflow/           dags/jobpulse_daily.py  docker-compose.yml
@@ -176,17 +178,27 @@ Flow per posting: cache lookup (content hash) → first-pass model with Structur
 | `lca_disclosures` | case_number, fiscal_year, case_status, employer_name, soc_code, soc_title, job_title, worksite_city, worksite_state, wage_rate_from, wage_rate_to, wage_unit, prevailing_wage, pw_wage_level, wage_basis |
 | `employer_lca_match` | company_id, lca_employer_name, match_method (exact/normalized/fuzzy), match_confidence, reviewed |
 
-### gold (dbt)
+### gold (dbt, schema `gold`; built by `jobpulse build-gold`)
+Built from silver and `extract.extractions`; it reads both and writes neither. Advertised salary only: LCA wages are never joined in.
+
 | Model | Grain / key columns |
 |---|---|
-| `fct_postings` | posting_key: company_id, role_family, seniority, remote_policy, city, country, salary_min_annual, salary_max_annual, salary_currency, has_advertised_salary, sponsorship_class, first_seen_date, closed_date, is_active, is_probable_duplicate, source_id |
-| `dim_company` | company_id: name, sources[], lca_match_confidence, visa_evidence_class |
-| `dim_skill` | skill_id: canonical_name, category |
-| `bridge_posting_skill` | (posting_key, skill_id) |
-| `agg_skill_demand_weekly` | (week_start, skill_id, role_family): active_postings, new_postings, share_of_postings |
-| `agg_salary_by_role_city` | (role_family, seniority, city): n_postings, n_with_salary, coverage_pct, p25/p50/p75. **Advertised salary only.** |
-| `agg_lca_wage_by_soc_city` | (fiscal_year, soc_code, worksite_city): LCA wages. **Separate model; never joined into advertised salary.** |
-| `snapshots/snap_postings` | dbt snapshot, `strategy=check`, `check_cols=[content_hash, source_status]`. It runs after each silver build, so its history follows authoritative observations, not wall-clock time. |
+| `fct_postings` | posting_key: company_id, source_id, title, `has_extraction`, role_family, seniority, remote_policy, city, `sponsorship_statement`, salary_min/max (as stated), salary_currency, salary_period, **`salary_period_inferred`**, salary_min_annual, salary_max_annual, `has_advertised_salary`, first_seen_date, closed_date, is_active, is_probable_duplicate. Every posting, active or closed; extracted fields are NULL and `has_extraction` is false until the posting's current content has been extracted. |
+| `dim_company` | company_id: name, sources[], n_postings, n_active, n_extracted |
+| `dim_skill` | skill_id (sha256 of canonical_name): canonical_name, n_spellings. Names come from `jobpulse.skills.norm_skill`, the same function `eval/score.py` uses. |
+| `bridge_posting_skill` | (posting_key, skill_id), deduplicated after normalization |
+| `agg_skill_demand_weekly` | (week_start, skill_id, role_family): active_postings, new_postings, share_of_postings. Extracted, non-duplicate postings only; the share's denominator is the extracted postings active that week in the role family. In the first week of data every posting is "new" (history starts there), so that week is a baseline, not a spike. |
+| `agg_salary_by_role_city` | (role_family, seniority, city, salary_currency): n_postings, n_with_salary, coverage_pct, n_currency_salary, n_annualized, p25/p50/p75 of the annualized midpoint. **Advertised salary only.** Active, extracted, non-duplicate postings. `n_postings`, `n_with_salary` and `coverage_pct` describe the whole (role, seniority, city) group and repeat on each currency row (do not sum them across currencies). Percentiles are NULL below `gold.min_salaries_for_percentiles`. A group with no salary has one row with currency `none`. |
+| `snapshots/snap_postings` | dbt snapshot (unique_key posting_key), `strategy=check`, `check_cols=[content_hash, source_status]`. Narrow (no description text). It runs in `build-gold`, so its history advances once per daily build and follows content and closure changes, not wall-clock time. |
+| `int_latest_extraction` (schema `gold_stage`) | content_hash: the newest extraction across prompt/schema versions. |
+
+**Annualization.** Only where the period is known (stated or rule-inferred, see "Missing salary period"): factors in `config/pipeline.yaml` `gold.annualization` (year 1, month 12, week 52, hour 2080). `day` is not annualized and a missing period is never guessed in gold, so those rows have NULL annual columns but still count in `n_with_salary`. Inferred periods are marked `salary_period_inferred`.
+
+**City.** There is no structured location in the source data. `city` is a conservative heuristic on `location_raw` (`location.py`, rules in `config/locations.yaml`): one city, optionally followed by a state/province/country, else NULL. Remote-only, country-only and multi-location strings have no city. Same-named cities in different countries merge (Dublin, CA and Dublin, Ireland). Share of active postings that get a city: run `scripts/gold_report.py`.
+
+**Mapping tables.** `build-gold` first rebuilds `gold_stage.skill_map` (raw spelling to canonical name) and `gold_stage.location_map` (location_raw to city) in Python, then runs dbt. They are recomputed from scratch each run, so reruns are idempotent.
+
+**Not built in P4 (needs the P5 LCA loader and employer match):** `sponsorship_class`, `country`, and `dim_company.lca_match_confidence` / `visa_evidence_class`. `dim_skill.category` is omitted: nothing in the data defines categories. `agg_lca_wage_by_soc_city` arrives with P5.
 
 ### Visa evidence classes
 | Class | Meaning |
@@ -245,9 +257,11 @@ Trust policy on the ingest role (exact):
 
 ## Daily workflow
 
-`daily_ingest.yml` has two jobs, both in the `prod` environment:
+`daily_ingest.yml` has four jobs, all in the `prod` environment:
 1. `ingest`: `jobpulse ingest` then `check-freshness`. Needs no MotherDuck and no dbt (`uv sync --no-default-groups`).
 2. `warehouse` (`needs: ingest`, runs unless cancelled): `load-ops` → `load-bronze` → `build-silver`. `MOTHERDUCK_TOKEN` (a `prod` environment secret) is set only on those three steps. A MotherDuck problem cannot fail ingest, and the next run catches up from the pointers because every step is idempotent.
+3. `extract` (`needs: warehouse`, only when it succeeded): `jobpulse extract --cap 0.25`.
+4. `gold` (`needs: [warehouse, extract]`, runs when `warehouse` succeeded, **even if `extract` failed or hit its cap**): `jobpulse build-gold`. Gold joins `extract.extractions`, so it must run after extract; running it earlier would lag extraction by a day. If extract did not finish, `extract.extractions` still holds everything extracted so far (at worst yesterday's), so gold builds from that and postings that are new or changed show `has_extraction = false` until the next successful extract. It is skipped only when `warehouse` failed (silver would be stale). It needs only `MOTHERDUCK_TOKEN` and the dbt group: no AWS, no OpenAI key.
 
 DuckDB is pinned to 1.5.6 because MotherDuck refuses newer clients; bump it only after MotherDuck announces support.
 
@@ -259,6 +273,6 @@ DuckDB is pinned to 1.5.6 because MotherDuck refuses newer clients; bump it only
 | AWS auth | OIDC, `prod` environment, `main` only | Owner's local AWS profile against a dev S3 prefix |
 | Warehouse | MotherDuck (from P2) | Dev MotherDuck DB or local DuckDB file |
 | Secrets | GitHub `prod` environment secrets (MotherDuck from P2, `OPENAI_API_KEY` for extraction; Adzuna if revived) | `.env` (gitignored), template in `.env.example` |
-| Status | **The real daily pipeline.** | Runs the same CLI tasks (`jobpulse ingest`, `load-ops`, `load-bronze`, `build-silver`, `extract`) to show orchestration; it is **not** the production scheduler. |
+| Status | **The real daily pipeline.** | Runs the same CLI tasks (`jobpulse ingest`, `load-ops`, `load-bronze`, `build-silver`, `extract`, `build-gold`) to show orchestration; it is **not** the production scheduler. |
 
 Terraform: `infra/terraform/bootstrap` creates the state bucket (local state, S3 native lockfile for the main root). `infra/terraform/main` holds the data bucket, OIDC provider, role, and budget. The owner runs `plan` and `apply` locally.
