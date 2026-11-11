@@ -14,6 +14,14 @@ and the prediction is absent or different. Precision = TP/(TP+FP), recall = TP/(
 Skills are scored as a micro-averaged set comparison (lower-cased); salary numbers match within
 `SALARY_TOLERANCE`.
 
+Two scoring-time conventions (owner decision 2026-11-11, from the 38-row pilot), both configured
+in config/extraction.yaml and both reported NEXT TO the raw exact-match number:
+- seniority (folded): staff/principal/manager/director/executive count as senior on both sides.
+- skills (normalized): lower-case, drop parenthetical abbreviations, drop a leading "Apache", strip
+  punctuation and a plural "s". skills (tools only): additionally drop competencies and soft skills
+  (e.g. "stakeholder management") from BOTH sides, since the prompt asks for tools and technologies.
+Stored extractions are never changed.
+
 Targeted sponsorship sample (optional): if `eval/sponsorship_labels.csv` exists, its labeled rows
 (sponsorship_statement filled in; blank = not labeled yet) are scored ONLY in the sponsorship
 report, as a second section next to the random-200 results plus a pooled view. They never enter
@@ -25,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import re
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -39,6 +48,8 @@ from common import (
 )
 
 SALARY_TOLERANCE = 0.005  # relative
+from jobpulse.config import ExtractionConfig, load_extraction  # noqa: E402
+
 CATEGORICAL = ["seniority", "role_family", "remote_policy", "salary_currency", "salary_period"]
 NUMERIC = ["salary_min", "salary_max"]
 SPONSOR_CLASSES = ["offered", "not_offered", "unspecified"]
@@ -68,6 +79,30 @@ def _skills(v: str | None) -> set[str]:
     if not v:
         return set()
     return {s.strip().lower() for s in v.replace("|", ";").split(";") if s.strip()}
+
+
+def fold_seniority(v: str | None, fold: dict[str, str]) -> str | None:
+    c = _cat(v)
+    return fold.get(c, c) if c else None
+
+
+def norm_skill(s: str) -> str:
+    s = s.lower().strip()
+    s = re.sub(r"\s*\([^)]*\)", "", s)  # "natural language processing (nlp)" -> "... processing"
+    s = re.sub(r"^apache\s+", "", s)
+    s = s.replace("&", " and ")
+    s = re.sub(r"[^a-z0-9+#./ ]+", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    words = [
+        w[:-1] if len(w) >= 4 and w.endswith("s") and not w.endswith(("ss", "is", "us")) else w
+        for w in s.split()
+    ]
+    return " ".join(words)
+
+
+def _norm_set(skills: set[str], out_of_scope: re.Pattern[str] | None = None) -> set[str]:
+    kept = {s for s in skills if not (out_of_scope and out_of_scope.search(s))}
+    return {n for n in (norm_skill(s) for s in kept) if n}
 
 
 def _same_num(a: float, b: float) -> bool:
@@ -107,7 +142,12 @@ def _prf(tp: int, fp: int, fn: int) -> dict[str, Any]:
     }
 
 
-def score_fields(pairs: list[tuple[Row, Row | None]]) -> dict[str, dict[str, Any]]:
+def score_fields(
+    pairs: list[tuple[Row, Row | None]], ecfg: ExtractionConfig | None = None
+) -> dict[str, dict[str, Any]]:
+    cfg = (ecfg or load_extraction()).eval
+    fold = cfg.seniority_fold
+    scope = re.compile(cfg.skills_out_of_scope_pattern, re.IGNORECASE)
     out: dict[str, dict[str, Any]] = {}
     for f in CATEGORICAL:
         tp = fp = fn = 0
@@ -133,6 +173,22 @@ def score_fields(pairs: list[tuple[Row, Row | None]]) -> dict[str, dict[str, Any
         g, p = _skills(lab.get("skills")), _skills(pred.get("skills") if pred else None)
         tp, fp, fn = tp + len(g & p), fp + len(p - g), fn + len(g - p)
     out["skills"] = _prf(tp, fp, fn)
+    tp = fp = fn = 0
+    for lab, pred in pairs:
+        g = fold_seniority(lab.get("seniority"), fold)
+        p = fold_seniority(pred.get("seniority") if pred else None, fold)
+        if p is not None:
+            tp, fp = (tp + 1, fp) if p == g else (tp, fp + 1)
+        if g is not None and p != g:
+            fn += 1
+    out["seniority_folded"] = _prf(tp, fp, fn)
+    for key, flt in (("skills_normalized", None), ("skills_tools_only", scope)):
+        tp = fp = fn = 0
+        for lab, pred in pairs:
+            g = _norm_set(_skills(lab.get("skills")), flt)
+            p = _norm_set(_skills(pred.get("skills") if pred else None), flt)
+            tp, fp, fn = tp + len(g & p), fp + len(p - g), fn + len(g - p)
+        out[key] = _prf(tp, fp, fn)
     return out
 
 
@@ -189,24 +245,37 @@ def _pct(v: float | None) -> str:
     return "n/a" if v is None else f"{v * 100:.1f}%"
 
 
+FIELD_LABELS = {
+    "seniority": "seniority (raw exact match)",
+    "seniority_folded": "seniority (staff/principal/manager/director/executive = senior)",
+    "skills": "skills (raw exact match)",
+    "skills_normalized": "skills (normalized names)",
+    "skills_tools_only": "skills (normalized, competencies/soft skills excluded)",
+}
+
+
 def render_main(
     fields: dict[str, dict[str, Any]], n: int, skipped: int, n_pred: int, preds_path: str
 ) -> str:
     cov = _ratio(n_pred, n)
     lines = [
-        "# Extraction benchmark (per-field precision / recall)",
+        f"# Hand-labeled pilot: per-field precision / recall (n={n})",
         "",
-        f"- Labeled postings scored: **{n}** (rows without done=y skipped: {skipped})",
+        f"- Hand-labeled postings scored: **{n}** (rows without done=y skipped: {skipped}). The "
+        "sheet is in a prefix-balanced order, so these are a representative subset of the "
+        "stratified sample, but n is small: treat percentages as rough.",
+        "- Labels are the owner's. Each field is shown raw; the folded/normalized rows apply the "
+        "scoring-time conventions in the `eval/score.py` docstring and are labeled as such.",
         f"- Prediction coverage (extracted, not quarantined/missing): **{_pct(cov)}** "
         f"({n_pred}/{n}); uncovered postings count as FN for every labeled field.",
-        f"- Predictions file: `{preds_path}`. Produced by `eval/score.py`.",
+        f"- Predictions file: `{Path(preds_path).name}`. Produced by `eval/score.py`.",
         "",
         "| Field | Precision | Recall | TP | FP | FN |",
         "|---|---|---|---|---|---|",
     ]
     for f, d in fields.items():
         lines.append(
-            f"| {f} | {_pct(d['precision'])} | {_pct(d['recall'])} | "
+            f"| {FIELD_LABELS.get(f, f)} | {_pct(d['precision'])} | {_pct(d['recall'])} | "
             f"{d['tp']} | {d['fp']} | {d['fn']} |"
         )
     lines += ["", "Sponsorship is reported separately in `sponsorship_report.md`.", ""]
@@ -247,7 +316,7 @@ def render_sponsorship(
         "Visa data is evidence, never a promise. `offered` and `not_offered` require a verbatim "
         "quote from the posting; everything else is `unspecified`.",
         "",
-        "## Random sample (the stratified 200; representative of the filtered set)",
+        "## Hand-labeled pilot (first rows of the stratified random sample)",
         "",
         f"- Labeled postings: **{sp['n']}**; accuracy: **{_pct(sp['accuracy'])}**",
         "",

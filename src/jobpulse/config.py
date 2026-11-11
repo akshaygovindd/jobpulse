@@ -205,6 +205,25 @@ class SponsorshipSampleConfig(_Strict):
         return self
 
 
+class AgreementConfig(_Strict):
+    size: int = Field(ge=1)
+    seed: int
+    cap_usd: float = Field(gt=0)
+    workers: int = Field(ge=1)
+
+
+class EvalConfig(_Strict):
+    seniority_fold: dict[str, str]
+    skills_out_of_scope_pattern: str
+    agreement: AgreementConfig
+    salary_tolerance: float = Field(ge=0, lt=1)
+
+    @model_validator(mode="after")
+    def _valid(self) -> EvalConfig:
+        re.compile(self.skills_out_of_scope_pattern)
+        return self
+
+
 class ExtractionConfig(_Strict):
     provider: Literal["openai"]
     api_key_env_var: str
@@ -222,6 +241,7 @@ class ExtractionConfig(_Strict):
     title_filter: TitleFilterConfig
     sample: SampleConfig
     sponsorship_sample: SponsorshipSampleConfig
+    eval: EvalConfig
 
 
 def load_extraction(path: Path | None = None) -> ExtractionConfig:

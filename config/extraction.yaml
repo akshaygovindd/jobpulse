@@ -65,6 +65,27 @@ sample:
   size: 200
   seed: 20261109
 
+# Evaluation settings (eval/ scripts). None of this affects extraction or the cache key.
+eval:
+  # Scoring-time mapping for seniority (owner decision 2026-11-11, from the 38-row pilot: Staff,
+  # Principal, Manager, Director and Executive titles were labeled `senior`). The raw exact-match
+  # number is always reported next to the mapped one; stored extractions are never changed.
+  seniority_fold:
+    staff: senior
+    principal: senior
+    manager: senior
+    director: senior
+    executive: senior
+  # Labeled skills matching this pattern are competencies/concepts, not tools or technologies. The
+  # prompt asks for tools only, so they are reported as out of scope (heuristic, case-insensitive).
+  skills_out_of_scope_pattern: 'collaborat|communicat|leadership|stakeholder|mentor|management|problem[- ]solving|critical thinking|code review|team ?work|ownership|strategic|presentation|decision[- ]making|prioriti|agile|scrum|project management|business acumen|curiosity|self-starter|detail[- ]oriented'
+  agreement:
+    size: 100          # postings sampled for the cross-model agreement run
+    seed: 20261111
+    cap_usd: 0.40      # hard spend cap for that run
+    workers: 1         # one call at a time, so the worst-case reservation per call stays small
+  salary_tolerance: 0.005    # relative tolerance when comparing parsed and extracted amounts
+
 # Second, targeted sample used ONLY in the sponsorship report. Selection is by posting text alone
 # (never by model output). Postings already in the main sample are excluded so nothing is labeled
 # twice. If fewer than `size` candidates match, all remaining matches are taken.

@@ -427,7 +427,9 @@ def test_targeted_sample_feeds_only_the_sponsorship_report(
     assert "Labeled postings: **3**" in sp  # targeted: t1, t2, t3
     assert "Labeled postings: **4**" in sp  # pooled: 'a' + 3
     main_md = (out / "extraction_report.md").read_text()
-    assert "Labeled postings scored: **1**" in main_md  # targeted rows never enter the field report
+    assert (
+        "Hand-labeled postings scored: **1**" in main_md
+    )  # targeted rows never enter the field report
     assert "Targeted sample" not in main_md
 
 
@@ -470,3 +472,61 @@ def test_blank_targeted_sheet_is_skipped_without_predictions(
     monkeypatch.setattr(sys, "argv", argv)
     assert score.main() == 0
     assert "## Targeted sample" not in (out / "sponsorship_report.md").read_text()
+
+
+# --- scoring-time conventions (seniority fold, skills normalization) ----------------------------
+def test_seniority_is_reported_raw_and_folded() -> None:
+    labels = [
+        _lab("a", seniority="senior"),
+        _lab("b", seniority="senior"),
+        _lab("c", seniority="mid"),
+    ]
+    preds = [
+        _pred("a", seniority="staff"),  # raw miss, folded hit
+        _pred("b", seniority="principal"),  # raw miss, folded hit
+        _pred("c", seniority="senior"),  # wrong either way
+    ]
+    pairs, _ = score.join(labels, preds)
+    f = score.score_fields(pairs)
+    assert (f["seniority"]["tp"], f["seniority"]["fp"], f["seniority"]["fn"]) == (0, 3, 3)
+    assert (f["seniority_folded"]["tp"], f["seniority_folded"]["fp"]) == (2, 1)
+    assert score.fold_seniority("Manager", {"manager": "senior"}) == "senior"
+    assert score.fold_seniority("", {"manager": "senior"}) is None
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("Apache Spark", "spark"),
+        ("Natural Language Processing (NLP)", "natural language processing"),
+        ("LLMs", "llm"),
+        ("Dashboards", "dashboard"),
+        ("A/B testing", "a/b testing"),
+        ("C++", "c++"),
+        ("AWS", "aws"),
+        ("analytics", "analytic"),
+        ("Data  Modeling ", "data modeling"),
+    ],
+)
+def test_norm_skill(raw: str, expected: str) -> None:
+    assert score.norm_skill(raw) == expected
+
+
+def test_skills_reported_strict_normalized_and_tools_only() -> None:
+    labels = [
+        _lab(
+            "a",
+            skills="Apache Spark; Python; stakeholder management; cross-functional collaboration",
+        )
+    ]
+    preds = [_pred("a", skills="spark;python;airflow")]
+    pairs, _ = score.join(labels, preds)
+    f = score.score_fields(pairs)
+    assert (f["skills"]["tp"], f["skills"]["fp"], f["skills"]["fn"]) == (1, 2, 3)  # only python
+    assert (f["skills_normalized"]["tp"], f["skills_normalized"]["fn"]) == (2, 2)  # + spark
+    # competencies are dropped from both sides in the tools-only variant
+    assert (
+        f["skills_tools_only"]["tp"],
+        f["skills_tools_only"]["fp"],
+        f["skills_tools_only"]["fn"],
+    ) == (2, 1, 0)
