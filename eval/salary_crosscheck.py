@@ -60,7 +60,9 @@ def main() -> int:
     disagreements: list[list[str]] = []
     for r in with_text:
         ranges = parse_pay(r["description_text"])
-        result = compare(ranges, r["salary_min"], r["salary_max"], r["salary_period"], tol)
+        # an inferred period is not model output, so it is not used to judge the model
+        model_period = None if r["salary_period_inferred"] else r["salary_period"]
+        result = compare(ranges, r["salary_min"], r["salary_max"], model_period, tol)
         counts[result] += 1
         if result in {"match_period_conflict", "partial", "mismatch", "model_missed"}:
             disagreements.append(

@@ -205,6 +205,17 @@ class SponsorshipSampleConfig(_Strict):
         return self
 
 
+class SalaryPeriodInferenceConfig(_Strict):
+    year_min: float = Field(gt=0)
+    hour_max: float = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _ordered(self) -> SalaryPeriodInferenceConfig:
+        if self.hour_max > self.year_min:
+            raise ValueError("hour_max must not exceed year_min")
+        return self
+
+
 class AgreementConfig(_Strict):
     size: int = Field(ge=1)
     seed: int
@@ -241,6 +252,7 @@ class ExtractionConfig(_Strict):
     title_filter: TitleFilterConfig
     sample: SampleConfig
     sponsorship_sample: SponsorshipSampleConfig
+    salary_period_inference: SalaryPeriodInferenceConfig
     eval: EvalConfig
 
 

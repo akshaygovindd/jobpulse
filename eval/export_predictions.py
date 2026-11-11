@@ -24,6 +24,7 @@ from common import (
 
 from jobpulse.config import load_extraction, load_pipeline
 from jobpulse.extract.schema import prompt_version
+from jobpulse.extract.store import Store
 from jobpulse.secrets import load_env_keys
 from jobpulse.warehouse import WarehouseError, connect
 
@@ -43,6 +44,9 @@ def main() -> int:
         print(f"error: {e}", file=sys.stderr)
         return 2
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    Store(
+        con, pipeline.warehouse, ecfg, prompt_version(ecfg.schema_version)
+    )  # applies the migration
     s = ecfg.extract_schema
     params = [ecfg.schema_version, prompt_version(ecfg.schema_version)]
     out_rows: list[list[object]] = []
@@ -52,7 +56,8 @@ def main() -> int:
         e = con.execute(
             f"""SELECT model, escalated, seniority, role_family, remote_policy, salary_min,
                        salary_max, salary_currency, salary_period, sponsorship_statement,
-                       sponsorship_original_text, skills
+                       sponsorship_original_text, skills,
+                       coalesce(salary_period_inferred, FALSE)
                 FROM "{s}"."extractions"
                 WHERE content_hash = ? AND schema_version = ? AND prompt_version = ?""",
             [h, *params],
@@ -60,7 +65,7 @@ def main() -> int:
         if e is not None:
             counts["extracted"] += 1
             skills = ";".join(e[11] or [])
-            out_rows.append([item["posting_key"], h, "extracted", *e[:11], skills])
+            out_rows.append([item["posting_key"], h, "extracted", *e[:11], skills, bool(e[12])])
             continue
         q = con.execute(
             f'SELECT 1 FROM "{s}"."quarantine" WHERE content_hash = ? '

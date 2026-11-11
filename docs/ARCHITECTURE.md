@@ -144,12 +144,14 @@ Scope: only postings that pass the config-driven **title filter** (`silver.int_e
 
 | Table | Key columns |
 |---|---|
-| `extractions` | PK (content_hash, schema_version, prompt_version), the **cache key**. posting_key, model, escalated, skills[], seniority, role_family, salary_min, salary_max, salary_currency, salary_period, salary_original_text, remote_policy, sponsorship_statement (`offered`/`not_offered`/`unspecified`), sponsorship_original_text, confidence, extracted_at. `prompt_version` is a hash of the prompt text + JSON schema, so any change misses the cache. |
+| `extractions` | PK (content_hash, schema_version, prompt_version), the **cache key**. posting_key, model, escalated, skills[], seniority, role_family, salary_min, salary_max, salary_currency, salary_period, salary_original_text, remote_policy, sponsorship_statement (`offered`/`not_offered`/`unspecified`), sponsorship_original_text, confidence, extracted_at, **salary_period_inferred**. `prompt_version` is a hash of the prompt text + JSON schema, so any change misses the cache. |
 | `quarantine` | PK as above. raw_output, validation_errors, model_chain (`luna>terra`), attempts. Not retried until the prompt/schema version changes. |
 | `queue` | content_hash (PK), posting_key, enqueued_at, reason (`budget_exhausted`), attempt_id. Cleared when the posting is extracted or quarantined. |
 | `llm_calls` | call_id, attempt_id, content_hash, model, mode (`sync`/`batch`), input_tokens, output_tokens, cached_tokens, cost_usd, latency_ms, outcome (ok/invalid/error/escalated), created_at |
 | `agreement` | PK (content_hash, schema_version, prompt_version, model). The escalation model's re-run output for the cross-model agreement sample (`eval/agreement.py`). Eval only: never read by the cache or the pipeline; its `llm_calls` rows have `mode='eval'` and are excluded from cost-per-1k. |
 | `batches` | batch_id, attempt_id, input_file_id, model, request_count, est_cost_usd, schema_version, prompt_version, status, created_at, collected_at. A new batch is refused while one is uncollected. |
+
+**Missing salary period.** The model sometimes returns an amount without a period and validation accepts it. A deterministic rule (`extract/period.py`, thresholds in `config/extraction.yaml` `salary_period_inference`) fills it when an amount exists and the period is empty: `year` if the amount (salary_min, else salary_max) is >= 20,000, `hour` if it is < 500, otherwise left empty. It runs when an extraction is stored and, once and idempotently, on rows already stored (no API call, no re-extraction). `salary_period_inferred = TRUE` marks filled values, and reports that judge the model (`salary_crosscheck`, agreement, the pilot's model-only row) ignore them.
 
 Flow per posting: cache lookup (content hash) → first-pass model with Structured Outputs → Pydantic validation plus grounding checks (quoted salary/sponsorship text must appear in the posting) → on failure, **one** escalation call → on failure, quarantine. Transport errors are recorded and retried next run (never quarantined). Failures are isolated per posting.
 

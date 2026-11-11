@@ -16,6 +16,7 @@ from typing import Any
 import duckdb
 
 from jobpulse.config import ExtractionConfig, WarehouseConfig
+from jobpulse.extract.period import infer_salary_period
 from jobpulse.extract.schema import Extraction
 
 _DDL = {
@@ -26,6 +27,7 @@ _DDL = {
         salary_min DOUBLE, salary_max DOUBLE, salary_currency VARCHAR, salary_period VARCHAR,
         salary_original_text VARCHAR, remote_policy VARCHAR, sponsorship_statement VARCHAR,
         sponsorship_original_text VARCHAR, confidence DOUBLE, extracted_at TIMESTAMPTZ NOT NULL,
+        salary_period_inferred BOOLEAN DEFAULT FALSE,
         PRIMARY KEY (content_hash, schema_version, prompt_version)
     """,
     "quarantine": """
@@ -105,12 +107,43 @@ class Store:
         self.silver = wcfg.silver_schema
         self.schema_version = ecfg.schema_version
         self.prompt_version = prompt_version
+        self._period_cfg = ecfg.salary_period_inference
         con.execute(f'CREATE SCHEMA IF NOT EXISTS "{self.s}"')
         for table, cols in _DDL.items():
             con.execute(f'CREATE TABLE IF NOT EXISTS "{self.s}"."{table}" ({cols})')
+        # Tables created before the flag existed get it here (idempotent), then any stored row
+        # with an amount and no period is filled by the deterministic rule.
+        con.execute(
+            f"ALTER TABLE {self.t('extractions')} "
+            "ADD COLUMN IF NOT EXISTS salary_period_inferred BOOLEAN DEFAULT FALSE"
+        )
+        self.periods_inferred = self.apply_salary_period_inference()
 
     def t(self, table: str) -> str:
         return f'"{self.s}"."{table}"'
+
+    def apply_salary_period_inference(self) -> int:
+        """Fill salary_period where an amount exists and the period is empty (no API call).
+        Idempotent: only rows with an empty period and no flag are considered. Returns the number
+        of rows filled."""
+        rows = self.con.execute(
+            f"SELECT content_hash, schema_version, prompt_version, salary_min, salary_max "
+            f"FROM {self.t('extractions')} WHERE salary_period IS NULL "
+            "AND coalesce(salary_period_inferred, FALSE) = FALSE "
+            "AND (salary_min IS NOT NULL OR salary_max IS NOT NULL)"
+        ).fetchall()
+        filled = 0
+        for h, sv, pv, lo, hi in rows:
+            period, inferred = infer_salary_period(lo, hi, None, self._period_cfg)
+            if inferred:
+                self.con.execute(
+                    f"UPDATE {self.t('extractions')} SET salary_period = ?, "
+                    "salary_period_inferred = TRUE "
+                    "WHERE content_hash = ? AND schema_version = ? AND prompt_version = ?",
+                    [period, h, sv, pv],
+                )
+                filled += 1
+        return filled
 
     @contextmanager
     def _tx(self) -> Iterator[None]:
@@ -243,9 +276,16 @@ class Store:
             self.con.execute(
                 f"DELETE FROM {self.t('queue')} WHERE content_hash = ?", [p.content_hash]
             )
+            period, inferred = infer_salary_period(
+                ex.salary_min, ex.salary_max, ex.salary_period, self._period_cfg
+            )
             self.con.execute(
-                f"INSERT OR REPLACE INTO {self.t('extractions')} "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                f"INSERT OR REPLACE INTO {self.t('extractions')} ("
+                "content_hash, schema_version, prompt_version, posting_key, model, escalated, "
+                "skills, seniority, role_family, salary_min, salary_max, salary_currency, "
+                "salary_period, salary_original_text, remote_policy, sponsorship_statement, "
+                "sponsorship_original_text, confidence, extracted_at, salary_period_inferred"
+                f") VALUES ({', '.join('?' * 20)})",
                 [
                     p.content_hash,
                     self.schema_version,
@@ -259,13 +299,14 @@ class Store:
                     ex.salary_min,
                     ex.salary_max,
                     ex.salary_currency,
-                    ex.salary_period,
+                    period,
                     ex.salary_original_text,
                     ex.remote_policy,
                     ex.sponsorship_statement,
                     ex.sponsorship_original_text,
                     ex.confidence,
                     now,
+                    inferred,
                 ],
             )
 

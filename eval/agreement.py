@@ -279,7 +279,12 @@ def write_report(ctx: Ctx, store: Store, stats: dict[str, Any] | None, out_dir: 
         "content_hash",
         *[f for f in [*CATEGORICAL, "sponsorship_statement", "skills", *NUMERIC]],
     ]
-    sel_a = ", ".join(f"e.{c}" for c in cols[1:])
+    sel_a = ", ".join(
+        "CASE WHEN e.salary_period_inferred THEN NULL ELSE e.salary_period END"
+        if c == "salary_period"
+        else f"e.{c}"
+        for c in cols[1:]
+    )  # the model's own period: a deterministically inferred one is not model output
     sel_b = ", ".join(f"g.{c}" for c in cols[1:])
     rows = ctx.con.execute(
         f"""SELECT e.content_hash, {sel_a}, {sel_b}

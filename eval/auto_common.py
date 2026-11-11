@@ -11,6 +11,7 @@ import duckdb
 
 from jobpulse.config import ExtractionConfig, PipelineConfig, load_extraction, load_pipeline
 from jobpulse.extract.schema import prompt_version
+from jobpulse.extract.store import Store
 from jobpulse.secrets import load_env_keys
 from jobpulse.warehouse import WarehouseError, connect
 
@@ -22,6 +23,7 @@ EXTRACTION_FIELDS = [
     "salary_max",
     "salary_currency",
     "salary_period",
+    "salary_period_inferred",
     "sponsorship_statement",
     "sponsorship_original_text",
     "salary_original_text",
@@ -46,7 +48,9 @@ def open_ctx(db: str | None) -> Ctx | None:
     except WarehouseError as e:
         print(f"error: {e}", file=sys.stderr)
         return None
-    return Ctx(con, pipeline, ecfg, prompt_version(ecfg.schema_version))
+    pv = prompt_version(ecfg.schema_version)
+    Store(con, pipeline.warehouse, ecfg, pv)  # creates tables / applies the period migration
+    return Ctx(con, pipeline, ecfg, pv)
 
 
 def fetch_extractions(ctx: Ctx) -> list[dict[str, Any]]:

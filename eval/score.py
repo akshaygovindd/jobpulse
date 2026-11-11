@@ -21,6 +21,9 @@ in config/extraction.yaml and both reported NEXT TO the raw exact-match number:
   punctuation and a plural "s". skills (tools only): additionally drop competencies and soft skills
   (e.g. "stakeholder management") from BOTH sides, since the prompt asks for tools and technologies.
 Stored extractions are never changed.
+- salary_period: the pipeline fills a missing period from the amount (see
+  config/extraction.yaml salary_period_inference). The headline row is the pipeline's output; a
+  second row drops the inferred values so the model's own output can be read separately.
 
 Targeted sponsorship sample (optional): if `eval/sponsorship_labels.csv` exists, its labeled rows
 (sponsorship_statement filled in; blank = not labeled yet) are scored ONLY in the sponsorship
@@ -182,6 +185,16 @@ def score_fields(
         if g is not None and p != g:
             fn += 1
     out["seniority_folded"] = _prf(tp, fp, fn)
+    tp = fp = fn = 0
+    for lab, pred in pairs:
+        g = _cat(lab.get("salary_period"))
+        inferred = bool(pred) and (pred or {}).get("salary_period_inferred", "").lower() == "true"
+        p = None if inferred or not pred else _cat(pred.get("salary_period"))
+        if p is not None:
+            tp, fp = (tp + 1, fp) if p == g else (tp, fp + 1)
+        if g is not None and p != g:
+            fn += 1
+    out["salary_period_model_only"] = _prf(tp, fp, fn)
     for key, flt in (("skills_normalized", None), ("skills_tools_only", scope)):
         tp = fp = fn = 0
         for lab, pred in pairs:
@@ -246,6 +259,8 @@ def _pct(v: float | None) -> str:
 
 
 FIELD_LABELS = {
+    "salary_period": "salary_period (pipeline output: model + deterministic fill)",
+    "salary_period_model_only": "salary_period (model output only, inferred values dropped)",
     "seniority": "seniority (raw exact match)",
     "seniority_folded": "seniority (staff/principal/manager/director/executive = senior)",
     "skills": "skills (raw exact match)",

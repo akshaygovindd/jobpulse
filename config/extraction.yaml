@@ -65,6 +65,16 @@ sample:
   size: 200
   seed: 20261109
 
+# Deterministic fill for a missing salary_period (owner decision 2026-11-11). The model sometimes
+# returns an amount and no period; validation accepts that. When an amount exists and the period is
+# empty, the period is inferred from the amount (salary_min, else salary_max): year when it is at or
+# above year_min, hour when it is below hour_max, otherwise left empty. Applied when an extraction
+# is stored and, once, to rows already stored; no API call. Inferred values are flagged in
+# extract.extractions.salary_period_inferred and never presented as model output.
+salary_period_inference:
+  year_min: 20000
+  hour_max: 500
+
 # Evaluation settings (eval/ scripts). None of this affects extraction or the cache key.
 eval:
   # Scoring-time mapping for seniority (owner decision 2026-11-11, from the 38-row pilot: Staff,

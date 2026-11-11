@@ -42,6 +42,7 @@ PREDICTION_COLUMNS = [
     "sponsorship_statement",
     "sponsorship_original_text",
     "skills",
+    "salary_period_inferred",  # true when salary_period came from the deterministic rule
 ]
 
 # Targeted sponsorship sample (separate files; used only by the sponsorship report).
