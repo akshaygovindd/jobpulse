@@ -48,7 +48,7 @@
   - (ii) **New dispatch on the same date:** same result as (i).
   - (iii) **Incomplete later attempt:** the pointer is unchanged.
 
-- [ ] **Tracked separately (still open; does not block P2).** The scheduled run succeeds on 2 consecutive days. Record the dates in NOTES.md when this happens.
+- [x] **Tracked separately (closed 2026-11-11).** The scheduled run succeeds on 2 consecutive days: Daily ingest #7 (Nov 10, 17:04 UTC) and #8 (Nov 11, 17:09 UTC), both `schedule` events, all jobs green. Observed through the GitHub Actions API; the owner may re-confirm in the UI. GitHub started both about 8 h after the 09:17 UTC cron.
 
 ## P2: Ashby, bronze/silver, dedup, observation tracking. ✅ Done 2026-11-10
 
@@ -75,7 +75,7 @@
 - [x] Running the full pipeline twice for the same date leaves row counts unchanged (fixture test, plus a live double run on MotherDuck checked with `scripts/warehouse_counts.py`; only `ops.pipeline_runs` grows, because each run records itself).
 - [x] The dispatched Daily ingest run (#5, `gha-42738644998-1`) has a green `warehouse` job, with Ashby companies in bronze (verified 2026-11-10).
 
-## P3: Extraction + benchmark (built and running; benchmark scope revised 2026-11-11, one box open)
+## P3: Extraction + benchmark. ✅ Done 2026-11-11 (benchmark scope revised by the owner; sponsorship accuracy still unmeasured)
 
 **Build**
 - Pydantic extraction schema.
@@ -97,7 +97,10 @@
 - [x] **Hand-labeled pilot (n=38)**: `eval/score.py` reports per-field precision/recall, with a **separate sponsorship report**. Caveats: n is small; the pilot holds 1 `not_offered` and 0 `offered` sponsorship labels, so sponsorship accuracy is effectively **unmeasured** (the 13-row targeted sponsorship sheet is unlabeled). *The original check (200 owner labels) is not met; it was dropped by the owner on 2026-11-11.*
 - [x] **Rule-based salary cross-check** over all extractions with posting text (489 of 503): `eval/salary_crosscheck.py`. Agreement, not accuracy.
 - [x] **Validation and grounding pass rates**: `eval/grounding_report.py`. Self-consistency, not accuracy.
-- [ ] **Cross-model agreement** on a seeded sample of 100 postings (cap $0.40): `eval/agreement.py`. Built and tested; the dry-run estimates about $0.32-0.33. **Not run yet; waiting for the owner's go-ahead.**
+- [x] **Cross-model agreement** on a seeded sample of 100 postings (cap $0.40): `eval/agreement.py`. Run 2026-11-11: 100/100 valid, cost **$0.2687**. Consistency, not accuracy: role_family 96%, remote_policy 93%, seniority 88% exact / 89% folded, salary amounts 100%, skills overlap (Jaccard) 65.7%; `salary_period` only 66% because terra often leaves the period empty. Details in `eval/reports/agreement_report.md`.
+- [x] **Missing salary period fixed deterministically** (owner decision 2026-11-11): when an amount exists and the period is empty, `year` if the amount is >= 20,000, `hour` if < 500, otherwise empty; flagged `salary_period_inferred`; no API calls, no re-extraction (`extract/period.py`). Applied to 73 stored rows. The pilot's `salary_period` recall goes from 75.0% (model output only) to 96.4% (pipeline output), and both rows are reported.
+
+**Known gaps (not blocking, recorded honestly):** sponsorship accuracy is effectively unmeasured (the pilot has 1 `not_offered` and 0 `offered` label; the 13-row targeted sheet is unlabeled, to be done by the owner later); skills recall stays near 49% against the owner's labels because the owner labels concepts and competencies that the tools-only prompt does not ask for; n=38 is small.
 
 ## P4: dbt gold + snapshots + local Airflow/Docker
 

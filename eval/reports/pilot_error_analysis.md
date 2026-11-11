@@ -52,13 +52,13 @@ Of the **623** labeled skills the model did not list (normalized names):
 - **13%** are competencies/soft skills (`skills_out_of_scope_pattern`), which the tools-only prompt does not ask for.
 - **24%** are phrases of three or more words (concepts, not tool names).
 
-Most-missed labeled skills: cross functional collaboration (13), technical leadership (9), stakeholder management (7), model evaluation (7), code review (6), performance optimization (6), production ml system (6), model training (6), data engineering (5), data quality (5), dashboard development (5), statistical analysis (5), business intelligence (5), python (5), machine learning (4).
+Most-missed labeled skills: cross functional collaboration (13), technical leadership (9), stakeholder management (7), model evaluation (7), code review (6), performance optimization (6), production ml system (6), model training (6), data quality (5), data engineering (5), dashboard development (5), statistical analysis (5), business intelligence (5), python (5), machine learning (4).
 
-Most frequent model skills the owner did not list: dashboard (4), machine learning (4), ai (3), testing (3), sql (3), automation (2), anomaly detection (2), llm (2), genai (2), snowflake (2), rag (2), data pipeline (2), streaming (2), copilot (2), stream data (2).
+Most frequent model skills the owner did not list: dashboard (4), machine learning (4), ai (3), testing (3), sql (3), automation (2), genai (2), anomaly detection (2), llm (2), snowflake (2), rag (2), streaming (2), data pipeline (2), realtime system (2), stream data (2).
 
 Reading: normalization barely moves the numbers, so the gap is scope, not spelling. The owner's lists include technical concepts and competencies (model evaluation, performance optimization, cross-functional collaboration); the prompt asks for tools and technologies.
 
 ## Salary period (extra finding)
 
-- Postings where the model returned a salary amount but **no period**: **6 of 28** with an amount.
+- Postings where the model returned a salary amount but **no period**: **0 of 28** with an amount.
 - Cause: validation does not require `salary_period` (or currency) when an amount is present, so such outputs are accepted instead of escalated. Not changed here (it would alter escalation behavior); see NOTES.md.

@@ -45,7 +45,8 @@ name-normalized with competencies excluded (settings: `config/extraction.yaml`, 
 
 Automated evaluations that need no human labels, each named for what it measures (none is
 accuracy): `salary_crosscheck.py`, `grounding_report.py`, and `agreement.py --dry-run | --run`
-(cross-model agreement; `--run` is paid and capped, see its docstring).
+(cross-model agreement; `--run` is paid and capped, see its docstring). The 100-posting agreement
+run was done on 2026-11-11 ($0.27); its report is `reports/agreement_report.md`.
 
 ## Targeted sponsorship sample (separate file)
 

@@ -407,3 +407,40 @@ Daily ingest #5 (`gha-42738644998-1`) verified read-only on S3 and MotherDuck. A
 **Other changes:** `quote_in_text` public helper in `schema.py`; `agreement` table in `Store`; `report_extraction_cost.py` now excludes `mode='eval'` calls from its figures; shared test fixtures moved to `tests/unit/conftest.py`; reports no longer embed absolute local paths.
 
 **Checks:** see the final entry below for the full `make check` result.
+
+---
+
+## 2026-11-11 (later): agreement run, deterministic salary_period, gitleaks allowlist, pilot labels committed
+
+**1. Cross-model agreement run (`eval/agreement.py --run`, paid, approved, cap $0.40).** `gpt-6.1-terra` re-ran the same prompt on the seeded 100 (seed 20261111) postings whose stored first-pass output came from `gpt-6-luna`. **100/100 valid, 0 API errors, cost $0.2687** (estimate was $0.33; terra averaged 1,821 input / 173 output tokens and 3.2 s per call, so it was cheaper than the config assumed). Consistency, **not accuracy**; the sample excludes the ~2% the first pass failed on, so agreement likely reads high.
+
+| Field | Agree (all 100) | Agree (>= 1 model gave a value) |
+|---|---|---|
+| role_family | 96.0% | 96.0% (96/100) |
+| remote_policy | 93.0% | 89.6% (60/67) |
+| seniority, exact | 88.0% | 87.5% (84/96) |
+| seniority, staff/principal/manager/director/executive = senior | 89.0% | 88.5% (85/96) |
+| salary_min / max / currency | 100% | 100% (69/69, 69/69, 68/68) |
+| sponsorship_statement | 100% | 100% (4/4, so almost no information) |
+| salary_period | 66.0% | 35.8% (19/53) |
+| skills | mean Jaccard 65.7% | luna's skills also in terra's list 75.3%; terra's also in luna's 83.1%; luna lists 17.9 per posting, terra 16.3 |
+
+- **I got the `salary_period` explanation wrong at first and corrected it after checking.** I had said the cheaper model omits the period more than terra. The data say the opposite: in **34** postings luna said `year` and **terra left the period empty**; there is no case of luna empty and terra filled. Both models leave the period out at times, terra more often, and validation accepts it. That is why the deterministic fill (below) is the right fix for the pipeline regardless of which model answers.
+- Seniority: 10 of the 12 exact-match disagreements are terra saying `unspecified` where luna inferred a level (mid 5, senior 3, junior 2); the rest are staff/senior and mid/senior. So the two models differ mainly in how willing they are to infer a level the posting does not state, which is the same ambiguity behind the owner's years-of-experience labeling (the pilot's notes column cites required years in most rows; a "years -> level" prompt rule is a candidate for a future prompt version and was not applied).
+
+**2. Deterministic `salary_period` fill (owner decision; no API calls, no re-extraction).** Rule in `src/jobpulse/extract/period.py`, thresholds in `config/extraction.yaml` (`salary_period_inference`): when an amount exists and the period is empty, `year` if the amount (salary_min, else salary_max) is >= 20,000, `hour` if 0 < amount < 500, otherwise left empty; a period the model gave is never changed. `extract.extractions` gained `salary_period_inferred` (BOOLEAN). The rule runs when an extraction is stored and, idempotently, on rows already stored (`Store.__init__`, so every consumer sees migrated data).
+- Live data before: **74 of 369** extractions with an amount had no period (20%). Applied: **72 -> year, 1 -> hour** ("$170.40-$255.60"), **1 left empty** ("EUR 5.000-6.250", a monthly-looking amount, correctly not guessed). 295 model-supplied periods untouched. Counts above are from the migration run; the table now holds 514 extractions (11 more came from the Nov 11 scheduled run).
+- Reports judging the model ignore inferred values: `salary_crosscheck`, the agreement report, and the pilot's `salary_period (model output only)` row. The pilot's headline `salary_period` row is the pipeline output. **Pilot salary_period: pipeline output P 96.4% / R 96.4% (27/1/1); model output only P 95.5% / R 75.0% (21/1/7).** The recall gain is a rule, not model quality, and is labeled that way.
+- Operational note: I deployed the code **before** touching the live table, because the previous deployed code inserted positionally and would have failed once the column existed (the Nov 11 scheduled run had already finished, nothing was in flight). The insert is now by column name. Tests: rule boundaries (20,000 / 500), legacy-table migration, idempotency, model period never touched, scoring split.
+
+**3. gitleaks allowlist (`.gitleaks.toml`).** Keeps all default rules (`useDefault = true`) and allowlists exactly `^eval/(sample|sponsorship)_manifest\.json$` (public posting sha256 hashes behind a JSON key named `posting_key`) and `^tests/unit/test_extraction.py$` (obviously fake keys). Trade-off: a path allowlist hides everything in those files, so a real key pasted into that test file would not be caught. CI #15 (the push with the config) is green, **but that push did not touch the manifests, so it does not prove the allowlist works.** I could not run gitleaks here. Proof needs `gitleaks detect --source . --redact` (full history) on a machine with gitleaks installed, or the next push that modifies a manifest.
+
+**4. Pilot labels committed.** `eval/labels.csv` (200 rows, 38 labeled, `notes` column filled for those 38) is now tracked, as the owner asked. It contains posting text from public job pages (including a few recruiting email addresses that are in the postings themselves) and the owner's labels. `eval/sponsorship_labels.csv` stays untracked (unlabeled; the owner will label it later). Predictions files stay gitignored.
+
+**5. Scheduled-run check closed.** Daily ingest #7 (Nov 10, 17:04 UTC) and #8 (Nov 11, 17:09 UTC) were both `schedule` events and fully green (ingest, warehouse, extract). Run #8: 8,481 postings, 499 pass the title filter, 11 new extractions for $0.0033, two authoritative snapshot dates (Nov 10 and Nov 11, 43 pointers each), 0 closures (closure needs absence on two consecutive dates, so the first can appear after Nov 12). ROADMAP P1's tracked box is ticked. GitHub's cron lag is about 8 h; the actual run times are about 12 PM EST.
+
+**6. Numbers refreshed.** Because the table grew to 514 extractions and postings changed, the automated reports now cover 514 extractions (499 with text still available), so figures differ slightly from the previous entry: salary cross-check 96.1% (323/336) agreement where both found a salary; first-pass validity 97.9% (503/514); 0 quarantined. Total OpenAI spend to date **$0.4675** of $4.96 (extraction $0.1988, evaluation $0.2687; the evaluation calls are excluded from cost per 1k postings, which stays about $0.39).
+
+**P3 status:** all done-when boxes ticked under the revised scope (see ROADMAP), with the gaps recorded: sponsorship accuracy unmeasured, skills recall near 49% by design, n=38.
+
+**Open for the owner:** (a) label `eval/sponsorship_labels.csv` (13 rows) when ready; (b) decide whether to add a "years of experience -> level" rule in a future prompt version (would invalidate the cache and cost about $0.20 to re-extract); (c) install gitleaks locally (`brew install gitleaks`) and run `make check` to prove the allowlist against full history.

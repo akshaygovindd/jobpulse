@@ -11,11 +11,12 @@
 | role_family | 71.1% | 75.0% | 27 | 11 | 9 |
 | remote_policy | 76.9% | 87.0% | 20 | 6 | 3 |
 | salary_currency | 96.4% | 96.4% | 27 | 1 | 1 |
-| salary_period | 95.5% | 75.0% | 21 | 1 | 7 |
+| salary_period (pipeline output: model + deterministic fill) | 96.4% | 96.4% | 27 | 1 | 1 |
 | salary_min | 96.4% | 96.4% | 27 | 1 | 1 |
 | salary_max | 96.4% | 96.4% | 27 | 1 | 1 |
 | skills (raw exact match) | 71.3% | 43.6% | 500 | 201 | 647 |
 | seniority (staff/principal/manager/director/executive = senior) | 81.6% | 83.8% | 31 | 7 | 6 |
+| salary_period (model output only, inferred values dropped) | 95.5% | 75.0% | 21 | 1 | 7 |
 | skills (normalized names) | 74.8% | 45.7% | 524 | 177 | 623 |
 | skills (normalized, competencies/soft skills excluded) | 74.6% | 48.8% | 512 | 174 | 538 |
 
