@@ -444,3 +444,11 @@ Daily ingest #5 (`gha-42738644998-1`) verified read-only on S3 and MotherDuck. A
 **P3 status:** all done-when boxes ticked under the revised scope (see ROADMAP), with the gaps recorded: sponsorship accuracy unmeasured, skills recall near 49% by design, n=38.
 
 **Open for the owner:** (a) label `eval/sponsorship_labels.csv` (13 rows) when ready; (b) decide whether to add a "years of experience -> level" rule in a future prompt version (would invalidate the cache and cost about $0.20 to re-extract); (c) install gitleaks locally (`brew install gitleaks`) and run `make check` to prove the allowlist against full history.
+
+---
+
+## 2026-11-11 (evening): gitleaks allowlist verified on full history
+
+The owner ran `make check` locally with **gitleaks 8.30.1** against commit `e4cb080` (reported by the owner; I did not run it, since gitleaks is not installed in my environment): 198 tests passed, both Terraform roots valid, and gitleaks scanned **32 commits (the whole history: `git rev-list --count HEAD` is 32) and found no leaks**. That full-history scan includes the two commits that earlier made CI #11 and #12 fail (`96efa65`, `6af5a07`, which add the benchmark manifests) and the unit-test commit with the fake keys, so with `.gitleaks.toml` in place the history is clean. This closes the verification gap noted in the previous entry (item 3), which had only a green push that did not touch the manifests.
+
+What this does and does not show: it shows the repository, as configured, has no findings. It does not isolate which findings the allowlist suppressed. A scan with the config bypassed (for example `gitleaks detect --source . --redact --config <a copy of the default config without the allowlist>`) would list the suppressed findings and confirm they are exactly the manifest hashes and the test keys. Optional; not done. The allowlist's trade-off stands: everything inside `eval/*_manifest.json` and `tests/unit/test_extraction.py` is exempt from scanning, so no real credential may ever be put in those files.
