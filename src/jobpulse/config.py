@@ -99,8 +99,24 @@ class WarehouseConfig(_Strict):
     ops_schema: str
     bronze_schema: str
     silver_schema: str
+    gold_schema: str
     # A posting closes after this many absences on calendar-adjacent, authoritative dates.
     closure_consecutive_absences: int = Field(ge=1)
+
+
+class GoldConfig(_Strict):
+    # Periods that can be annualized -> multiplier. A period absent here (e.g. "day") is never
+    # annualized: the annual columns stay NULL rather than guess working days.
+    annualization: dict[str, float]
+    # An agg_salary_by_role_city group publishes percentiles only with at least this many salaries.
+    min_salaries_for_percentiles: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def _factors_positive(self) -> GoldConfig:
+        bad = [k for k, v in self.annualization.items() if v <= 0]
+        if bad:
+            raise ValueError(f"annualization factors must be > 0: {bad}")
+        return self
 
 
 class PipelineConfig(_Strict):
@@ -109,6 +125,19 @@ class PipelineConfig(_Strict):
     freshness: FreshnessConfig
     storage: StorageConfig
     warehouse: WarehouseConfig
+    gold: GoldConfig
+
+
+class LocationsConfig(_Strict):
+    """Rules for the city heuristic (src/jobpulse/location.py). No structured location exists in
+    the source data, so `city` is derived from location_raw and is NULL when it is ambiguous."""
+
+    remote_pattern: str  # a location matching this has no single city
+    multi_pattern: str  # a location matching this lists several places
+    noise_pattern: str  # office/HQ decorations stripped before parsing
+    regions: list[str]  # lower-case states, provinces, countries: never a city, may follow one
+    also_cities: list[str]  # lower-case region names that are also cities (New York, Washington)
+    aliases: dict[str, str]  # lower-case spelling -> canonical city
 
 
 def _load_yaml(path: Path) -> object:
@@ -254,6 +283,10 @@ class ExtractionConfig(_Strict):
     sponsorship_sample: SponsorshipSampleConfig
     salary_period_inference: SalaryPeriodInferenceConfig
     eval: EvalConfig
+
+
+def load_locations(path: Path | None = None) -> LocationsConfig:
+    return LocationsConfig.model_validate(_load_yaml(path or CONFIG_DIR / "locations.yaml"))
 
 
 def load_extraction(path: Path | None = None) -> ExtractionConfig:

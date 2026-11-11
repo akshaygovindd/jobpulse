@@ -29,4 +29,10 @@ warehouse:
   ops_schema: ops
   bronze_schema: bronze
   silver_schema: silver
+  gold_schema: gold
   closure_consecutive_absences: 2  # absences on calendar-adjacent authoritative dates before closing
+
+gold:
+  # Multiplier to annual pay per stated period. "day" is deliberately absent (not annualized).
+  annualization: {year: 1, month: 12, week: 52, hour: 2080}  # hour: 40 h x 52 weeks
+  min_salaries_for_percentiles: 5   # fewer salaries in a group => p25/p50/p75 are NULL

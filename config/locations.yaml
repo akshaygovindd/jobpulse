@@ -1,0 +1,216 @@
+# Rules for deriving `city` from location_raw (src/jobpulse/location.py). Validated by
+# jobpulse.config.LocationsConfig. The source data has no structured location, so city is a
+# heuristic: it is NULL for remote-only, multi-location, country/state-only or unrecognized strings.
+# Known limitation: same-named cities in different countries (Dublin, CA vs Dublin, Ireland) merge.
+
+remote_pattern: '(?i)\b(remote|anywhere|n/a)\b'
+multi_pattern: '(?i)(;|•|\||/|\bor\b|\band\b| - | – )'
+noise_pattern: '(?i)(\(\s*hq\s*\)|\bhq\b|\boffice\b|\bheadquarters\b)'
+
+# Region names that are also cities: allowed as the first part ("New York, NY", "Washington, DC").
+also_cities:
+  - new york
+  - washington
+  - singapore
+
+# Lower-case. A location whose first part is one of these has no city; parts after the first must
+# be one of these, or the string is treated as a list of places and city is NULL.
+regions:
+  # US states and DC
+  - alabama
+  - alaska
+  - arizona
+  - arkansas
+  - california
+  - colorado
+  - connecticut
+  - delaware
+  - florida
+  - georgia
+  - hawaii
+  - idaho
+  - illinois
+  - indiana
+  - iowa
+  - kansas
+  - kentucky
+  - louisiana
+  - maine
+  - maryland
+  - massachusetts
+  - michigan
+  - minnesota
+  - mississippi
+  - missouri
+  - montana
+  - nebraska
+  - nevada
+  - new hampshire
+  - new jersey
+  - new mexico
+  - new york
+  - north carolina
+  - north dakota
+  - ohio
+  - oklahoma
+  - oregon
+  - pennsylvania
+  - rhode island
+  - south carolina
+  - south dakota
+  - tennessee
+  - texas
+  - utah
+  - vermont
+  - virginia
+  - washington
+  - west virginia
+  - wisconsin
+  - wyoming
+  - district of columbia
+  - d.c.
+  - dc
+  # US state codes
+  - al
+  - ak
+  - az
+  - ar
+  - ca
+  - co
+  - ct
+  - de
+  - fl
+  - ga
+  - hi
+  - id
+  - il
+  - in
+  - ia
+  - ks
+  - ky
+  - la
+  - me
+  - md
+  - ma
+  - mi
+  - mn
+  - ms
+  - mo
+  - mt
+  - ne
+  - nv
+  - nh
+  - nj
+  - nm
+  - ny
+  - nc
+  - nd
+  - oh
+  - ok
+  - or
+  - pa
+  - ri
+  - sc
+  - sd
+  - tn
+  - tx
+  - ut
+  - vt
+  - va
+  - wa
+  - wv
+  - wi
+  - wy
+  # Canadian provinces
+  - ontario
+  - quebec
+  - québec
+  - british columbia
+  - alberta
+  - nova scotia
+  - manitoba
+  - saskatchewan
+  - new brunswick
+  # Countries and country codes
+  - united states
+  - united states of america
+  - usa
+  - us
+  - u.s.
+  - canada
+  - ca
+  - united kingdom
+  - uk
+  - england
+  - scotland
+  - ireland
+  - germany
+  - france
+  - spain
+  - italy
+  - netherlands
+  - belgium
+  - switzerland
+  - sweden
+  - norway
+  - denmark
+  - finland
+  - poland
+  - portugal
+  - austria
+  - czech republic
+  - romania
+  - india
+  - china
+  - japan
+  - jp
+  - south korea
+  - korea
+  - australia
+  - new zealand
+  - brazil
+  - mexico
+  - argentina
+  - chile
+  - colombia
+  - philippines
+  - indonesia
+  - vietnam
+  - thailand
+  - malaysia
+  - israel
+  - united arab emirates
+  - uae
+  - saudi arabia
+  - turkey
+  - south africa
+  - nigeria
+  - kenya
+  - egypt
+  - bc
+  - 'on'
+  - ab
+  - qc
+  - ns
+  - hungary
+  - uruguay
+  - queensland
+  - ukraine
+  - greece
+  - czechia
+  - taiwan
+  - emea
+  - apac
+  - latam
+  - north america
+
+# Lower-case spelling -> canonical city name.
+aliases:
+  new york city: New York
+  nyc: New York
+  bengaluru: Bengaluru
+  bangalore: Bengaluru
+  washington d.c.: Washington
+  sf: San Francisco
+  "gurugram": Gurugram
+  gurgaon: Gurugram

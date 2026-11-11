@@ -52,6 +52,7 @@ from common import (
 
 SALARY_TOLERANCE = 0.005  # relative
 from jobpulse.config import ExtractionConfig, load_extraction  # noqa: E402
+from jobpulse.skills import norm_skill  # noqa: E402
 
 CATEGORICAL = ["seniority", "role_family", "remote_policy", "salary_currency", "salary_period"]
 NUMERIC = ["salary_min", "salary_max"]
@@ -87,20 +88,6 @@ def _skills(v: str | None) -> set[str]:
 def fold_seniority(v: str | None, fold: dict[str, str]) -> str | None:
     c = _cat(v)
     return fold.get(c, c) if c else None
-
-
-def norm_skill(s: str) -> str:
-    s = s.lower().strip()
-    s = re.sub(r"\s*\([^)]*\)", "", s)  # "natural language processing (nlp)" -> "... processing"
-    s = re.sub(r"^apache\s+", "", s)
-    s = s.replace("&", " and ")
-    s = re.sub(r"[^a-z0-9+#./ ]+", " ", s)
-    s = re.sub(r"\s+", " ", s).strip()
-    words = [
-        w[:-1] if len(w) >= 4 and w.endswith("s") and not w.endswith(("ss", "is", "us")) else w
-        for w in s.split()
-    ]
-    return " ".join(words)
 
 
 def _norm_set(skills: set[str], out_of_scope: re.Pattern[str] | None = None) -> set[str]:
