@@ -1,0 +1,17 @@
+# Keeps all of gitleaks' default rules and allowlists two narrow, reviewed false-positive sources.
+# Path allowlists also apply when scanning history. CI runs gitleaks-action on each push.
+title = "JobPulse gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Reviewed false positives: posting identity hashes and fake test keys"
+paths = [
+  # sha256 posting_key / content_hash values of PUBLIC job postings in the benchmark manifests.
+  # The JSON key name "posting_key" contains the word "key", which trips generic-api-key.
+  '''^eval/(sample|sponsorship)_manifest\.json$''',
+  # Unit tests that use obviously fake API keys (sk-test-..., sk-abc...) to prove they are never
+  # logged or leaked. No real credential belongs in this file.
+  '''^tests/unit/test_extraction\.py$''',
+]
