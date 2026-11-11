@@ -313,3 +313,12 @@ def test_latest_extraction_wins_per_content_hash(storage: LocalStorage, db: Path
     gold(db)
     assert fct(db, "1")["seniority"] == "senior"
     assert query(db, "SELECT count(*) FROM gold.fct_postings") == [(1,)]
+
+
+def test_cli_build_gold_records_a_pipeline_run(storage: LocalStorage, db: Path) -> None:
+    from jobpulse.cli import main
+
+    seed(storage, db, [gh_job("1")])
+    assert main(["build-gold", "--db", str(db)]) == 0
+    rows = query(db, "SELECT task, status, rows_kept FROM ops.pipeline_runs WHERE task = 'gold'")
+    assert rows == [("gold", "success", 1)]

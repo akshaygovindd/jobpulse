@@ -154,3 +154,37 @@ jobs:
           MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: uv run jobpulse extract --cap 0.25
+
+  # Gold runs last, after extraction, because fct_postings joins extract.extractions. It runs even
+  # when `extract` failed or hit its spend cap (not skipped): extractions are a persistent cache, so
+  # gold then uses everything extracted so far (at worst yesterday's) and postings that are new or
+  # changed show has_extraction = false until the next successful extract. It is skipped only when
+  # the warehouse job failed (silver would be stale or missing). Needs MotherDuck and dbt only: no
+  # AWS credentials and no OpenAI key. A failure here cannot affect ingest, silver or extraction.
+  gold:
+    needs: [warehouse, extract]
+    if: ${{ !cancelled() && needs.warehouse.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment: prod
+    timeout-minutes: 20
+    env:
+      UV_NO_SYNC: "1" # the explicit `uv sync` step below picks the dependency groups; `uv run` must not re-sync
+    steps:
+      - name: Check required configuration
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+        run: |
+          [[ -n "$MOTHERDUCK_TOKEN" ]] || { echo "::error::prod environment secret MOTHERDUCK_TOKEN is not set"; exit 1; }
+
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+
+      - run: uv sync --frozen --no-default-groups --group dbt
+
+      - name: Build gold (dbt models + tests + snap_postings)
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+        run: uv run jobpulse build-gold
