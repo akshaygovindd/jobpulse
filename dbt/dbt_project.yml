@@ -5,6 +5,7 @@ profile: jobpulse
 
 model-paths: ["models"]
 macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
 test-paths: ["tests"]
 target-path: target
 clean-targets: ["target"]
@@ -17,6 +18,11 @@ flags:
 vars:
   bronze_schema: bronze
   silver_schema: silver
+  gold_schema: gold
+  gold_stage_schema: gold_stage
+  extract_schema: extract
+  annualization: {year: 1, month: 12, week: 52, hour: 2080}
+  min_salaries_for_percentiles: 5
   closure_consecutive_absences: 2
   extraction_exclude: ''
   extraction_families:
@@ -29,3 +35,13 @@ models:
       +materialized: view
     silver:
       +materialized: table
+    gold:
+      +materialized: table
+      +schema: "{{ var('gold_schema') }}"
+      # int_ models and the Python-built mapping tables live in a separate stage schema so the
+      # gold schema holds only what the app reads.
+      int_latest_extraction:
+        +schema: "{{ var('gold_stage_schema') }}"
+snapshots:
+  jobpulse:
+    +schema: "{{ var('gold_schema') }}"

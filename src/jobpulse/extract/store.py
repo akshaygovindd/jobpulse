@@ -94,6 +94,19 @@ class CallRecord:
     outcome: str  # ok | invalid | error | escalated
 
 
+def ensure_extract_tables(con: duckdb.DuckDBPyConnection, ecfg: ExtractionConfig) -> None:
+    """Create the extraction schema and tables if missing (idempotent). Also lets readers such as
+    the gold build run on a warehouse where nothing has been extracted yet."""
+    con.execute(f'CREATE SCHEMA IF NOT EXISTS "{ecfg.extract_schema}"')
+    for table, cols in _DDL.items():
+        con.execute(f'CREATE TABLE IF NOT EXISTS "{ecfg.extract_schema}"."{table}" ({cols})')
+    # Tables created before the flag existed get the column here.
+    con.execute(
+        f'ALTER TABLE "{ecfg.extract_schema}"."extractions" '
+        "ADD COLUMN IF NOT EXISTS salary_period_inferred BOOLEAN DEFAULT FALSE"
+    )
+
+
 class Store:
     def __init__(
         self,
@@ -108,15 +121,8 @@ class Store:
         self.schema_version = ecfg.schema_version
         self.prompt_version = prompt_version
         self._period_cfg = ecfg.salary_period_inference
-        con.execute(f'CREATE SCHEMA IF NOT EXISTS "{self.s}"')
-        for table, cols in _DDL.items():
-            con.execute(f'CREATE TABLE IF NOT EXISTS "{self.s}"."{table}" ({cols})')
-        # Tables created before the flag existed get it here (idempotent), then any stored row
-        # with an amount and no period is filled by the deterministic rule.
-        con.execute(
-            f"ALTER TABLE {self.t('extractions')} "
-            "ADD COLUMN IF NOT EXISTS salary_period_inferred BOOLEAN DEFAULT FALSE"
-        )
+        ensure_extract_tables(con, ecfg)
+        # Any stored row with an amount and no period is filled by the deterministic rule.
         self.periods_inferred = self.apply_salary_period_inference()
 
     def t(self, table: str) -> str:

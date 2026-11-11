@@ -34,6 +34,7 @@ from jobpulse.extract.schema import prompt_version
 from jobpulse.extract.store import Store
 from jobpulse.freshness import check_freshness
 from jobpulse.freshness import render_markdown as render_freshness
+from jobpulse.gold import build_gold
 from jobpulse.http import HttpClient
 from jobpulse.ingest.identity import (
     Clock,
@@ -238,6 +239,59 @@ def cmd_build_silver(args: argparse.Namespace, clock: Clock) -> int:
         f"- Failures: **{len(result.failures)}**\n"
         + "".join(f"  - `{f}`\n" for f in result.failures)
         + (f"- Error: `{result.error}`\n" if result.error else "")
+    )
+    print(summary)
+    _append_step_summary(summary)
+    return EXIT_OK if result.success else EXIT_ALERT
+
+
+def cmd_build_gold(args: argparse.Namespace, clock: Clock) -> int:
+    pipeline = load_pipeline()
+    cfg = pipeline.warehouse
+    try:
+        con = _warehouse(args)  # fail fast on a missing token before doing any work
+    except WarehouseError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return EXIT_USAGE
+    now = clock()
+    attempt_id = make_attempt_id(now)
+    con.close()  # release the file lock before dbt opens its own connection
+    try:
+        result, maps = build_gold(pipeline, db_path=Path(args.db) if args.db else None)
+    except (WarehouseError, duckdb.Error) as e:
+        print(f"error: gold build failed before dbt ran: {type(e).__name__}", file=sys.stderr)
+        return EXIT_ALERT
+    finished = clock()
+    con = _warehouse(args)
+    postings = con.execute(f'SELECT count(*) FROM "{cfg.gold_schema}"."fct_postings"').fetchone()
+    n_postings = int(postings[0]) if postings else 0
+    record_pipeline_run(
+        con,
+        cfg,
+        {
+            "attempt_id": attempt_id,
+            "snapshot_date": now.date().isoformat(),
+            "task": "gold",
+            "source_id": "all",
+            "started_at": now.isoformat(),
+            "finished_at": finished.isoformat(),
+            "duration_s": round((finished - now).total_seconds(), 3),
+            "status": "success" if result.success else "failed",
+            "rows_in": None,
+            "rows_kept": n_postings,
+            "rows_dropped_json": {f: 1 for f in result.failures},
+            "llm_cost_usd": 0.0,
+            "env": detect_env(),
+        },
+    )
+    summary = (
+        "## Gold build (dbt)\n\n"
+        f"- Models and snapshots built: **{result.models_built}**\n"
+        f"- Tests passed: **{result.tests_passed}**\n"
+        f"- Failures: **{len(result.failures)}**\n"
+        + "".join(f"  - `{f}`\n" for f in result.failures)
+        + (f"- Error: `{result.error}`\n" if result.error else "")
+        + f"- Staged mappings: {maps.skills} skill spellings, {maps.locations} locations\n"
     )
     print(summary)
     _append_step_summary(summary)
@@ -461,6 +515,9 @@ def build_parser() -> argparse.ArgumentParser:
     bs = sub.add_parser("build-silver", help="run the dbt silver models and tests")
     bs.add_argument("--db", help="local DuckDB file instead of MotherDuck")
 
+    bg = sub.add_parser("build-gold", help="run the dbt gold models, tests and snapshot")
+    bg.add_argument("--db", help="local DuckDB file instead of MotherDuck")
+
     ex = sub.add_parser("extract", help="LLM extraction for postings in target role families")
     ex.add_argument("--db", help="local DuckDB file instead of MotherDuck")
     ex.add_argument("--limit", type=int, help="process at most N postings")
@@ -488,6 +545,7 @@ def main(argv: Sequence[str] | None = None, clock: Clock | None = None) -> int:
         "load-ops": cmd_load_ops,
         "load-bronze": cmd_load_bronze,
         "build-silver": cmd_build_silver,
+        "build-gold": cmd_build_gold,
         "extract": cmd_extract,
         "check-freshness": cmd_check_freshness,
         "validate-employers": cmd_validate_employers,

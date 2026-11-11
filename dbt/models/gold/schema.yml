@@ -1,0 +1,133 @@
+version: 2
+
+models:
+  - name: int_latest_extraction
+    description: Newest extraction per content_hash (stage schema, not read by the app).
+    columns:
+      - {name: content_hash, tests: [unique, not_null]}
+  - name: fct_postings
+    description: >
+      One row per posting with extracted fields. Advertised salary only; annual figures only where
+      the period is known (salary_period_inferred marks a rule-filled period).
+    columns:
+      - {name: posting_key, tests: [unique, not_null]}
+      - {name: company_id, tests: [not_null]}
+      - {name: source_id, tests: [not_null]}
+      - {name: has_extraction, tests: [not_null]}
+      - {name: has_advertised_salary, tests: [not_null]}
+      - {name: salary_period_inferred, tests: [not_null]}
+      - {name: first_seen_date, tests: [not_null]}
+      - {name: is_active, tests: [not_null]}
+      - {name: is_probable_duplicate, tests: [not_null]}
+      - name: role_family
+        tests:
+          - accepted_values:
+              arguments:
+                values: [data_analyst, data_engineer, analytics_engineer, bi, business_analyst, data_scientist, ml_ai_engineer, other]
+      - name: seniority
+        tests:
+          - accepted_values:
+              arguments:
+                values: [intern, junior, mid, senior, staff, principal, manager, director, executive, unspecified]
+      - name: remote_policy
+        tests:
+          - accepted_values:
+              arguments: {values: [remote, hybrid, onsite, unspecified]}
+      - name: sponsorship_statement
+        tests:
+          - accepted_values:
+              arguments: {values: [offered, not_offered, unspecified]}
+      - name: salary_period
+        tests:
+          - accepted_values:
+              arguments: {values: [hour, day, week, month, year]}
+      - name: is_active
+        tests:
+          - accepted_values:
+              arguments: {values: [true, false], quote: false}
+  - name: dim_company
+    description: One row per company.
+    columns:
+      - {name: company_id, tests: [unique, not_null]}
+      - {name: name, tests: [not_null]}
+      - {name: n_postings, tests: [not_null]}
+  - name: dim_skill
+    description: One row per canonical skill name (jobpulse.skills.norm_skill).
+    columns:
+      - {name: skill_id, tests: [unique, not_null]}
+      - {name: canonical_name, tests: [unique, not_null]}
+  - name: bridge_posting_skill
+    description: Normalized, deduplicated skills per posting.
+    tests:
+      - unique_combination:
+          arguments:
+            combination_of_columns: [posting_key, skill_id]
+    columns:
+      - {name: posting_key, tests: [not_null]}
+      - name: skill_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_skill')
+                field: skill_id
+  - name: agg_skill_demand_weekly
+    description: Weekly skill demand per role family (extracted postings only).
+    tests:
+      - unique_combination:
+          arguments:
+            combination_of_columns: [week_start, skill_id, role_family]
+    columns:
+      - {name: week_start, tests: [not_null]}
+      - {name: skill_id, tests: [not_null]}
+      - name: role_family
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [data_analyst, data_engineer, analytics_engineer, bi, business_analyst, data_scientist, ml_ai_engineer, other]
+      - {name: active_postings, tests: [not_null]}
+      - {name: new_postings, tests: [not_null]}
+      - {name: share_of_postings, tests: [not_null]}
+  - name: agg_salary_by_role_city
+    description: >
+      Advertised salary only (never LCA wages). One row per currency within a
+      (role_family, seniority, city) group; coverage_pct is the group's share with any salary.
+    tests:
+      - unique_combination:
+          arguments:
+            combination_of_columns: [role_family, seniority, city, salary_currency]
+    columns:
+      - name: role_family
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [data_analyst, data_engineer, analytics_engineer, bi, business_analyst, data_scientist, ml_ai_engineer, other]
+      - name: seniority
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [intern, junior, mid, senior, staff, principal, manager, director, executive, unspecified]
+      - {name: city, tests: [not_null]}
+      - {name: salary_currency, tests: [not_null]}
+      - {name: n_postings, tests: [not_null]}
+      - {name: n_with_salary, tests: [not_null]}
+      - {name: coverage_pct, tests: [not_null]}
+
+snapshots:
+  - name: snap_postings
+    description: History of content_hash/source_status per posting (check strategy).
+    tests:
+      - unique_combination:
+          arguments:
+            combination_of_columns: [posting_key, dbt_valid_from]
+    columns:
+      - {name: posting_key, tests: [not_null]}
+      - {name: content_hash, tests: [not_null]}
+      - name: source_status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments: {values: [active, closed]}

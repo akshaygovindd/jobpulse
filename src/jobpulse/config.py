@@ -103,6 +103,11 @@ class WarehouseConfig(_Strict):
     # A posting closes after this many absences on calendar-adjacent, authoritative dates.
     closure_consecutive_absences: int = Field(ge=1)
 
+    @property
+    def gold_stage_schema(self) -> str:
+        """Holds the Python-built mapping tables and int_ models, apart from what the app reads."""
+        return f"{self.gold_schema}_stage"
+
 
 class GoldConfig(_Strict):
     # Periods that can be annualized -> multiplier. A period absent here (e.g. "day") is never

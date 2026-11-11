@@ -26,12 +26,15 @@ class SilverResult:
     error: str | None = None
 
 
-def build_silver(
+def run_dbt(
     cfg: WarehouseConfig,
+    select: list[str],
+    variables: dict[str, object],
     *,
     db_path: Path | None = None,
-    extraction: ExtractionConfig | None = None,
 ) -> SilverResult:
+    """Run `dbt build` (models + tests + snapshots) for the selected paths. A DuckDB file selects
+    the local `ci` target; otherwise the MotherDuck `prod` target."""
     from dbt.cli.main import dbtRunner  # lazy: ingest-only installs don't have the dbt group
 
     if db_path is not None:
@@ -40,14 +43,6 @@ def build_silver(
     else:
         os.environ["JOBPULSE_DBT_DB"] = cfg.database
         target = "prod"
-    flt = (extraction or load_extraction()).title_filter
-    variables = {
-        "extraction_exclude": flt.exclude,
-        "extraction_families": [f.model_dump() for f in flt.families],
-        "bronze_schema": cfg.bronze_schema,
-        "silver_schema": cfg.silver_schema,
-        "closure_consecutive_absences": cfg.closure_consecutive_absences,
-    }
     with tempfile.TemporaryDirectory() as tmp:
         res = dbtRunner().invoke(
             [
@@ -59,8 +54,7 @@ def build_silver(
                 "--target",
                 target,
                 "--select",
-                "path:models/staging",
-                "path:models/silver",
+                *select,
                 "--target-path",
                 str(Path(tmp) / "target"),
                 "--log-path",
@@ -84,3 +78,23 @@ def build_silver(
         else:
             result.failures.append(f"{name}: {status}")
     return result
+
+
+def build_silver(
+    cfg: WarehouseConfig,
+    *,
+    db_path: Path | None = None,
+    extraction: ExtractionConfig | None = None,
+) -> SilverResult:
+    flt = (extraction or load_extraction()).title_filter
+    variables: dict[str, object] = {
+        "extraction_exclude": flt.exclude,
+        "extraction_families": [f.model_dump() for f in flt.families],
+        "bronze_schema": cfg.bronze_schema,
+        "silver_schema": cfg.silver_schema,
+        # dbt renders project-level config with CLI vars only, so every schema is always passed.
+        "gold_schema": cfg.gold_schema,
+        "gold_stage_schema": cfg.gold_stage_schema,
+        "closure_consecutive_absences": cfg.closure_consecutive_absences,
+    }
+    return run_dbt(cfg, ["path:models/staging", "path:models/silver"], variables, db_path=db_path)

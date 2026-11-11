@@ -28,3 +28,14 @@ sources:
           - {name: board_id, tests: [not_null]}
           - {name: snapshot_date, tests: [not_null]}
           - {name: attempt_id, tests: [not_null]}
+  - name: extract
+    schema: "{{ var('extract_schema') }}"
+    description: LLM extraction cache written by `jobpulse extract`. Gold reads it; never writes it.
+    tables:
+      - name: extractions
+  - name: gold_stage
+    schema: "{{ var('gold_stage_schema') }}"
+    description: Mapping tables written in Python by `jobpulse build-gold` before dbt runs.
+    tables:
+      - name: skill_map
+      - name: location_map
