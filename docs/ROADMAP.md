@@ -75,25 +75,29 @@
 - [x] Running the full pipeline twice for the same date leaves row counts unchanged (fixture test, plus a live double run on MotherDuck checked with `scripts/warehouse_counts.py`; only `ops.pipeline_runs` grows, because each run records itself).
 - [x] The dispatched Daily ingest run (#5, `gha-42738644998-1`) has a green `warehouse` job, with Ashby companies in bronze (verified 2026-11-10).
 
-## P3: Extraction + benchmark
+## P3: Extraction + benchmark (built and running; benchmark scope revised 2026-11-11, one box open)
 
 **Build**
 - Pydantic extraction schema.
 - **Provider changed to OpenAI (2026-11-09):** `gpt-6-luna` runs first and escalates once to `gpt-6.1-terra` when validation fails. Provider, model ids and prices live in `config/extraction.yaml`.
 - **Scope for cost:** only postings in target role families (title filter in config, applied in silver before any LLM call) are extracted. The pass count is reported by `scripts/extraction_counts.py`.
-- Batch API for the first-pass backfill (50% off). Budget: $4.96 prepaid; backfill capped at $1.50 per run.
+- Batch API path built (50% off, `extract --batch submit|collect`); the real backfill ran synchronously by owner choice (cost difference was about $0.08). Budget: $4.96 prepaid; backfill capped at $1.50 per run.
 - Content-hash cache.
 - Quarantine.
 - `llm_calls` logging.
 - Per-run spend cap. Once the cap is hit, remaining postings go to the queue.
-- `eval/labels_template.csv` (**blind**: id, title, company, description only, no predictions), stratified `eval/sample.py` (200 postings from the filtered set), `eval/export_predictions.py` (predictions in a separate file), `eval/score.py` (joins the two by posting_key).
+- `eval/labels_template.csv` (**blind**: id, title, company, description only, no predictions), stratified `eval/sample.py` (200 postings from the filtered set), `eval/export_predictions.py` (predictions in a separate file), `eval/score.py` (joins the two by posting_key), local labeling app `eval/label_app.py`.
+- **Revised 2026-11-11 (owner):** manual labeling stopped at **38 rows**, kept as a *hand-labeled pilot*. Further evaluation needs no human labels and is reported separately, each report named for what it measures: `eval/salary_crosscheck.py` (agreement between a regex parser and the model), `eval/grounding_report.py` (validation/quote-in-text pass rates), `eval/agreement.py` (cross-model agreement). None of these is an accuracy measure. Scoring-time conventions (seniority folding, skills name normalization) are configured in `config/extraction.yaml` `eval:` and always shown next to the raw numbers.
 
 **Done when**
-- [ ] A second run over the same postings makes 0 LLM calls (all cache hits).
-- [ ] With the cap set to $0.01, extraction stops, the remaining postings are queued, and no raw data is lost.
-- [ ] Tests cover the path invalid output → escalation → quarantine.
-- [ ] `score.py` reports per-field precision/recall on the owner's 200 labels, with a **separate sponsorship report**.
-- [ ] Cost per 1k postings is reported by script.
+- [x] A second run over the same postings makes 0 LLM calls (all cache hits). Verified on the live backfill 2026-11-10: 495 cache hits, 0 calls, $0.
+- [x] With a tiny cap, extraction stops, the remaining postings are queued, and no raw data is lost. Proven by `tests/unit/test_extraction.py` (cap tests). Not demonstrated live, because nothing is pending to extract.
+- [x] Tests cover the path invalid output → escalation → quarantine (`tests/unit/test_extraction.py`).
+- [x] Cost per 1k postings is reported by script: **$0.39** (`scripts/report_extraction_cost.py`; escalation 2.2%, quarantine 0%).
+- [x] **Hand-labeled pilot (n=38)**: `eval/score.py` reports per-field precision/recall, with a **separate sponsorship report**. Caveats: n is small; the pilot holds 1 `not_offered` and 0 `offered` sponsorship labels, so sponsorship accuracy is effectively **unmeasured** (the 13-row targeted sponsorship sheet is unlabeled). *The original check (200 owner labels) is not met; it was dropped by the owner on 2026-11-11.*
+- [x] **Rule-based salary cross-check** over all extractions with posting text (489 of 503): `eval/salary_crosscheck.py`. Agreement, not accuracy.
+- [x] **Validation and grounding pass rates**: `eval/grounding_report.py`. Self-consistency, not accuracy.
+- [ ] **Cross-model agreement** on a seeded sample of 100 postings (cap $0.40): `eval/agreement.py`. Built and tested; the dry-run estimates about $0.32-0.33. **Not run yet; waiting for the owner's go-ahead.**
 
 ## P4: dbt gold + snapshots + local Airflow/Docker
 

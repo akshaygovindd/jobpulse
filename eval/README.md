@@ -35,6 +35,18 @@ CSV open in a spreadsheet at the same time.
 5. `uv run python eval/score.py` joins labels and predictions by `posting_key` and writes
    `reports/extraction_report.md` and `reports/sponsorship_report.md`.
 
+## Where things stand (2026-11-11)
+
+Manual labeling stopped at 38 rows; `labels.csv` is kept as the **hand-labeled pilot**. Score it
+with `export_predictions.py` then `score.py` (rows without `done=y` are skipped), and read
+`pilot_analysis.py` for the seniority/skills error analysis. Seniority is reported raw and with
+staff/principal/manager/director/executive folded into senior; skills raw, name-normalized, and
+name-normalized with competencies excluded (settings: `config/extraction.yaml`, `eval:`).
+
+Automated evaluations that need no human labels, each named for what it measures (none is
+accuracy): `salary_crosscheck.py`, `grounding_report.py`, and `agreement.py --dry-run | --run`
+(cross-model agreement; `--run` is paid and capped, see its docstring).
+
 ## Targeted sponsorship sample (separate file)
 
 Only about 2.6% of postings state a sponsorship position, so the random 200 holds few positives.

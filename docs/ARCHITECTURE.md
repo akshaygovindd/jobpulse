@@ -52,6 +52,7 @@ jobpulse/
 ├── app/               Home.py  pages/   (5 MVP pages; Resume Match added in P6)
 ├── eval/              sample.py  sponsorship_sample.py  export_predictions.py  score.py  README.md  reports/
 │                      label_app.py + label_io.py (local Streamlit labeling app; never reads predictions)
+│                      pilot_analysis.py  salary_rules.py  salary_crosscheck.py  grounding_report.py  agreement.py (automated, no human labels)
 │                      labels_template.csv (BLIND: id, title, company, text only)  predictions.csv (separate, gitignored)
 ├── scripts/           validate_employers.py  check_freshness.py  warehouse_counts.py
 │                      extraction_counts.py  report_extraction_cost.py
@@ -147,6 +148,7 @@ Scope: only postings that pass the config-driven **title filter** (`silver.int_e
 | `quarantine` | PK as above. raw_output, validation_errors, model_chain (`luna>terra`), attempts. Not retried until the prompt/schema version changes. |
 | `queue` | content_hash (PK), posting_key, enqueued_at, reason (`budget_exhausted`), attempt_id. Cleared when the posting is extracted or quarantined. |
 | `llm_calls` | call_id, attempt_id, content_hash, model, mode (`sync`/`batch`), input_tokens, output_tokens, cached_tokens, cost_usd, latency_ms, outcome (ok/invalid/error/escalated), created_at |
+| `agreement` | PK (content_hash, schema_version, prompt_version, model). The escalation model's re-run output for the cross-model agreement sample (`eval/agreement.py`). Eval only: never read by the cache or the pipeline; its `llm_calls` rows have `mode='eval'` and are excluded from cost-per-1k. |
 | `batches` | batch_id, attempt_id, input_file_id, model, request_count, est_cost_usd, schema_version, prompt_version, status, created_at, collected_at. A new batch is refused while one is uncollected. |
 
 Flow per posting: cache lookup (content hash) → first-pass model with Structured Outputs → Pydantic validation plus grounding checks (quoted salary/sponsorship text must appear in the posting) → on failure, **one** escalation call → on failure, quarantine. Transport errors are recorded and retried next run (never quarantined). Failures are isolated per posting.
@@ -154,6 +156,15 @@ Flow per posting: cache lookup (content hash) → first-pass model with Structur
 **Spend cap.** Before each call the runner reserves its worst-case cost (estimated input + `max_output_tokens`, times `cap_safety_factor`) against the per-run cap; if it does not fit, the posting goes to `queue`. Defaults: $0.25 per daily run, $1.50 for `--backfill`/`--batch`. Raw bronze/silver data is never touched.
 
 **Batch API.** `extract --batch submit` sends the first pass of the backlog as one batch (50% off, up to 24h); `extract --batch collect` parses results, runs escalations synchronously, and quarantines failures. Daily incremental runs are synchronous.
+
+**Evaluation (what each report measures).** Reports are separate on purpose and named for what they are:
+
+| Report (script) | Needs human labels? | What it measures | What it does NOT measure |
+|---|---|---|---|
+| Hand-labeled pilot (`eval/score.py`, `eval/pilot_analysis.py`) | yes (38 rows) | Agreement with the owner's labels, per field | Accuracy beyond n=38; the owner's labeling conventions are folded in at scoring time (seniority) or normalized (skill names), always shown next to the raw number |
+| Salary cross-check (`eval/salary_crosscheck.py`) | no | Agreement between a regex pay-range parser and the model | Correctness: the parser has its own errors (it misreads European number formats and equity grants) |
+| Grounding / validation (`eval/grounding_report.py`) | no | How often output passed the pipeline's own checks; whether quoted evidence is in the text | Whether a value is right |
+| Cross-model agreement (`eval/agreement.py`) | no | Consistency of `gpt-6-luna` vs `gpt-6.1-terra` on the same prompt, on a seeded sample | Correctness: two models can be wrong together |
 
 **Provider.** OpenAI (`gpt-6-luna` first pass, `gpt-6.1-terra` escalation), Responses API with `json_schema` strict output, called through the shared HTTP client; no provider SDK. Prices in `config/extraction.yaml` come from the OpenAI pricing page (checked 2026-11-09). The key is never printed, logged, or committed; error text is scrubbed.
 
