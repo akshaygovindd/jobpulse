@@ -108,6 +108,40 @@ models:
     columns:
       - {name: n_certified, tests: [not_null]}
       - {name: coverage_pct, tests: [not_null]}
+  - name: fct_snapshot_freshness
+    description: Newest authoritative snapshot per board; the app computes age against now and max_age_hours.
+    tests:
+      - unique_combination:
+          arguments:
+            combination_of_columns: [source_id, board_id]
+    columns:
+      - {name: newest_completed_at, tests: [not_null]}
+  - name: fct_pipeline_runs
+    description: One row per pipeline task run (counts and cost only).
+    tests:
+      - unique_combination:
+          arguments:
+            combination_of_columns: [attempt_id, task, source_id]
+    columns:
+      - {name: status, tests: [not_null]}
+  - name: agg_ingest_status_daily
+    description: Per-board ingest outcomes by snapshot date.
+    tests:
+      - unique_combination:
+          arguments:
+            combination_of_columns: [snapshot_date, source_id, status, reason_code]
+  - name: agg_data_quality
+    description: Coverage of the fields the app relies on, with numerator and denominator.
+    columns:
+      - {name: metric, tests: [unique, not_null]}
+      - {name: numerator, tests: [not_null]}
+      - {name: denominator, tests: [not_null]}
+  - name: agg_llm_cost_daily
+    description: OpenAI extraction calls by day, model, mode and outcome.
+    tests:
+      - unique_combination:
+          arguments:
+            combination_of_columns: [call_date, model, mode, outcome]
   - name: dim_company
     description: One row per company.
     columns:

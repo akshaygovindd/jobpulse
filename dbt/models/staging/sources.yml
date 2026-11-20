@@ -45,6 +45,7 @@ sources:
     description: LLM extraction cache written by `jobpulse extract`. Gold reads it; never writes it.
     tables:
       - name: extractions
+      - name: llm_calls
   - name: gold_stage
     schema: "{{ var('gold_stage_schema') }}"
     description: Mapping tables written in Python by `jobpulse build-gold` before dbt runs.
@@ -57,3 +58,9 @@ sources:
     tables:
       - name: lca_disclosures
       - name: employer_lca_match
+  - name: ops
+    schema: "{{ var('ops_schema') }}"
+    description: Run records loaded from S3 by `jobpulse load-ops`. Gold reads them; never writes them.
+    tables:
+      - name: pipeline_runs
+      - name: company_snapshots

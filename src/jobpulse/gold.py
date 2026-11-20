@@ -25,6 +25,7 @@ from jobpulse.config import (
 )
 from jobpulse.extract.store import ensure_extract_tables
 from jobpulse.location import CityParser, Place
+from jobpulse.ops.load_ops import ensure_ops_tables
 from jobpulse.silver import SilverResult, run_dbt
 from jobpulse.skills import norm_skill
 from jobpulse.visa.lca_loader import ensure_ref_tables
@@ -78,6 +79,7 @@ def stage_maps(
     con.execute(f'CREATE SCHEMA IF NOT EXISTS "{wh.gold_schema}"')
     con.execute(f'CREATE SCHEMA IF NOT EXISTS "{stage}"')
     ensure_extract_tables(con, ecfg)
+    ensure_ops_tables(con, wh)
     ensure_ref_tables(con, wh)  # visa tables exist (empty) even if load-lca never ran
 
     raw_skills = [
@@ -134,6 +136,8 @@ def build_gold(
         "gold_stage_schema": wh.gold_stage_schema,
         "extract_schema": ecfg.extract_schema,
         "ref_schema": wh.ref_schema,
+        "ops_schema": wh.ops_schema,
+        "freshness_max_age_hours": pipeline.freshness.max_age_hours,
         "extraction_exclude": ecfg.title_filter.exclude,
         "extraction_families": [f.model_dump() for f in ecfg.title_filter.families],
         "lca_certified_statuses": [x.upper() for x in lca.certified_statuses],

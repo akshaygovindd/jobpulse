@@ -96,6 +96,7 @@ def build_silver(
         "gold_schema": cfg.gold_schema,
         "gold_stage_schema": cfg.gold_stage_schema,
         "ref_schema": cfg.ref_schema,
+        "ops_schema": cfg.ops_schema,
         "closure_consecutive_absences": cfg.closure_consecutive_absences,
     }
     return run_dbt(cfg, ["path:models/staging", "path:models/silver"], variables, db_path=db_path)
