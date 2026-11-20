@@ -26,7 +26,8 @@ The data is spread across ATS job boards. It is unstructured, and sponsorship cl
 
 | Time | Page | What to show |
 |---|---|---|
-| 0:00 | **Pipeline Health** | Freshness per source, last run, which companies failed and why, rows in/kept/dropped by reason, LLM cost per run, days of history accumulated |
+| 0:00 | **Home** | The four headline cards (open postings with the weekly change, top skill, median advertised pay, H-1B coverage); follow a link |
+| 0:10 | **Pipeline Health** | Freshness per source, last run, which companies failed and why, rows in/kept/dropped by reason, LLM cost per run, days of history accumulated |
 | 0:20 | **Market Overview** | Active postings by role family and seniority, source mix. Postings flagged as cross-source duplicates are excluded from counts. |
 | 0:40 | **Hiring Trends** | Weekly skill demand; pick one rising skill and show its trajectory |
 | 1:00 | **Salary** | Advertised ranges by role and city with coverage %. Then the separate LCA offered-wage view. The two datasets are never blended. |

@@ -36,7 +36,7 @@ jobpulse/
 ├── CLAUDE.md  README.md  Makefile  pyproject.toml  uv.lock  .env.example
 ├── config/            employers.yaml (converted from owner's seed list)
 │                      sources.yaml  pipeline.yaml  extraction.yaml  locations.yaml
-│                      lca.yaml  lca_aliases.yaml  resume.yaml  publish.yaml
+│                      lca.yaml  lca_aliases.yaml  resume.yaml  publish.yaml  app.yaml  city_coords.yaml
 ├── src/jobpulse/
 │   ├── config.py  logging.py  http.py  cli.py
 │   ├── connectors/    base.py  greenhouse.py  lever.py  ashby.py  (adzuna.py: later)
@@ -45,6 +45,7 @@ jobpulse/
 │   ├── bronze/        loader.py  normalize.py
 │   ├── silver.py      (runs the dbt silver models with vars from config; run_dbt shared with gold)
 │   ├── gold.py        (stages skill/city mapping tables, then runs the dbt gold models + snapshot)
+│   ├── insights.py    (one-sentence data-computed insights; pure)
 │   ├── publish.py     (export-gold: allow-listed gold tables to one validated DuckDB file)
 │   ├── app_data.py  app_ui.py   (the app's read-only door to gold; shared page helpers)
 │   ├── skills.py  location.py   (skill-name normalization shared with eval; place heuristic)
@@ -235,7 +236,7 @@ The **company** class (`dim_company.visa_evidence_class`) reflects **filing hist
 
 ## Streamlit app (`app/`, P5 pages, P6 Resume match and deploy)
 
-`app/streamlit_app.py` is the entry point (`st.navigation`, six pages in `app/app_pages/`: Market overview, Hiring trends, Salary, Visa intelligence, Resume match, Pipeline health). The layout uses Streamlit's responsive containers, so columns stack on a phone.
+`app/streamlit_app.py` is the entry point (`st.navigation`, seven pages in `app/app_pages/`: Home, Market overview, Hiring trends, Salary, Visa intelligence, Resume match, Pipeline health). The layout uses Streamlit's responsive containers, so columns stack on a phone.
 
 **Gold only, read only.** All reads go through `jobpulse.app_data.read_gold`: one `SELECT`/`WITH` statement, no comments, no write/DDL/attach/pragma/load keywords, and every table must be `gold.<name>` with the name in the `GOLD_TABLES` allow-list (the `gold_stage` working tables, bronze, silver, ops, extract and ref are refused). The connection is, in order: a read-only local DuckDB file (`JOBPULSE_APP_DB`); **the published gold file** (`JOBPULSE_GOLD_URL`, the public deploy: no token of any kind); or, for development only, MotherDuck with a read-scaling token (`MOTHERDUCK_READ_TOKEN`, never the write token; the Lite plan has none). Pages never import duckdb. Pipeline Health reads the gold models over ops and LLM-call data (`fct_snapshot_freshness`, `fct_pipeline_runs`, `agg_ingest_status_daily`, `agg_data_quality`, `agg_llm_cost_daily`).
 
@@ -246,6 +247,15 @@ The **company** class (`dim_company.visa_evidence_class`) reflects **filing hist
 **Tests (`tests/unit/test_app.py`, run in CI with pytest).** `AppTest` renders every page against a gold fixture built by the real pipeline (with data, and with no extraction/visa/ops data), plus the stale-data banner, the visa disclaimer/quote/count, the separate salary tabs, a missing-data message, the read-only connection, the refused statements and a static check that app code names only allow-listed gold tables.
 
 Run locally: `JOBPULSE_APP_DB=path/to/warehouse.duckdb uv run streamlit run app/streamlit_app.py`.
+
+### Look and feel (Home, insights, map, theme)
+
+- **One chart style.** Every chart goes through `app_ui._chart`, which applies one Vega-Lite config (`CHART_CONFIG`); every hex colour lives in one palette block at the top of `app_ui.py` (blue and slate only: colour never implies a verdict, no red/green). `.streamlit/config.toml` sets the matching blue theme (`primaryColor`, `linkColor`, `baseRadius`). Label colour is a mid slate that reads on the light and the dark theme. `tests/unit/test_app_style.py` fails if a page draws its own chart or hard-codes a colour.
+- **Home** (`app_pages/home.py`, the default page): a hero and four cards whose numbers are all read from gold (open postings with a weekly change, the most requested skill, the median advertised yearly USD pay, companies with H-1B filings), a resume-match call to action, and the visa disclaimer.
+- **Key insight lines.** `jobpulse/insights.py` holds pure functions that turn the rows a chart is drawn from into one sentence ("Databricks has the most open postings: 921, 11% of all 8,464."). They return nothing when there is no data and carry the evidence caveat for visa sentences; the remote-policy sentence never crowns "Not stated"; there is no per-day average where empty days are absent from the rows.
+- **KPI deltas** (`app_ui.kpi_comparison`, `config/app.yaml` `kpi.delta_days`, default 7). Open postings, companies hiring and cities are rebuilt from `fct_postings` (first seen on or before the day and not closed by then) for the last **settled** day (the day before the newest snapshot, because a posting counts as closed only after two missed snapshots) and `delta_days` earlier. The change shows only when the data goes back that far, in neutral colour. "Data & AI roles analyzed" has no delta because extraction time is not in gold.
+- **Map** (Market overview). pydeck (already a Streamlit dependency, no new package) with a CARTO dark basemap (no token) and the attribution from `config/app.yaml` shown under it. Positions come from `config/city_coords.yaml`: hand-entered approximate city centres keyed by the gold city label. A city with no entry is not drawn; the page states how many postings are drawn and how many are left off. Remote-only and multi-location postings have no single city and are not on the map.
+- **Company lookup card** (Visa page): type-ahead search, evidence badge, filing counts, filings per fiscal year, strongest year, most common data role family (lower bound) and wage level, filed-under names, and the "evidence, not a promise" line; breakdown tables and posting quotes stay below it.
 
 ### Resume match (`src/jobpulse/resume/`, `app/app_pages/resume_match.py`)
 

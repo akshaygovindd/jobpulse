@@ -23,22 +23,23 @@ Daily job-market intelligence for data and AI roles. Every day it pulls the publ
 
 | Page | What you get |
 |---|---|
-| Market overview | Open postings by company, role family and remote policy, with how much of the data is analyzed |
+| Home | The headline numbers (open postings with the weekly change, top skill, median advertised pay, H-1B coverage) and links to everything else |
+| Market overview | Open postings by company, role family and remote policy, a map of open postings by city, and how much of the data is analyzed |
 | Hiring trends | New and closed postings per day, skills employers ask for |
 | Salary | Advertised pay by role, seniority and city (with coverage %), and, in a separate tab, wages on H-1B filings |
-| Visa intelligence | Public H-1B filing counts per company and what postings say about sponsorship. Evidence, not a promise. |
+| Visa intelligence | Top sponsors, a company lookup card, and what postings say about sponsorship. Evidence, not a promise. |
 | Resume match | Paste a resume or upload a PDF, get open data and AI postings ranked by skill overlap, with matched and missing skills, visa evidence and advertised salary. No AI call, no storage. |
 | Pipeline health | Data freshness, recent runs, data quality and AI extraction cost |
 
 ### 2-minute demo script
 
-1. **Pipeline health** (0:00): freshness per source, last runs, AI cost.
-2. **Market overview** (0:20): open roles by company and role family; note the "analyzed" coverage line.
-3. **Hiring trends** (0:40): new and closed postings per day; pick a skill.
-4. **Salary** (1:00): advertised ranges with coverage %, then the separate LCA offered-wage tab.
-5. **Visa intelligence** (1:20): top sponsors; open one company and read the evidence banner.
+1. **Home** (0:00): the four headline cards; follow one link.
+2. **Market overview** (0:15): open roles by company and role family, the key-insight lines, and the map; note the "analyzed" coverage line.
+3. **Hiring trends** (0:35): new and closed postings per day; pick a skill.
+4. **Salary** (0:55): advertised ranges with coverage %, then the separate LCA offered-wage tab.
+5. **Visa intelligence** (1:15): top sponsors; look up one company and read the evidence card.
 6. **Resume match** (1:40): paste a resume, read the matches and the missing skills, filter by visa evidence (a filter, never part of the score), press **Delete my resume data**.
-7. Close (1:55): the evaluation reports in [`eval/reports/`](eval/reports/).
+7. **Pipeline health** and the evaluation reports in [`eval/reports/`](eval/reports/) (1:55).
 
 ## Architecture
 
@@ -130,6 +131,7 @@ JOBPULSE_GOLD_URL=https://github.com/akshaygovindd/jobpulse/releases/download/go
 `--snapshot-date` only accepts the current UTC date, so a missed day stays a gap and is never backfilled.
 
 Source attribution:
+- Map basemap © OpenStreetMap contributors © CARTO
 - [Greenhouse Job Board API](https://developers.greenhouse.io/job-board.html)
 - [Lever Postings API](https://github.com/lever/postings-api)
 - Ashby public job board API
