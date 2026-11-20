@@ -519,3 +519,42 @@ What this does and does not show: it shows the repository, as configured, has no
 1. **MotherDuck:** the trial has ended. An organization admin must pick Free, Lite or Business at app.motherduck.com. Until then daily `warehouse`, `extract` and `gold` jobs cannot work either (check the Actions tab). Note that DuckDB is pinned to 1.5.6 for MotherDuck. After access is restored, run `uv run jobpulse build-gold` and send me the full error line (it is now printed); I will reproduce, fix and add the regression test, then record `database_size` and counts.
 2. Map bare `Dublin` to Ireland? (config line in `known_places`.)
 3. Try the demo: commands are in `airflow/README.md`.
+
+---
+
+## 2026-11-19 (later): bronze storage mitigation, Dublin, Actions history; MotherDuck still refused from this machine
+
+**1. Live `build-gold` and the `CatalogException`: not reproduced.**
+- With the token in `.env`, `jobpulse build-gold` (and a read-only `scripts/storage_projection.py`) still fail at connect with the same `Your MotherDuck trial has ended` error, tried several times over a few minutes after you restored the plan. So the `.env` token may belong to the old org/trial, or the plan change has not reached it. **Please generate a new token in the restored org and put it in `.env` and the GitHub `prod` secret `MOTHERDUCK_TOKEN`** (editor only, not the chat). Until then I cannot run anything live.
+- **New evidence from the Actions API:** the `gold` job was **green on MotherDuck in Daily ingest runs #9 (dispatch, 2026-11-11) and #10 to #14 (scheduled, 11-12 to 11-16)**, all on commit `76b1490`. So gold does build on MotherDuck from CI, and the `CatalogException` you saw must be specific to that local run. Hypothesis, **not verified**: your manual run overlapped CI run #9, whose gold job ran 18:44 to 18:51 UTC on 2026-11-11, and two sessions doing DDL (`CREATE SCHEMA`, `DROP`/`CREATE TABLE`) in the same MotherDuck database at once can conflict; that would also explain `gold_report.py` finding no gold schema at that moment. I wrote no regression test because I cannot reproduce it; a test for a guessed cause would prove nothing. If it happens again, `build-gold` now prints the first line of the error.
+- **Speed/cost fix I could verify locally:** the gold jobs took 2 to 7 minutes in Actions (runs #9, #12, #14: 7 min) against seconds locally. The cause is almost certainly `executemany` in `stage_maps` (one MotherDuck round trip per row, about 1,500 location rows plus skills). It now inserts 500 rows per statement (`gold.bulk_insert`, unit-tested with 1,203 rows, empty input, NULL and unicode). Why it matters: the Lite plan has 10 CU-hours a month. **Expected effect on MotherDuck is unmeasured.**
+- ROADMAP P4's last box is **ticked on the strength of the Actions evidence** (gold job green on MotherDuck for six consecutive days). That evidence is job and step conclusions, not logs, and I have not re-run it myself. Say if you want it unticked until you have run it.
+
+**2. Bare `Dublin` -> Ireland** (`known_places`, owner decision). On the real local data: Dublin, Ireland 237 active postings (the explicit 147 plus the bare 90), Dublin, California 11. `Dublin, CA` and `US-CA-Dublin` keep their explicit state. Tests updated (parser, gold).
+
+**3. Storage mitigation (implemented).** Bronze now keeps the description text and raw payload **once per (posting, content_hash)** in new `bronze.posting_content`; `bronze.raw_postings` keeps only the small per-day observation fields. This is the "keep payloads only when content_hash changes" idea, done as content-addressing so it is order-independent and idempotent (a same-day replacement or an A→B→A change cannot lose content). `stg_raw_postings` joins the description back, so silver and gold are unchanged (all 59 silver and 53 gold dbt tests pass on the migrated real data, and every one of 9,516 `dim_postings` rows still has its description). S3 raw pages are untouched and remain the complete record, so payload history can always be re-read from S3.
+- **Migration** (`migrate_to_content_table`, runs inside `load-bronze`, idempotent, one transaction): builds `posting_content` from the earliest observation of each content, rebuilds `raw_postings` without the two large columns (a rebuild, not `DROP COLUMN`, so space is released). **It has not run on MotherDuck.** It is the one unverified step of the next warehouse job: if it fails, the transaction rolls back (old data intact) but `load-bronze` fails with it. I would run `uv run jobpulse load-bronze` locally once, with the new token, before the next scheduled run.
+- **Measured on the real 10-day dataset** (82,849 observation rows, 2026-11-10 to 2026-11-19, local DuckDB, `scripts/storage_projection.py`): used size **1,541.8 MiB -> 320.2 MiB (-79%)**. Content rows 10,568 against 82,849 observations (87% of daily rows were exact repeats before).
+- **Projected growth** (`--marginal 3`: cost of the last three days, rebuilding silver and gold each time): 3.75, 4.25 and 2.50 MiB per day, **mean 3.5 MiB/day, about 105 MiB per 30 days = 1.0% of the 10 GiB limit**. Before the change the same 10 days averaged about 154 MiB/day (1,541.8 MiB / 10 days, including the first full day), which would have been roughly 4.5 GiB a month and about 45% of the limit. **Caveats:** this is local DuckDB "used blocks", and your MotherDuck reading on 2026-11-10 (54.7 MiB for one day) was well below the local figure for a comparable day, so MotherDuck's number may differ; this says nothing about CU-hours, which the 10 CU-hour limit also counts; and it assumes today's volume and change rate continue. I will re-measure on MotherDuck after a week (`uv run python scripts/storage_projection.py`).
+- Tests (`tests/unit/test_bronze_content.py`, 6): unchanged postings store content once; A→B→A keeps two contents and three silver versions; payload kept from the first observation; a replaced same-day attempt leaves no orphan; migration from the old shape is lossless and idempotent; rerun loads nothing.
+- `scripts/warehouse_counts.py` now also counts `bronze.posting_content`.
+
+**4. Actions history (GitHub API, unauthenticated; job and step conclusions only, I cannot read logs).**
+
+| Run | Date (UTC) | ingest | warehouse | extract | gold |
+|---|---|---|---|---|---|
+| #9 dispatch | 11-11 | ok | ok | ok | ok |
+| #10 to #14 | 11-12 to 11-16 | ok | ok | ok | ok (2 to 7 min) |
+| #15 | 11-17 | ok | **failed at "Load ops JSON into MotherDuck"** | skipped | skipped |
+| #16 | 11-18 | ok | **failed (same step)** | skipped | skipped |
+| #17 | 11-19 | ok | **failed (same step)** | skipped | skipped |
+
+- Matches the trial ending between 11-16 and 11-17. Ingest was unaffected: S3 has **43 of 43 authoritative pointers for each of 11-15 to 11-19**, and the 11-19 run report shows 43/43 complete, 8,267 records.
+- **No day needs a manual re-run.** `load-bronze` lists every pointer in S3 and loads any date whose attempt is not yet in the warehouse, `load-ops` reads all ops JSON, silver closure is computed from the pointer dates, and `extract` works on whatever is pending (the three missed days of new postings are small against the $0.25 cap, and anything over the cap is queued). The next scheduled run (09:17 UTC, in practice about 17:00 UTC) catches everything up, **once MotherDuck access works from the `prod` secret**. Two minor side effects: `snap_postings` records changes seen during the outage with the catch-up date as their valid-from, and the catch-up run is the first to run the bronze migration (see above). Note the Actions history can't tell me whether the `prod` secret token works now; I could not see a run after the restore.
+
+**Checks run (`make check`, final):** ruff check and format clean; mypy strict 41 files; pytest **310 passed** (3 live deselected; was 303); terraform fmt + validate both roots valid; gitleaks no leaks. Not run: anything against MotherDuck (access refused), and `pytest -m live`.
+
+**Owner steps**
+1. New MotherDuck token from the restored org -> local `.env` and GitHub `prod` secret `MOTHERDUCK_TOKEN`.
+2. Locally, once: `uv run jobpulse load-bronze` (runs the migration; watch for errors), then `uv run jobpulse build-silver`, `uv run jobpulse build-gold`, and `uv run python scripts/gold_report.py` and `uv run python scripts/storage_projection.py`. Send me the output (or any error line) and I will record the live numbers.
+3. Then dispatch **Daily ingest** once (or wait for the schedule) and check that all four jobs are green.

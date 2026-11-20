@@ -104,10 +104,10 @@
 
 ## P4: dbt gold + snapshots + local Airflow/Docker
 
-**Part A (gold + snapshot + daily job): built 2026-11-11.** It builds and passes tests on local DuckDB (fixtures and real data) and in CI, but **has not run against MotherDuck**: the first live `build-gold` failed with a `CatalogException`, and a re-run on 2026-11-19 could not connect because the MotherDuck trial has ended. **Part B (local Airflow demo, `airflow/`): built and run end to end on 2026-11-19** with local storage and a local DuckDB file.
+**Part A (gold + snapshot + daily job): built 2026-11-11 and running on MotherDuck from CI.** The `gold` job succeeded in the scheduled/dispatched Daily ingest runs #9 to #14 (2026-11-11 to 2026-11-16, read from the GitHub Actions API: job and step conclusions, not logs). The MotherDuck trial ended before run #15, so #15 to #17 failed at `load-ops` (no gold run). **Part B (local Airflow demo, `airflow/`): built and run end to end on 2026-11-19** with local storage and a local DuckDB file.
 
 **Done when**
-- [ ] All gold models and `snap_postings` build, with grain and `accepted_values` tests. (Built and tested on local DuckDB and in CI; not yet on MotherDuck. Stays open until the live build passes.)
+- [x] All gold models and `snap_postings` build, with grain and `accepted_values` tests. (Local fixtures and real data: 61 dbt nodes, 0 errors. On MotherDuck: `gold` job green in Actions runs #9 to #14. Basis is the job conclusions; I could not re-run it live from the owner's machine, see NOTES 2026-11-19 (later).)
 - [x] `dbt build` runs against fixtures in CI. (CI #18 on `6a77ec0` and #19 on `76b1490`, confirmed green by the owner.)
 - [x] `docker compose up` runs the Airflow DAG end to end against the dev target. (Local directory storage and a local DuckDB file; verified 2026-11-19, all 8 tasks green. See `airflow/README.md`.)
 - [x] Both environments are documented in ARCHITECTURE.md.

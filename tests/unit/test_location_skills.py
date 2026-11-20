@@ -63,17 +63,18 @@ def test_same_name_different_places_never_merge() -> None:
     ireland = PARSER.parse("Dublin, Ireland")
     california = PARSER.parse("Dublin, CA")
     prefixed = PARSER.parse("US-CA-Dublin")
-    bare = PARSER.parse("Dublin")  # ambiguous: not in known_places, so it stays its own place
+    bare = PARSER.parse("Dublin")  # owner decision: a bare Dublin is Dublin, Ireland
     assert ireland is not None
     assert california is not None
     assert prefixed is not None
     assert bare is not None
-    assert ireland.key != california.key != bare.key != ireland.key
+    assert bare.key == ireland.key
+    assert ireland.key != california.key
     assert prefixed.key == california.key
     assert (ireland.label, california.label, bare.label) == (
         "Dublin, Ireland",
         "Dublin, California",
-        "Dublin",
+        "Dublin, Ireland",
     )
     assert PARSER.parse("IE-Dublin-WW") == ireland
     # Same state and city name, different state or country elsewhere:

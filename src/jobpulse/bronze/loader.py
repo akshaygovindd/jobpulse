@@ -32,11 +32,18 @@ from jobpulse.ops.load_ops import transaction
 
 POINTER_SUFFIX = "/_AUTHORITATIVE.json"
 
+# One row per observation of a posting on a snapshot date. The large fields (description text and
+# the raw API payload) are NOT here: they live once per (posting, content_hash) in
+# `posting_content`, so an unchanged posting costs a few hundred bytes a day instead of ~17 KB.
+# Staging joins them back.
 _RAW_POSTINGS_DDL = """
     source_id VARCHAR NOT NULL, board_id VARCHAR NOT NULL, snapshot_date DATE NOT NULL,
     attempt_id VARCHAR NOT NULL, external_posting_id VARCHAR NOT NULL, title VARCHAR,
-    location_raw VARCHAR, description_text VARCHAR, apply_url VARCHAR,
-    content_hash VARCHAR NOT NULL, payload JSON, object_key VARCHAR NOT NULL,
+    location_raw VARCHAR, apply_url VARCHAR, content_hash VARCHAR NOT NULL,
+    object_key VARCHAR NOT NULL, loaded_at TIMESTAMPTZ NOT NULL"""
+_CONTENT_DDL = """
+    source_id VARCHAR NOT NULL, external_posting_id VARCHAR NOT NULL, content_hash VARCHAR NOT NULL,
+    first_snapshot_date DATE NOT NULL, description_text VARCHAR, payload JSON,
     loaded_at TIMESTAMPTZ NOT NULL"""
 _POINTERS_DDL = """
     source_id VARCHAR NOT NULL, board_id VARCHAR NOT NULL, company VARCHAR NOT NULL,
@@ -76,10 +83,61 @@ class BronzeResult:
     rows_by_source: Counter[str] = field(default_factory=Counter)
 
 
+def _has_column(con: duckdb.DuckDBPyConnection, schema: str, table: str, column: str) -> bool:
+    row = con.execute(
+        "SELECT count(*) FROM information_schema.columns "
+        "WHERE table_schema = ? AND table_name = ? AND column_name = ?",
+        [schema, table, column],
+    ).fetchone()
+    return bool(row and row[0])
+
+
+def migrate_to_content_table(con: duckdb.DuckDBPyConnection, cfg: WarehouseConfig) -> bool:
+    """One-time, idempotent: move description/payload out of an old-shape raw_postings.
+
+    Keeps, for each (source, posting, content_hash), the content of its earliest observation, then
+    rebuilds raw_postings without the two large columns (a rebuild, not DROP COLUMN, so the space is
+    actually released). Returns True if a migration ran.
+    """
+    b = cfg.bronze_schema
+    if not _has_column(con, b, "raw_postings", "payload"):
+        return False
+    with transaction(con):
+        con.execute(f'CREATE TABLE IF NOT EXISTS "{b}"."posting_content" ({_CONTENT_DDL})')
+        con.execute(
+            f"""INSERT INTO "{b}"."posting_content"
+                SELECT source_id, external_posting_id, content_hash, snapshot_date,
+                       description_text, payload, loaded_at
+                FROM "{b}"."raw_postings" r
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM "{b}"."posting_content" c
+                    WHERE c.source_id = r.source_id
+                      AND c.external_posting_id = r.external_posting_id
+                      AND c.content_hash = r.content_hash)
+                QUALIFY row_number() OVER (
+                    PARTITION BY source_id, external_posting_id, content_hash
+                    ORDER BY snapshot_date, board_id) = 1"""
+        )
+        con.execute(f'CREATE TABLE "{b}"."raw_postings_new" ({_RAW_POSTINGS_DDL})')
+        con.execute(
+            f"""INSERT INTO "{b}"."raw_postings_new"
+                SELECT source_id, board_id, snapshot_date, attempt_id, external_posting_id, title,
+                       location_raw, apply_url, content_hash, object_key, loaded_at
+                FROM "{b}"."raw_postings" """
+        )
+        con.execute(f'DROP TABLE "{b}"."raw_postings"')
+        con.execute(f'ALTER TABLE "{b}"."raw_postings_new" RENAME TO "raw_postings"')
+    return True
+
+
 def ensure_bronze_tables(con: duckdb.DuckDBPyConnection, cfg: WarehouseConfig) -> None:
     con.execute(
         f'CREATE TABLE IF NOT EXISTS "{cfg.bronze_schema}"."raw_postings" ({_RAW_POSTINGS_DDL})'
     )
+    con.execute(
+        f'CREATE TABLE IF NOT EXISTS "{cfg.bronze_schema}"."posting_content" ({_CONTENT_DDL})'
+    )
+    migrate_to_content_table(con, cfg)
     con.execute(
         f'CREATE TABLE IF NOT EXISTS "{cfg.bronze_schema}"."snapshot_pointers" ({_POINTERS_DDL})'
     )
@@ -176,13 +234,32 @@ def _replace_snapshot(
             path = Path(tmp) / "postings.ndjson"
             _write_ndjson(path, pointer, postings)
             con.execute(
-                f"""INSERT INTO "{cfg.bronze_schema}"."raw_postings"
+                f"""CREATE OR REPLACE TEMP TABLE incoming AS
                     SELECT source_id, board_id, snapshot_date, attempt_id, external_posting_id,
                            title, location_raw, description_text, apply_url, content_hash,
-                           payload::JSON, object_key, ?::TIMESTAMPTZ
+                           payload::JSON AS payload, object_key, ?::TIMESTAMPTZ AS loaded_at
                     FROM read_json(?, format='newline_delimited', columns={_NDJSON_COLUMNS})""",
                 [loaded_at, str(path)],
             )
+            con.execute(
+                f"""INSERT INTO "{cfg.bronze_schema}"."raw_postings"
+                    SELECT source_id, board_id, snapshot_date, attempt_id, external_posting_id,
+                           title, location_raw, apply_url, content_hash, object_key, loaded_at
+                    FROM incoming"""
+            )
+            # Large fields are kept once per (posting, content_hash): only when the content is new.
+            con.execute(
+                f"""INSERT INTO "{cfg.bronze_schema}"."posting_content"
+                    SELECT source_id, external_posting_id, content_hash, snapshot_date,
+                           description_text, payload, loaded_at
+                    FROM incoming i
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM "{cfg.bronze_schema}"."posting_content" c
+                        WHERE c.source_id = i.source_id
+                          AND c.external_posting_id = i.external_posting_id
+                          AND c.content_hash = i.content_hash)"""
+            )
+            con.execute("DROP TABLE incoming")
         con.execute(
             f'INSERT INTO "{cfg.bronze_schema}"."snapshot_pointers" VALUES (?,?,?,?,?,?,?,?,?,?)',
             [
@@ -258,5 +335,15 @@ def load_bronze(
             company=pointer.board_id,
             snapshot_date=pointer.snapshot_date.isoformat(),
             rows=len(postings),
+        )
+    if result.loaded:
+        # A replaced attempt can leave content nothing refers to any more (its hash changed again).
+        con.execute(
+            f"""DELETE FROM "{cfg.bronze_schema}"."posting_content" c
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM "{cfg.bronze_schema}"."raw_postings" r
+                    WHERE r.source_id = c.source_id
+                      AND r.external_posting_id = c.external_posting_id
+                      AND r.content_hash = c.content_hash)"""
         )
     return result

@@ -26,3 +26,4 @@ models:
       - {name: snapshot_date, tests: [not_null]}
       - {name: external_posting_id, tests: [not_null]}
       - {name: content_hash, tests: [not_null]}
+      - {name: description_text, tests: [not_null]}  # every observation must find its content

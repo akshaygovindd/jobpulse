@@ -17,6 +17,18 @@ sources:
           - {name: attempt_id, tests: [not_null]}
           - {name: external_posting_id, tests: [not_null]}
           - {name: content_hash, tests: [not_null]}
+      - name: posting_content
+        description: >
+          Description text and raw API payload, kept once per (posting, content_hash) rather than
+          once per daily observation (loaded by jobpulse load-bronze).
+        tests:
+          - unique_combination:
+              arguments:
+                combination_of_columns: [source_id, external_posting_id, content_hash]
+        columns:
+          - {name: source_id, tests: [not_null]}
+          - {name: external_posting_id, tests: [not_null]}
+          - {name: content_hash, tests: [not_null]}
       - name: snapshot_pointers
         description: One row per authoritative logical snapshot, including empty boards.
         tests:

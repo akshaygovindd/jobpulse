@@ -20,6 +20,7 @@ TABLES = (
     ("ops", "source_registry"),
     ("bronze", "snapshot_pointers"),
     ("bronze", "raw_postings"),
+    ("bronze", "posting_content"),
     ("silver", "dim_postings"),
     ("silver", "fct_posting_observations"),
     ("silver", "dim_posting_versions"),

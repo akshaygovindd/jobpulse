@@ -9,6 +9,7 @@ share one normalization; they are rebuilt from scratch each run, so reruns are i
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -27,6 +28,19 @@ from jobpulse.location import CityParser, Place
 from jobpulse.silver import SilverResult, run_dbt
 from jobpulse.skills import norm_skill
 from jobpulse.warehouse import connect
+
+_INSERT_CHUNK = 500  # rows per INSERT: one round trip each, instead of one per row on MotherDuck
+
+
+def bulk_insert(
+    con: duckdb.DuckDBPyConnection, table: str, rows: Sequence[tuple[object, ...]]
+) -> None:
+    """Insert rows with few statements. `executemany` sends one round trip per row, which is slow
+    against MotherDuck (minutes for a few thousand rows) and spends compute-unit hours."""
+    for i in range(0, len(rows), _INSERT_CHUNK):
+        chunk = rows[i : i + _INSERT_CHUNK]
+        marks = ",".join("(" + ",".join("?" * len(chunk[0])) + ")" for _ in chunk)
+        con.execute(f"INSERT INTO {table} VALUES {marks}", [v for row in chunk for v in row])
 
 
 @dataclass
@@ -87,8 +101,7 @@ def stage_maps(
     skill_rows = [(raw, norm_skill(raw)) for raw in sorted(raw_skills)]
     con.execute(f'DROP TABLE IF EXISTS "{stage}"."skill_map"')
     con.execute(f'CREATE TABLE "{stage}"."skill_map" (raw_skill VARCHAR, canonical_name VARCHAR)')
-    if skill_rows:
-        con.executemany(f'INSERT INTO "{stage}"."skill_map" VALUES (?, ?)', skill_rows)
+    bulk_insert(con, f'"{stage}"."skill_map"', skill_rows)
 
     parser = CityParser(locations)
     raw_counts = {
@@ -105,8 +118,7 @@ def stage_maps(
         f'CREATE TABLE "{stage}"."location_map" (location_raw VARCHAR, city VARCHAR, '
         "city_name VARCHAR, city_state VARCHAR, city_country VARCHAR, city_key VARCHAR)"
     )
-    if loc_rows:
-        con.executemany(f'INSERT INTO "{stage}"."location_map" VALUES (?, ?, ?, ?, ?, ?)', loc_rows)
+    bulk_insert(con, f'"{stage}"."location_map"', loc_rows)
     return StagedMaps(skills=len(skill_rows), locations=len(loc_rows))
 
 

@@ -237,14 +237,12 @@ def test_same_named_cities_in_different_places_stay_separate(
         query(db, "SELECT city, count(*) FROM gold.fct_postings GROUP BY 1")  # type: ignore[arg-type]
     )
     assert cities == {
-        "Dublin, Ireland": 1,
+        "Dublin, Ireland": 2,
         "Dublin, California": 2,
-        "Dublin": 1,
         "Redwood City, California": 3,
     }
     groups = query(db, "SELECT DISTINCT city FROM gold.agg_salary_by_role_city ORDER BY city")
     assert [g[0] for g in groups] == [
-        "Dublin",
         "Dublin, California",
         "Dublin, Ireland",
         "Redwood City, California",
@@ -393,3 +391,21 @@ def test_gold_report_on_built_gold(
     gold(db)
     assert _gold_report(["--db", str(db)]) == 0
     assert "fct_postings rows: 1" in capsys.readouterr().out
+
+
+def test_bulk_insert_chunks_and_handles_empty() -> None:
+    from jobpulse.gold import bulk_insert
+
+    con = duckdb.connect(":memory:")
+    con.execute("CREATE TABLE t (a VARCHAR, b INTEGER)")
+    bulk_insert(con, "t", [])
+    assert con.execute("SELECT count(*) FROM t").fetchone() == (0,)
+    rows = [(f"v{i}", i) for i in range(1203)]  # 3 chunks of 500, 500, 203
+    bulk_insert(con, "t", rows)
+    assert con.execute("SELECT count(*), sum(b), count(DISTINCT a) FROM t").fetchone() == (
+        1203,
+        sum(range(1203)),
+        1203,
+    )
+    bulk_insert(con, "t", [("só", 1), (None, 2)])  # unicode and NULL pass through as parameters
+    assert con.execute("SELECT count(*) FROM t WHERE a IS NULL OR a = 'só'").fetchone() == (2,)

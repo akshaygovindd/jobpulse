@@ -336,8 +336,9 @@ countries:
 country_codes: {US: United States, CA: Canada, GB: United Kingdom, IE: Ireland, DE: Germany, FR: France, ES: Spain, IT: Italy, NL: Netherlands, SE: Sweden, PL: Poland, PT: Portugal, CH: Switzerland, IN: India, JP: Japan, SG: Singapore, AU: Australia, NZ: New Zealand, BR: Brazil, MX: Mexico, IL: Israel, KR: South Korea, CN: China}
 
 # Bare city names that are unambiguous enough to fill in a missing state or country. Applied only when
-# the location gives no state, and its country (if any) matches. Cities NOT listed here (for example
-# Dublin, which exists in Ireland and California) stay unresolved: they never merge with a qualified one.
+# the location gives no state, and its country (if any) matches. Cities NOT listed here stay
+# unresolved: they never merge with a qualified one. Dublin is listed as Ireland by owner decision;
+# "Dublin, CA" and "US-CA-Dublin" carry an explicit state, so they stay Dublin, California.
 known_places:
   "new york": {state: New York}
   "san francisco": {state: California}
@@ -349,6 +350,7 @@ known_places:
   "toronto": {state: Ontario}
   "vancouver": {state: British Columbia}
   "washington": {state: District of Columbia}
+  "dublin": {country: Ireland}
   "london": {country: United Kingdom}
   "singapore": {country: Singapore}
   "tokyo": {country: Japan}
