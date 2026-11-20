@@ -76,3 +76,12 @@ def test_nothing_is_said_without_data() -> None:
     assert i.salary_insight([]) is None
     assert i.sponsors_insight([("A", 0.0)]) is None
     assert i.share(1, 0) == "n/a"
+
+
+def test_concentration_insight() -> None:
+    rows = [("A", 50.0), ("B", 30.0), ("C", 10.0), ("D", 10.0)]
+    assert i.concentration_insight(rows) == (
+        "The 3 busiest cities (A; B; C) hold 90% of the 100 mapped postings."
+    )
+    assert i.concentration_insight(rows[:2]) is None
+    assert i.concentration_insight([]) is None

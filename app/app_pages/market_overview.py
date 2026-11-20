@@ -5,6 +5,7 @@ from jobpulse.app_ui import (
     REMOTE_LABELS,
     app_config,
     bar,
+    city_map,
     human,
     key_insight,
     kpi_comparison,
@@ -13,6 +14,7 @@ from jobpulse.app_ui import (
     pct,
     role_label,
 )
+from jobpulse.config import load_city_coords
 
 counts = load(
     "SELECT count(*) AS n, count(*) FILTER (WHERE is_active) AS active, "
@@ -150,3 +152,19 @@ with right:
             f"A single city could be read for {pct(row['numerator'], row['denominator'])} of "
             "open postings; the rest are remote-only or list several locations."
         )
+
+st.subheader("Where the open postings are")
+by_city = load(
+    "SELECT city, count(*) AS postings FROM gold.fct_postings "
+    "WHERE is_active AND NOT is_probable_duplicate AND city IS NOT NULL GROUP BY 1"
+)
+city_rows = [(str(c), int(n)) for c, n in zip(by_city["city"], by_city["postings"], strict=True)]
+mapped = [r for r in city_rows if r[0] in load_city_coords(app_config())]
+key_insight(insights.concentration_insight([(c, float(n)) for c, n in mapped]))
+drawn, left_off = city_map(city_rows)
+st.caption(
+    f"{drawn:,} open postings that name a single city are on the map; {left_off:,} more are in "
+    "cities that have no map position yet. Dot area shows the number of postings. Positions are "
+    "approximate city centres, not exact office locations. Remote-only and multi-location "
+    "postings have no single city and are not drawn."
+)

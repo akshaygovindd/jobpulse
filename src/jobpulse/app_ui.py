@@ -400,13 +400,14 @@ def kpi_comparison(days: int) -> tuple[dict[str, int], dict[str, int] | None]:
     return at(settled), (at(ref_day) if ref_day >= first_day else None)
 
 
-def city_map(rows: Sequence[tuple[str, int]]) -> tuple[int, int]:
-    """Draw open postings per city on a dark CARTO basemap. Returns (postings drawn, postings left
-    off because the city has no coordinates in config/city_coords.yaml)."""
-    import pydeck as pdk
-
-    cfg = app_config().map
-    coords = load_city_coords(app_config())
+def map_points(
+    rows: Sequence[tuple[str, int]],
+    coords: dict[str, tuple[float, float]],
+    min_radius: float,
+    max_radius: float,
+) -> tuple[list[dict[str, Any]], int]:
+    """(points to draw, postings left off). Cities that share a coordinate (spelling variants) are
+    summed; the dot radius grows with the square root of postings, between the two radii."""
     points: dict[tuple[float, float], dict[str, Any]] = {}
     left_off = 0
     for city, n in rows:
@@ -416,15 +417,26 @@ def city_map(rows: Sequence[tuple[str, int]]) -> tuple[int, int]:
             p["postings"] += int(n)
         else:
             left_off += int(n)
-    data = list(points.values())
+    data = sorted(points.values(), key=lambda p: -p["postings"])
+    if data:
+        top = data[0]["postings"]
+        for p in data:
+            p["radius"] = min_radius + (max_radius - min_radius) * (p["postings"] / top) ** 0.5
+    return data, left_off
+
+
+def city_map(rows: Sequence[tuple[str, int]]) -> tuple[int, int]:
+    """Draw open postings per city on a dark CARTO basemap. Returns (postings drawn, postings left
+    off because the city has no coordinates in config/city_coords.yaml)."""
+    import pydeck as pdk
+
+    cfg = app_config().map
+    data, left_off = map_points(
+        rows, load_city_coords(app_config()), cfg.min_radius_px, cfg.max_radius_px
+    )
     if not data:
         st.caption("No mappable cities yet.")
         return 0, left_off
-    top = max(p["postings"] for p in data)
-    for p in data:  # area-proportional dot size between the configured radii
-        p["radius"] = cfg.min_radius_px + (cfg.max_radius_px - cfg.min_radius_px) * (
-            (p["postings"] / top) ** 0.5
-        )
     layer = pdk.Layer(
         "ScatterplotLayer",
         data=data,

@@ -86,7 +86,7 @@ def history_db(tmp_path_factory: pytest.TempPathFactory) -> Path:
     tmp = tmp_path_factory.mktemp("history")
     db = tmp / "wh.duckdb"
     storage = LocalStorage(tmp / "s3")
-    jobs = [gh_job(str(i), content=f"text {i}") for i in range(1, 6)]
+    jobs = [gh_job(str(i), content=f"text {i}", loc="New York, NY") for i in range(1, 6)]
     plan = {
         date(2026, 11, 10): jobs[:3],
         date(2026, 11, 11): jobs[:3],
@@ -178,3 +178,50 @@ def test_key_insights_are_computed_from_the_data(
     assert "2 new postings across 2 days" in trends
     visa = _text(_page(history_db, monkeypatch, "app_pages/visa.py"))
     assert "certified filings for these roles" in visa
+
+
+def test_map_shows_open_postings_on_a_dark_carto_basemap_with_attribution(
+    history_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    at = _page(history_db, monkeypatch, "app_pages/market_overview.py")
+    decks = at.get("deck_gl_json_chart")
+    assert len(decks) == 1
+    spec = json.loads(decks[0].proto.json)
+    assert "dark-matter-gl-style" in decks[0].proto.json
+    layer = spec["layers"][0]
+    assert layer["data"][0]["city"] == "New York, New York"
+    assert layer["data"][0]["postings"] == 5
+    assert "mapbox" not in decks[0].proto.json.lower()  # no token-based basemap
+    text = _text(at)
+    assert load_app().map.attribution in text
+    assert "5 open postings that name a single city are on the map; 0 more" in text
+    assert "approximate city centres" in text
+
+
+def test_map_points_sum_variants_and_report_what_is_left_off() -> None:
+    from jobpulse.app_ui import map_points
+
+    coords = {"São Paulo, Brazil": (-23.5, -46.6), "Sao Paulo, Brazil": (-23.5, -46.6),
+              "Boston, Massachusetts": (42.36, -71.06)}  # fmt: skip
+    rows = [("São Paulo, Brazil", 25), ("Sao Paulo, Brazil", 18), ("Boston, Massachusetts", 43),
+            ("Nowhereville", 7)]  # fmt: skip
+    points, left_off = map_points(rows, coords, 4, 36)
+    assert left_off == 7
+    assert [(p["postings"]) for p in points] == [43, 43]  # both cities have 43
+    assert all(4 <= p["radius"] <= 36 for p in points)
+    assert max(p["radius"] for p in points) == 36
+    one, _ = map_points([("Boston, Massachusetts", 4), ("São Paulo, Brazil", 1)], coords, 4, 36)
+    assert one[0]["radius"] == 36
+    assert one[1]["radius"] == pytest.approx(4 + 32 * 0.5)  # sqrt(1/4) = 0.5
+
+
+def test_city_coordinates_and_app_config_are_valid() -> None:
+    from jobpulse.config import load_city_coords
+
+    coords = load_city_coords()
+    assert coords["New York, New York"] == (40.7128, -74.006)
+    assert len(coords) >= 80
+    assert all(-90 <= la <= 90 and -180 <= lo <= 180 for la, lo in coords.values())
+    cfg = load_app()
+    assert "CARTO" in cfg.map.attribution
+    assert "OpenStreetMap" in cfg.map.attribution

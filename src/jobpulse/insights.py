@@ -117,3 +117,16 @@ def sponsors_insight(rows: Sequence[tuple[str, float]]) -> str | None:
         f"{share(top[1], total)} of the {total:,.0f} shown. Filings show an employer applied, "
         "not that any posting is sponsored."
     )
+
+
+def concentration_insight(rows: Sequence[tuple[str, float]], top: int = 3) -> str | None:
+    """How concentrated postings are in the busiest `top` places."""
+    total = sum(v for _, v in rows)
+    if not total or len(rows) < top:
+        return None
+    best = sorted(rows, key=lambda r: -r[1])[:top]
+    names = "; ".join(k for k, _ in best)
+    return (
+        f"The {top} busiest cities ({names}) hold {share(sum(v for _, v in best), total)} of the "
+        f"{total:,.0f} mapped postings."
+    )
