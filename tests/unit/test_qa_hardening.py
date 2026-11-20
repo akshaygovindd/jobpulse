@@ -152,3 +152,31 @@ def test_changed_source_files_drop_the_stale_jobpulse_modules(tmp_path: Path) ->
         [sys.executable, "-c", script], capture_output=True, text=True, check=False
     )
     assert out.stdout.strip() == "ok", out.stderr
+
+
+def test_clean_treats_nan_none_na_and_blank_as_missing() -> None:
+    import pandas as pd
+
+    from jobpulse.app_ui import clean
+
+    for missing in (None, float("nan"), pd.NA, "", "   "):
+        assert clean(missing, "fallback") == "fallback"
+    assert clean(" Austin, Texas ", "x") == "Austin, Texas"
+    assert clean(float("nan")) == ""
+
+
+def test_title_lines_never_keep_contact_details() -> None:
+    from jobpulse.resume.parse import extract_profile
+
+    text = "\n".join(
+        [
+            "Data Analyst Intern | priya@example.com",
+            "Senior Engineer +1 (415) 555-0132",
+            "Analyst [click](https://evil.example)",
+            "Engineer github.com/someone",
+            "Data Scientist",
+            "ML Engineer",
+        ]
+    )
+    titles = extract_profile(text, {"python"}, CFG).titles
+    assert titles == ("Data Scientist", "ML Engineer")

@@ -5,6 +5,7 @@ from jobpulse.app_ui import (
     REMOTE_LABELS,
     app_config,
     bar,
+    city_coords,
     city_map,
     human,
     key_insight,
@@ -14,7 +15,6 @@ from jobpulse.app_ui import (
     pct,
     role_label,
 )
-from jobpulse.config import load_city_coords
 
 counts = load(
     "SELECT count(*) AS n, count(*) FILTER (WHERE is_active) AS active, "
@@ -159,7 +159,8 @@ by_city = load(
     "WHERE is_active AND NOT is_probable_duplicate AND city IS NOT NULL GROUP BY 1"
 )
 city_rows = [(str(c), int(n)) for c, n in zip(by_city["city"], by_city["postings"], strict=True)]
-mapped = [r for r in city_rows if r[0] in load_city_coords(app_config())]
+coords = city_coords()  # parsed once per process, not once per city
+mapped = [r for r in city_rows if r[0] in coords]
 key_insight(insights.concentration_insight([(c, float(n)) for c, n in mapped]))
 drawn, left_off = city_map(city_rows)
 st.caption(

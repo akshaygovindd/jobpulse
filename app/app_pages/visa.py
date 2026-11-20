@@ -6,6 +6,7 @@ from jobpulse.app_ui import (
     MATCH_LABELS,
     ROLE_LABELS,
     bar,
+    clean,
     human,
     key_insight,
     load,
@@ -239,5 +240,5 @@ for _, p in posts.iterrows():
             if p["sponsorship_class"] == "CONFIRMED_OFFERED"
             else "Sponsorship not available"
         )
-        st.markdown(f"**{p['title']}** ({p['city'] or 'location not stated'}): {verdict}")
+        st.markdown(f"**{p['title']}** ({clean(p['city'], 'location not stated')}): {verdict}")
         st.markdown(f"> {p['sponsorship_quote']}")

@@ -25,6 +25,12 @@ from jobpulse.skills import norm_skill
 _SEGMENT_SPLIT = re.compile(r"[\n\r,;|:•·●]+")
 _YEARS = re.compile(r"(?i)\b(\d{1,2})\s*\+?\s*(?:years?|yrs?)\b")
 _EDGE_PUNCT = ".,;:()[]{}\"'"
+# Lines carrying contact details are never kept as a "title line": an email, a URL, or a phone-like
+# run of digits (7+ digits, with the usual separators).
+_CONTACT = re.compile(
+    r"(?i)(@|https?://|www\.|\b[\w-]+\.(?:com|net|org|io|dev|ai|co)\b|"
+    r"(?:\+?\d[\s().-]?){7,}|linkedin|github\.)"
+)
 
 
 class ResumeError(Exception):
@@ -124,7 +130,11 @@ def _titles(text: str, cfg: ResumeConfig) -> tuple[str, ...]:
     seen: list[str] = []
     for line in text.splitlines():
         line = line.strip(" \t-*•")
-        is_title = 0 < len(line) <= p.max_title_chars and any(k in line.lower() for k in keywords)
+        is_title = (
+            0 < len(line) <= p.max_title_chars
+            and any(k in line.lower() for k in keywords)
+            and not _CONTACT.search(line)
+        )
         if is_title and line not in seen:
             seen.append(line)
         if len(seen) >= p.max_titles:

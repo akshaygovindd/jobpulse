@@ -134,7 +134,7 @@ CHART_CONFIG: dict[str, Any] = {
 
 def human(value: Any, mapping: dict[str, str] | None = None) -> str:
     """A readable label for a stored code ('ml_ai_engineer' -> 'ML/AI Engineer')."""
-    if value is None or value != value:  # None or NaN
+    if is_missing(value):
         return "Not stated"
     text = str(value)
     if mapping and text in mapping:
@@ -143,6 +143,23 @@ def human(value: Any, mapping: dict[str, str] | None = None) -> str:
     words = [ACRONYMS.get(w.lower(), w) for w in words]
     out = " ".join(words)
     return out[:1].upper() + out[1:]
+
+
+def is_missing(value: Any) -> bool:
+    """True for None, NaN and pandas' NA (which has no truth value)."""
+    try:
+        return value is None or bool(value != value)
+    except TypeError:
+        return True
+
+
+def clean(value: Any, default: str = "") -> str:
+    """Text for a table cell or sentence: `default` for None, NaN, NA and blank strings. NaN is a
+    truthy float, so `value or default` would let 'nan' and 'None' through."""
+    if is_missing(value):
+        return default
+    text = str(value).strip()
+    return text or default
 
 
 def sentence(text: str) -> str:
@@ -371,6 +388,12 @@ def salary_range(low: Any, high: Any, currency: Any) -> str:
 
 
 @functools.lru_cache(maxsize=1)
+def city_coords() -> dict[str, tuple[float, float]]:
+    """config/city_coords.yaml, parsed once per process (it is hand-entered and static)."""
+    return load_city_coords(app_config())
+
+
+@functools.lru_cache(maxsize=1)
 def app_config() -> AppConfig:
     return load_app()
 
@@ -453,9 +476,7 @@ def city_map(rows: Sequence[tuple[str, int]]) -> tuple[int, int]:
     import pydeck as pdk
 
     cfg = app_config().map
-    data, left_off = map_points(
-        rows, load_city_coords(app_config()), cfg.min_radius_px, cfg.max_radius_px
-    )
+    data, left_off = map_points(rows, city_coords(), cfg.min_radius_px, cfg.max_radius_px)
     if not data:
         st.caption("No mappable cities yet.")
         return 0, left_off
@@ -501,8 +522,4 @@ def skill_label(name: str) -> str:
 
 def dash(value: Any, fmt: str = "{:,.0f}") -> str:
     """A table cell for a value that may be missing: the formatted number, or an em dash."""
-    try:
-        missing = value is None or bool(value != value)  # None, NaN
-    except TypeError:  # pandas' NA has no truth value
-        missing = True
-    return "—" if missing else fmt.format(value)
+    return "—" if is_missing(value) else fmt.format(value)

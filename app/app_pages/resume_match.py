@@ -2,6 +2,7 @@ import streamlit as st
 
 from jobpulse.app_ui import (
     REMOTE_LABELS,
+    clean,
     human,
     load,
     role_label,
@@ -108,7 +109,7 @@ with st.container(horizontal=True, vertical_alignment="center"):
 left, right = st.columns(2)
 with left:
     st.metric("Skills recognized", len(profile.skills), border=True)
-    st.write(
+    st.text(
         ", ".join(sorted(skill_label(v) for v in profile.skills))
         or "None. Try listing tools and methods by name."
     )
@@ -118,7 +119,9 @@ with right:
         "Not found" if profile.years is None else profile.years,
         border=True,
     )
-    st.write("; ".join(profile.titles) or "No title lines found.")
+    # Text taken from the resume is shown as plain text, never as markdown (no links, images or
+    # LaTeX from an uploaded file).
+    st.text("; ".join(profile.titles) or "No title lines found.")
 st.caption(
     "Only skills that appear in the skill list built from the postings can be recognized, and "
     "spelling variants the list does not know are missed. Single letters and everyday words "
@@ -212,7 +215,7 @@ rows = [
         "Match": round(100 * m.score),
         "Company": m.posting.info["company"],
         "Title": m.posting.info["title"],
-        "City": m.posting.info["city"] or "No single city",
+        "City": clean(m.posting.info["city"], "No single city"),
         "Remote": human(m.posting.info["remote"], REMOTE_LABELS),
         "Matched skills": ", ".join(skill_label(v) for v in m.matched),
         "Missing skills": ", ".join(skill_label(v) for v in m.missing),
