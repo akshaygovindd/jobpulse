@@ -132,6 +132,8 @@
 
 ## P6: Resume Match + deploy
 
+**P6 complete (2026-11-20).** Live at https://jobpulse-insights.streamlit.app.
+
 **Build**
 - Parse the resume in memory. Keep only skills, titles, years of experience, and location preference in session state.
 - Never store the file or the raw text.
@@ -142,8 +144,8 @@
 **Done when**
 - [x] Tests prove nothing from the resume is written to disk or the database (`tests/unit/test_resume.py`: write guards, directory snapshot, read-only DB file unchanged, no logging/printing/caching in the resume code).
 - [x] Delete is verified by a test (`test_delete_clears_everything_from_the_session`).
-- [ ] The app is deployed on Streamlit Community Cloud from the published gold file (`JOBPULSE_GOLD_URL`), with no MotherDuck token. Needs the owner's steps (first `publish` run, then deploy).
-- [ ] The README has the live link and the demo script. The demo script is written; the live link and screenshots wait for the deploy.
+- [x] The app is deployed on Streamlit Community Cloud from the published gold file (`JOBPULSE_GOLD_URL`), with no MotherDuck token: https://jobpulse-insights.streamlit.app (owner confirmed 2026-11-20; all pages load).
+- [x] The README has the live link and the demo script. Screenshots are still to be added by the owner.
 
 ## P7: Agent (later)
 

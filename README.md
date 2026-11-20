@@ -2,9 +2,9 @@
 
 Daily job-market intelligence for data and AI roles. Every day it pulls the public job boards of 43 tech employers, tracks each posting over time, reads the data and AI postings with a small LLM, adds public H-1B filing evidence from the US Department of Labor, and serves it all in a Streamlit app.
 
-**Live app:** _link goes here after the first deploy (Streamlit Community Cloud)._ <!-- TODO(owner): paste the *.streamlit.app URL -->
+**Live app: [jobpulse-insights.streamlit.app](https://jobpulse-insights.streamlit.app)** (Streamlit Community Cloud; it may take a few seconds to wake up if idle).
 
-**Screenshots:** _to be added after the first deploy: Market overview, Salary, Visa intelligence, Resume match._
+**Screenshots:** _to be added: Home, Market overview (map), Salary (heatmap), Visa intelligence, Resume match._
 
 - Product spec: [docs/SPEC.md](docs/SPEC.md)
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)

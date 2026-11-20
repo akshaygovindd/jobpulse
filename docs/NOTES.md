@@ -818,3 +818,19 @@ README: added a Highlights section near the top, and changed the architecture di
 **Not verified:** how any of this looks in a browser. AppTest checks content and element structure, not rendering: the map tiles and dots, the cards' spacing, the dark-theme legibility of chart labels, phone layout, and whether pydeck's CARTO basemap loads from Streamlit Community Cloud (it fetches tiles in the visitor's browser). Please look at Home, Market overview (the map) and the Visa card on the deployed app.
 
 **Open for the owner:** the deploy steps from the P6 entry are still pending (first `publish` run, then Streamlit Cloud). The published export now carries the same gold tables; no export change was needed.
+
+---
+
+## 2026-11-20 (night): P6 closed; fixes from the owner's review of the live app
+
+**P6 closed.** Live app: https://jobpulse-insights.streamlit.app (deployed by the owner; they report all pages load). README has the link; both remaining P6 boxes are ticked in ROADMAP. Screenshots are still placeholders in the README (owner to capture). Not verified by me: the publish job's log and the Streamlit Cloud build (the owner confirmed the result).
+
+**Review fixes**
+1. **Remote policy chart showed two of four labels.** Likely cause: Vega hid category labels it judged overlapping on a short chart (4 rows, 134 px). Fix: bar charts now pass every category as an axis value, turn label-overlap hiding off for all axes, and use 30 px per row. A test checks the spec. I cannot render Vega here, so please confirm on the live app.
+2. **Hiring trends:** daily bars use one ordinal band per day with a band width of 0.7 (a temporal bar axis drew them as thin lines); lines stay temporal. A small space after each key-insight sentence keeps the chart's hover toolbar from covering the text. Days with no postings are not drawn (as before).
+3. **Skill names:** `config/skill_display.yaml` maps canonical names to display names (SQL, Python, dbt, AWS, Snowflake, Airflow, Looker, Kubernetes, Databricks, pandas, MLOps...); unlisted skills show their canonical name with a capital first letter. Used on Home, Hiring trends (chart, picker, insight) and Resume match (detected, matched, missing). Data is unchanged. A test checks every key is a canonical name and that each display name normalizes back to it.
+4. **Skills over time** is hidden until `config/app.yaml` `trends.min_full_weeks` (3) full Monday-to-Sunday weeks exist; the note stays and says how many exist (0 today; the first full week completes on 22 Nov, three on 6 Dec).
+5. **Salary:** the grouped bars are replaced by a role by seniority heatmap of median pay with `$NNNK` in each cell (white text on dark cells), tooltips with the number of salaries, groups of at least five salaries only (blank cell = fewer).
+6. **Pipeline health:** missing figures show "—" in the runs and data-quality tables (those columns are now text, so the share bars are gone). Found by running the real data: pandas' NA broke the first version of the helper; fixed and tested.
+
+**Checks run:** `make check` green: ruff, ruff format, mypy strict (52 files), pytest 456 passed (3 live deselected), terraform fmt and validate, gitleaks no leaks. All seven pages ran on the real export without exceptions. Not verified: how the heatmap, wide bars and all four remote labels look in a browser.
