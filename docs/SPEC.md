@@ -31,7 +31,7 @@ The data is spread across ATS job boards. It is unstructured, and sponsorship cl
 | 0:40 | **Hiring Trends** | Weekly skill demand; pick one rising skill and show its trajectory |
 | 1:00 | **Salary** | Advertised ranges by role and city with coverage %. Then the separate LCA offered-wage view. The two datasets are never blended. |
 | 1:20 | **Visa Intelligence** | Filter by evidence class. Open one employer to show LCA fiscal year, case status, SOC, worksite, wage basis, and name-match confidence. Banner: "Evidence, not a promise." |
-| 1:40 | **Resume Match** (P6) | Upload a resume, see top matches and the skill gap, apply the sponsorship filter, click **Delete** and see the confirmation |
+| 1:40 | **Resume Match** | Upload a resume, see top matches and the skill gap, apply the sponsorship filter, click **Delete** and see the confirmation |
 | 1:55 | Close | Eval table (per-field precision/recall) and CI badge |
 
 ## Metrics

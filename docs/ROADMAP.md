@@ -137,12 +137,13 @@
 - Never store the file or the raw text.
 - Add a **Delete** control.
 - Sponsorship works as a filter only and never feeds into the score.
+- Deploy without any database credential in the public app: a daily job exports the allow-listed gold tables to a public GitHub Release asset and the app downloads and opens it read-only (owner-approved on 2026-11-20; the MotherDuck Lite plan has no read-scaling token).
 
 **Done when**
-- [ ] Tests prove nothing from the resume is written to disk or the database.
-- [ ] Delete is verified by a test.
-- [ ] The app is deployed on Streamlit Community Cloud using a read-only MotherDuck token.
-- [ ] The README has the live link and the demo script.
+- [x] Tests prove nothing from the resume is written to disk or the database (`tests/unit/test_resume.py`: write guards, directory snapshot, read-only DB file unchanged, no logging/printing/caching in the resume code).
+- [x] Delete is verified by a test (`test_delete_clears_everything_from_the_session`).
+- [ ] The app is deployed on Streamlit Community Cloud from the published gold file (`JOBPULSE_GOLD_URL`), with no MotherDuck token. Needs the owner's steps (first `publish` run, then deploy).
+- [ ] The README has the live link and the demo script. The demo script is written; the live link and screenshots wait for the deploy.
 
 ## P7: Agent (later)
 

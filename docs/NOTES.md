@@ -748,3 +748,52 @@ Read-only queries against MotherDuck (token from `.env` inside Python; the scrip
 ## 2026-11-20 (close): P5 marked complete
 
 Owner accepted 35 matched pairs (of 60 labeled) for the employer-match precision line; the box is amended to "on ≥ 50 labeled pairs (60 labeled; precision computed on the 35 matched pairs)" and ticked. All P5 boxes are ticked and P5 is marked complete in `docs/ROADMAP.md`. Docs-only change; `make check` not re-run (no code or config changed). Next: P6 (Resume Match and deployment); not started.
+
+---
+
+## 2026-11-20 (P6): Resume match, token-free public deploy, README
+
+**Owner decisions this session:** add `pypdf` (app group only, 2 MB cap, reject non-PDF/text); add a `publish` job and publish the allow-listed gold tables publicly; Option A for deployment; pin Python 3.12 on Streamlit Cloud and add a requirements file if needed.
+
+**Part A: Resume match (no LLM, $0 per visit)**
+- `config/resume.yaml` (new, `ResumeConfig`): upload limits (2 MB, 10 PDF pages, 60,000 characters, pdf/txt/md), parsing rules, match settings.
+- `src/jobpulse/resume/parse.py`: pasted text or PDF in memory; extension, size and magic-byte checks; encrypted/scanned PDFs refused with a message. Skills are found by looking up 1 to 4 word n-grams, normalized with `norm_skill` (the function that built `dim_skill`), in `gold.dim_skill`. Single letters and everyday words (R, C, Go, Ray, search, testing, ...) count only in a configured form. Output is a `ResumeProfile` (canonical skills, up to 5 short title lines, a years figure); the raw text is never part of it.
+- `src/jobpulse/resume/match.py`: score = matched skills / the posting's skills; postings with fewer than 5 skills are not ranked; ties break by matched count, company, title.
+- `app/app_pages/resume_match.py` + a sixth navigation entry: privacy notice, paste/upload, detected skills, filters (role, remote, city, visa evidence class), table with match %, matched and missing skills, visa evidence class with filing count, advertised salary, and the disclaimer. Sponsorship is a filter only. **Delete my resume data** clears every `resume_*` session key.
+- Real data check (read-only on MotherDuck, via the exported file): all six pages run without exceptions; a sample data-scientist resume produced sensible top matches (Brex, Stripe, MongoDB, Pinterest, Lyft); 436 postings were rankable at the time of the first check.
+- Found and fixed in testing: trailing punctuation ("dbt.") stopped a skill from matching.
+
+**Part B: public deploy with no database token (Option A)**
+- `config/publish.yaml` (new, `PublishConfig`); `src/jobpulse/publish.py`; CLI `jobpulse export-gold`. It copies only `app_data.GOLD_TABLES` into a fresh DuckDB file and validates it (exactly those tables, row counts equal to the source, per-table minimums) before an atomic move. A failure leaves the previous file untouched.
+- `app_data.connect()` gains the published-file mode (`JOBPULSE_GOLD_URL`, only URLs under the configured release prefix; the download must hold exactly the allow-listed tables; stale copy kept if a refresh fails). `HttpClient` got `expect="bytes"`. The app's connection cache now expires hourly so the file is re-checked. The URL can also come from Streamlit "Secrets" (`st.secrets`).
+- Found and fixed: DuckDB names a database after its file, so a file called `gold.duckdb` makes `gold.table` ambiguous. The asset is `jobpulse_gold.duckdb`, and config validation rejects `gold.duckdb`.
+- `daily_ingest.yml`: new `publish` job (`needs: gold`, only when gold succeeded). `contents: write` on that job only; `MOTHERDUCK_TOKEN` on the export step only, the built-in token on the upload step only; no AWS or OpenAI credentials. A test pins these rules and the tag/asset names against `config/publish.yaml`. **The job has not run in GitHub Actions yet.**
+- `app/requirements.txt` (Community Cloud reads the file next to the main file first): eight pinned packages, checked against `uv.lock` by a test. `streamlit_app.py` adds `src/` to `sys.path` because the project is not pip-installed there. Verified in a clean Python 3.12 venv with only that file installed: all six pages run against the real export.
+- Real export from MotherDuck (read-only): 5.3 MB, 16 tables, 9,516 postings.
+- `.streamlit/config.toml`: `maxUploadSize = 2` (MB).
+- The `MOTHERDUCK_READ_TOKEN` path stays for development only and is untested (the Lite plan has no read-scaling token).
+
+**Part C: README** rewritten: live-link and screenshot placeholders (they need the deploy), Mermaid diagram, demo script, key numbers each with the script that produced them, limitations, future work. `scripts/gold_report.py` gained two lines (companies with certified filings; certified filings matched) so the LCA figures come from a script.
+
+**Checks run**
+- `make check`: see the last run below. Before the final doc edits it was green: ruff, ruff format, mypy strict (51 files), pytest 427 passed (3 live deselected), terraform fmt and validate for both roots, gitleaks no leaks.
+- Not verified: the `publish` job in GitHub Actions, the Streamlit Cloud build (Python 3.12 selection, `app/requirements.txt` pickup), a browser look at the Resume match page, phone layout, the PDF path on real resumes (only a synthetic one-page PDF was tested), and that Streamlit Cloud exposes the secret to `st.secrets` as assumed.
+
+**Open for the owner**
+- The steps below. P6 boxes "deployed" and "README has the live link" stay unticked until then.
+- The README's live link and screenshots are placeholders.
+- The MotherDuck token pasted into a session transcript on 2026-11-09 was never rotated (still recommended; the public app no longer depends on it).
+
+**Owner steps**
+1. Ask me to commit (small commits on `main`), then push.
+2. GitHub: Actions tab, "Daily ingest", "Run workflow" (branch `main`, leave snapshot_date empty). When all jobs are green, the repo's Releases section has "Gold data (latest)" with `jobpulse_gold.duckdb` (about 5 MB).
+3. Streamlit Community Cloud: sign in at share.streamlit.io with GitHub, Create app, repository `akshaygovindd/jobpulse`, branch `main`, main file `app/streamlit_app.py`, Advanced settings: Python 3.12 and Secrets `JOBPULSE_GOLD_URL = "https://github.com/akshaygovindd/jobpulse/releases/download/gold-latest/jobpulse_gold.duckdb"`, then Deploy.
+4. Send me the app URL; I add it to the README and tick the last two P6 boxes. Take the screenshots from the live app.
+
+---
+
+## 2026-11-20 (later): MotherDuck token rotated; open item closed
+
+The owner rotated the MotherDuck token today: the new token is in the local `.env` and in the GitHub `prod` environment secret `MOTHERDUCK_TOKEN`, and the old tokens are revoked. This closes the open item from 2026-11-09 (the token that appeared in a session transcript). Nothing in the repo changed for this; I did not see or handle the new value. The public app does not use this token (it reads the published gold file).
+
+README: added a Highlights section near the top, and changed the architecture diagram's visitor edge to the plain `-->|label|` syntax (the dotted-edge label form is the likeliest to fail in GitHub's Mermaid renderer). I could not render the page on GitHub from here; the diagram and tables still need a look on github.com after the push.

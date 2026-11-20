@@ -25,7 +25,7 @@ flowchart LR
   MD --> SIL["dbt silver<br/>identity, observations, closure"]
   SIL --> FLT["title filter<br/>target role families"] --> EX["LLM extraction (OpenAI)<br/>luna→terra, cache, spend cap, quarantine"] --> MD
   LCA[DOL OFLC LCA files] --> VM[employer name match] --> MD
-  SIL --> GOLD[dbt gold + snapshots] --> APP["Streamlit<br/>5 MVP pages + Resume Match (P6)"]
+  SIL --> GOLD[dbt gold + snapshots] --> EXP["export-gold<br/>allow-listed tables"] --> REL[("GitHub Release asset<br/>jobpulse_gold.duckdb")] --> APP["Streamlit Cloud<br/>5 MVP pages + Resume Match<br/>(no database token)"]
   BUD["AWS Budgets $10/mo alert"] -.email.-> OWN[Owner]
 ```
 
@@ -36,6 +36,7 @@ jobpulse/
 ├── CLAUDE.md  README.md  Makefile  pyproject.toml  uv.lock  .env.example
 ├── config/            employers.yaml (converted from owner's seed list)
 │                      sources.yaml  pipeline.yaml  extraction.yaml  locations.yaml
+│                      lca.yaml  lca_aliases.yaml  resume.yaml  publish.yaml
 ├── src/jobpulse/
 │   ├── config.py  logging.py  http.py  cli.py
 │   ├── connectors/    base.py  greenhouse.py  lever.py  ashby.py  (adzuna.py: later)
@@ -44,6 +45,8 @@ jobpulse/
 │   ├── bronze/        loader.py  normalize.py
 │   ├── silver.py      (runs the dbt silver models with vars from config; run_dbt shared with gold)
 │   ├── gold.py        (stages skill/city mapping tables, then runs the dbt gold models + snapshot)
+│   ├── publish.py     (export-gold: allow-listed gold tables to one validated DuckDB file)
+│   ├── app_data.py  app_ui.py   (the app's read-only door to gold; shared page helpers)
 │   ├── skills.py  location.py   (skill-name normalization shared with eval; place heuristic)
 │   ├── env.py         (prod/dev switch: dev prefix guard, prefixed storage, local-only warehouse)
 │   ├── warehouse.py   (MotherDuck / local DuckDB connection)
@@ -52,7 +55,7 @@ jobpulse/
 │   ├── visa/          lca_loader.py  employer_match.py
 │   └── resume/        parse.py  match.py
 ├── dbt/               models/{staging,silver,gold}/  snapshots/  tests/generic/  macros/  profiles.yml
-├── app/               Home.py  pages/   (5 MVP pages; Resume Match added in P6)
+├── app/               streamlit_app.py  app_pages/  requirements.txt   (5 MVP pages + Resume match)
 ├── eval/              sample.py  sponsorship_sample.py  export_predictions.py  score.py  README.md  reports/
 │                      label_app.py + label_io.py (local Streamlit labeling app; never reads predictions)
 │                      pilot_analysis.py  salary_rules.py  salary_crosscheck.py  grounding_report.py  agreement.py (automated, no human labels)
@@ -230,11 +233,11 @@ Built from silver and `extract.extractions`; it reads both and writes neither. A
 
 The **company** class (`dim_company.visa_evidence_class`) reflects **filing history only**: `HISTORICAL_EVIDENCE` when the employer has certified LCAs under a name matched at or above the threshold, else `UNKNOWN`. It is always shown with `n_lca_certified` (for example, 3 filings is thin evidence). A posting statement is about that posting, so it is **not** rolled up into the company class: `fct_postings.sponsorship_class` is `CONFIRMED_OFFERED` / `EXPLICITLY_UNAVAILABLE` when the posting says so (with `sponsorship_quote`) and takes precedence over LCA history for that posting; an extracted posting that says nothing, and any posting not yet extracted, falls back to the company's LCA evidence (for an unextracted posting this means "the employer has filings", not "the posting is silent"). `dim_company` carries `n_active_offered` / `n_active_not_offered` so the app shows them beside the company class. Only plain `CERTIFIED` cases count as LCA evidence. By-role LCA counts are **lower bounds**: the role family is a title keyword match with the extraction rules, so titles like "Software Engineer, Data" fall in `other`.
 
-## Streamlit app (`app/`, P5; deployment is P6)
+## Streamlit app (`app/`, P5 pages, P6 Resume match and deploy)
 
-`app/streamlit_app.py` is the entry point (`st.navigation`, five pages in `app/app_pages/`: Market overview, Hiring trends, Salary, Visa intelligence, Pipeline health). The layout uses Streamlit's responsive containers, so columns stack on a phone.
+`app/streamlit_app.py` is the entry point (`st.navigation`, six pages in `app/app_pages/`: Market overview, Hiring trends, Salary, Visa intelligence, Resume match, Pipeline health). The layout uses Streamlit's responsive containers, so columns stack on a phone.
 
-**Gold only, read only.** All reads go through `jobpulse.app_data.read_gold`: one `SELECT`/`WITH` statement, no comments, no write/DDL/attach/pragma/load keywords, and every table must be `gold.<name>` with the name in the `GOLD_TABLES` allow-list (the `gold_stage` working tables, bronze, silver, ops, extract and ref are refused). The connection is a read-only local DuckDB file (`JOBPULSE_APP_DB`) or MotherDuck with a **read-scaling token** (`MOTHERDUCK_READ_TOKEN`; never the write token). Pages never import duckdb. Pipeline Health reads the gold models over ops and LLM-call data (`fct_snapshot_freshness`, `fct_pipeline_runs`, `agg_ingest_status_daily`, `agg_data_quality`, `agg_llm_cost_daily`).
+**Gold only, read only.** All reads go through `jobpulse.app_data.read_gold`: one `SELECT`/`WITH` statement, no comments, no write/DDL/attach/pragma/load keywords, and every table must be `gold.<name>` with the name in the `GOLD_TABLES` allow-list (the `gold_stage` working tables, bronze, silver, ops, extract and ref are refused). The connection is, in order: a read-only local DuckDB file (`JOBPULSE_APP_DB`); **the published gold file** (`JOBPULSE_GOLD_URL`, the public deploy: no token of any kind); or, for development only, MotherDuck with a read-scaling token (`MOTHERDUCK_READ_TOKEN`, never the write token; the Lite plan has none). Pages never import duckdb. Pipeline Health reads the gold models over ops and LLM-call data (`fct_snapshot_freshness`, `fct_pipeline_runs`, `agg_ingest_status_daily`, `agg_data_quality`, `agg_llm_cost_daily`).
 
 **Cost control.** Every query is cached for one hour (`st.cache_data`, `app_ui.CACHE_TTL_S`); gold changes once a day, and a longer cache spends fewer MotherDuck compute-unit hours. Freshness age is computed against the current time at view, so the stale banner stays right between builds.
 
@@ -243,6 +246,20 @@ The **company** class (`dim_company.visa_evidence_class`) reflects **filing hist
 **Tests (`tests/unit/test_app.py`, run in CI with pytest).** `AppTest` renders every page against a gold fixture built by the real pipeline (with data, and with no extraction/visa/ops data), plus the stale-data banner, the visa disclaimer/quote/count, the separate salary tabs, a missing-data message, the read-only connection, the refused statements and a static check that app code names only allow-listed gold tables.
 
 Run locally: `JOBPULSE_APP_DB=path/to/warehouse.duckdb uv run streamlit run app/streamlit_app.py`.
+
+### Resume match (`src/jobpulse/resume/`, `app/app_pages/resume_match.py`)
+
+No LLM and no cost per visit. `parse.py` reads pasted text or an uploaded PDF/text file (limits in `config/resume.yaml`: 2 MB, 10 PDF pages, extension and magic-byte checks; the server also caps uploads at 2 MB in `.streamlit/config.toml`) and finds skills by looking up 1 to 4 word n-grams, normalized with `jobpulse.skills.norm_skill` (the function that built `dim_skill`), in `gold.dim_skill`. Single letters and everyday words (R, C, Go, search, testing) count only in a configured form. `match.py` ranks the open, analyzed target-role postings (`fct_postings` joined to `bridge_posting_skill`) by *matched skills / the posting's skills*; postings with fewer than 5 extracted skills are not ranked. The visa evidence class, city, role and remote filters are applied before ranking and never change a score.
+
+**Privacy contract.** The raw text and file bytes are dropped right after parsing (the text box is cleared and the uploader is reset). Session state keeps only the profile (canonical skills, up to 5 short title lines, a years figure) and filter widgets; **Delete** removes every `resume_*` key. Nothing from a resume is written to disk or the database (the connection is read-only), logged, printed, or passed to a Streamlit cache; the resume code imports no logging, tempfile or cache API, and `tests/unit/test_resume.py` checks this along with write guards and a directory snapshot. Streamlit keeps an uploaded file in server memory only until the uploader is reset or the session ends.
+
+### Publishing gold for the public app (`jobpulse export-gold`, `publish` job)
+
+The public Streamlit Community Cloud app must never hold a MotherDuck token (the Lite plan has no read-only or read-scaling tokens). Instead, the last job of `daily_ingest.yml` (`publish`, after `gold` succeeded) runs `jobpulse export-gold`, which copies **only the `GOLD_TABLES` allow-list** into a fresh DuckDB file (`config/publish.yaml`: `jobpulse_gold.duckdb`; the name must not be `gold.duckdb`, because DuckDB names the catalog after the file and `gold.table` would become ambiguous). The export is validated before it is moved into place: exactly the allow-listed tables and nothing else, row counts equal to the source, and a minimum size per table. On any failure the step fails, the upload is skipped, and yesterday's release asset stays. The file is uploaded to the public `gold-latest` GitHub Release (`gh release upload --clobber`) with the built-in `GITHUB_TOKEN` (`contents: write` on that job only). `MOTHERDUCK_TOKEN` is on the export step only and the release token on the upload step only; no AWS or OpenAI credentials are present.
+
+The app downloads the file through the shared HTTP client (`app_data.connect_published`), accepts only URLs under `release.url_prefix`, checks that the download holds exactly the allow-listed tables, replaces its local copy atomically, and opens it read-only. The copy is refreshed when older than `app.refresh_s` (1 h); if a refresh fails the previous copy keeps serving. Streamlit Community Cloud installs from `app/requirements.txt` (found next to the main file, so it wins over `uv.lock`; pins are checked against `uv.lock` by a test) and needs Python 3.12 in Advanced settings.
+
+What the file contains: public posting titles, advertised salaries, short sponsorship quotes, skills and counts from public job boards, plus aggregates of public DOL filings. No resume data and no raw posting text.
 
 ## GitHub OIDC → AWS
 
