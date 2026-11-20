@@ -473,3 +473,18 @@ def test_chart_text_and_series_colours_meet_contrast_targets() -> None:
         assert _contrast(step, text) >= 4.5, (i, step)
     # the two first series colours are far apart in lightness
     assert _contrast(ui.NEUTRAL[0], ui.NEUTRAL[1]) >= 3
+
+
+def test_market_overview_filters_apply_to_the_numbers_and_say_what_they_cover(
+    history_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    at = _page(history_db, monkeypatch, "app_pages/market_overview.py")
+    assert "Open postings" in [m.label for m in at.metric]
+    at.multiselect(key="mkt_roles").set_value(["data_scientist"]).run()
+    assert not at.exception, at.exception
+    metrics = {m.label: m.value for m in at.metric}
+    assert metrics["Open postings (matching)"] == "1"  # the one analyzed data scientist posting
+    assert any("Filtered view" in str(i.value) for i in at.info)
+    # a combination with no match says so instead of drawing empty charts
+    at.multiselect(key="mkt_levels").set_value(["director"]).run()
+    assert not at.exception, at.exception

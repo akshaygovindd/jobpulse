@@ -3,6 +3,7 @@ import streamlit as st
 from jobpulse import insights
 from jobpulse.app_ui import (
     REMOTE_LABELS,
+    SENIORITY_LABELS,
     app_config,
     bar,
     city_coords,
@@ -42,6 +43,63 @@ st.markdown(
 days = app_config().kpi.delta_days
 now_kpi, before_kpi = kpi_comparison(days)
 
+# ---- filters: they apply to every number, chart and the map on this page --------------------
+# Role family, seniority and remote policy come from the AI's reading of a posting, so a filtered
+# view covers analyzed postings only.
+options = load(
+    "SELECT DISTINCT role_family, seniority, remote_policy FROM gold.fct_postings "
+    "WHERE is_active AND has_extraction AND NOT is_probable_duplicate"
+)
+with st.container(horizontal=True):
+    pick_roles = st.multiselect(
+        "Role family",
+        sorted(options["role_family"].dropna().unique()),
+        format_func=role_label,
+        key="mkt_roles",
+    )
+    pick_levels = st.multiselect(
+        "Seniority",
+        [v for v in SENIORITY_LABELS if v in set(options["seniority"].dropna())],
+        format_func=lambda v: human(v, SENIORITY_LABELS),
+        key="mkt_levels",
+    )
+    pick_remote = st.multiselect(
+        "Remote policy",
+        sorted(options["remote_policy"].dropna().unique()),
+        format_func=lambda v: human(v, REMOTE_LABELS),
+        key="mkt_remote",
+    )
+filtered = bool(pick_roles or pick_levels or pick_remote)
+conditions = ["is_active", "NOT is_probable_duplicate"]
+params: list[str] = []
+for column, picked in (
+    ("role_family", pick_roles),
+    ("seniority", pick_levels),
+    ("remote_policy", pick_remote),
+):
+    if picked:
+        conditions.append(f"{column} IN ({', '.join('?' for _ in picked)})")
+        params += picked
+base_where = " AND ".join(conditions)
+analyzed_where = base_where + " AND has_extraction"
+city_where = analyzed_where if filtered else base_where
+if filtered:
+    counts = load(
+        "SELECT count(*) AS n, count(*) AS active, count(*) AS analyzed, "
+        "count(DISTINCT company_id) AS companies, count(DISTINCT city) AS cities "
+        f"FROM gold.fct_postings WHERE {analyzed_where}",
+        params,
+    ).iloc[0]
+    now_kpi, before_kpi = {"postings": 0, "companies": 0, "cities": 0}, None
+    st.info(
+        f"Filtered view: {int(counts['active']):,} analyzed open postings match. Filters use the "
+        "AI's reading of each posting, so postings that were not analyzed are not included.",
+        icon=":material/filter_alt:",
+    )
+    if not counts["active"]:
+        st.warning("No postings match these filters.")
+        st.stop()
+
 
 def _delta(name: str) -> str | None:
     return insights.delta_text(
@@ -51,7 +109,7 @@ def _delta(name: str) -> str | None:
 
 with st.container(horizontal=True):
     st.metric(
-        "Open postings",
+        "Open postings (matching)" if filtered else "Open postings",
         f"{int(counts['active']):,}",
         delta=_delta("postings"),
         delta_color="off",
@@ -97,8 +155,10 @@ left, right = st.columns(2)
 with left:
     st.subheader("Open postings by company")
     by_company = load(
-        "SELECT name AS company, n_active AS postings FROM gold.dim_company WHERE n_active > 0 "
-        "ORDER BY n_active DESC LIMIT 15"
+        "SELECT c.name AS company, count(*) AS postings FROM gold.fct_postings p "
+        "JOIN gold.dim_company c USING (company_id) "
+        f"WHERE {city_where} GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 15",
+        params,
     )
     key_insight(
         insights.company_insight(
@@ -111,8 +171,8 @@ with right:
     st.subheader("Role family (analyzed postings)")
     by_role = load(
         "SELECT role_family, count(*) AS postings FROM gold.fct_postings "
-        "WHERE is_active AND has_extraction AND NOT is_probable_duplicate "
-        "GROUP BY 1 ORDER BY 2 DESC"
+        f"WHERE {analyzed_where} GROUP BY 1 ORDER BY 2 DESC",
+        params,
     )
     by_role["role"] = by_role["role_family"].map(role_label)
     key_insight(insights.role_insight(list(zip(by_role["role"], by_role["postings"], strict=True))))
@@ -123,8 +183,8 @@ with left:
     st.subheader("Remote policy (analyzed postings)")
     remote = load(
         "SELECT remote_policy, count(*) AS postings FROM gold.fct_postings "
-        "WHERE is_active AND has_extraction AND NOT is_probable_duplicate "
-        "GROUP BY 1 ORDER BY 2 DESC"
+        f"WHERE {analyzed_where} GROUP BY 1 ORDER BY 2 DESC",
+        params,
     )
     remote["policy"] = remote["remote_policy"].map(lambda v: human(v, REMOTE_LABELS))
     key_insight(
@@ -135,8 +195,8 @@ with right:
     st.subheader("Top cities")
     cities = load(
         "SELECT city, count(*) AS postings FROM gold.fct_postings "
-        "WHERE is_active AND NOT is_probable_duplicate AND city IS NOT NULL "
-        "GROUP BY 1 ORDER BY 2 DESC LIMIT 15"
+        f"WHERE {city_where} AND city IS NOT NULL GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 15",
+        params,
     )
     quality = load(
         "SELECT numerator, denominator FROM gold.agg_data_quality WHERE metric = 'city_parsed'"
@@ -156,7 +216,8 @@ with right:
 st.subheader("Where the open postings are")
 by_city = load(
     "SELECT city, count(*) AS postings FROM gold.fct_postings "
-    "WHERE is_active AND NOT is_probable_duplicate AND city IS NOT NULL GROUP BY 1"
+    f"WHERE {city_where} AND city IS NOT NULL GROUP BY 1",
+    params,
 )
 city_rows = [(str(c), int(n)) for c, n in zip(by_city["city"], by_city["postings"], strict=True)]
 coords = city_coords()  # parsed once per process, not once per city
