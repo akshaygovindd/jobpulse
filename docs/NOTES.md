@@ -700,5 +700,5 @@ Read-only queries against MotherDuck (token from `.env` inside Python; the scrip
 
 **Owner steps**
 1. `uv run jobpulse build-gold` against MotherDuck (applies the wage range, company class and health models).
-2. In MotherDuck create a read-scaling token, put `MOTHERDUCK_READ_TOKEN=...` in `.env` (never commit), then: `set -a` is not needed, the app reads the environment, so run `MOTHERDUCK_READ_TOKEN=<token> uv run streamlit run app/streamlit_app.py` in your own terminal and look at all five pages (phone width too: browser dev tools). Tell me what looks wrong.
+2. In MotherDuck create a read-scaling token, then run `MOTHERDUCK_READ_TOKEN=<token> uv run streamlit run app/streamlit_app.py` in your own terminal (the app reads the environment only, not `.env`; do not commit the token) and look at all five pages (phone width too: browser dev tools). Tell me what looks wrong.
 3. Label the employer-match sheet (see the earlier entry).
