@@ -44,7 +44,8 @@ jobpulse/
 │   ├── bronze/        loader.py  normalize.py
 │   ├── silver.py      (runs the dbt silver models with vars from config; run_dbt shared with gold)
 │   ├── gold.py        (stages skill/city mapping tables, then runs the dbt gold models + snapshot)
-│   ├── skills.py  location.py   (skill-name normalization shared with eval; city heuristic)
+│   ├── skills.py  location.py   (skill-name normalization shared with eval; place heuristic)
+│   ├── env.py         (prod/dev switch: dev prefix guard, prefixed storage, local-only warehouse)
 │   ├── warehouse.py   (MotherDuck / local DuckDB connection)
 │   ├── extract/       schema.py  llm.py  cost.py  store.py (cache, queue, quarantine)  budget.py  runner.py
 │   ├── secrets.py     (.env reader, Python only; redaction)
@@ -267,12 +268,21 @@ DuckDB is pinned to 1.5.6 because MotherDuck refuses newer clients; bump it only
 
 ## Environments
 
-| | Production | Local demo |
+| | Production | Local demo (dev) |
 |---|---|---|
-| Scheduler | GitHub Actions `daily_ingest.yml` (cron `17 9 * * *` + `workflow_dispatch` with `snapshot_date` input) | Airflow in Docker Compose (`airflow/`) |
-| AWS auth | OIDC, `prod` environment, `main` only | Owner's local AWS profile against a dev S3 prefix |
-| Warehouse | MotherDuck (from P2) | Dev MotherDuck DB or local DuckDB file |
-| Secrets | GitHub `prod` environment secrets (MotherDuck from P2, `OPENAI_API_KEY` for extraction; Adzuna if revived) | `.env` (gitignored), template in `.env.example` |
-| Status | **The real daily pipeline.** | Runs the same CLI tasks (`jobpulse ingest`, `load-ops`, `load-bronze`, `build-silver`, `extract`, `build-gold`) to show orchestration; it is **not** the production scheduler. |
+| Scheduler | GitHub Actions `daily_ingest.yml` (cron `17 9 * * *` + `workflow_dispatch` with `snapshot_date` input) | Airflow in Docker Compose (`airflow/`), manual triggers only |
+| CLI mode | `--env prod` (default) | `--env dev` (`JOBPULSE_ENV=dev`) |
+| Raw/ops storage | S3 bucket, roots `raw/`, `snapshots/`, `ops/` | A local directory (`airflow/demo-data/storage`), via `--local-dir`. If S3 were used in dev, every key goes under `storage.dev_prefix` (`dev/`) |
+| Warehouse | MotherDuck | A local DuckDB file (`airflow/demo-data/demo.duckdb`). Dev refuses MotherDuck |
+| Credentials | OIDC to AWS (`prod`, `main` only); GitHub `prod` secrets for `MOTHERDUCK_TOKEN` and `OPENAI_API_KEY` | **None in the container**: no AWS, no MotherDuck token, no OpenAI key (the key is added only by the opt-in `docker-compose.extract.yml`) |
+| `extract` | Real calls, capped (`--cap 0.25`) | Dry run unless the DAG is triggered with `real_extract: true` and the opt-in override is used |
+| Status | **The real daily pipeline.** | Runs the same CLI tasks (`ingest`, `load-ops`, `load-bronze`, `build-silver`, `extract`, `build-gold`) to show orchestration. **Not** production, and it does not exercise S3 or MotherDuck. |
+
+**Why dev cannot touch prod (layers):**
+1. The Compose service has no credentials and no `env_file`; the image build uses an allow-list (`airflow/Dockerfile.dockerignore`), so `.env` never enters the image. The DAG's first task fails the run if any AWS, MotherDuck or bucket variable is present.
+2. `--env dev` makes the CLI require a local `--db` (a `md:` path or URL is refused, and the MotherDuck token is never read), and wraps S3 in a prefix wrapper (`env.py`).
+3. `storage.dev_prefix` is validated against `storage.prod_prefixes`: it must be non-empty, end in `/`, and neither sit inside nor above `raw/`, `snapshots/` or `ops/`.
+
+`tests/unit/test_env.py` and `tests/unit/test_airflow_demo.py` pin these properties. The end-to-end Docker run is manual: see `airflow/README.md` for the commands.
 
 Terraform: `infra/terraform/bootstrap` creates the state bucket (local state, S3 native lockfile for the main root). `infra/terraform/main` holds the data bucket, OIDC provider, role, and budget. The owner runs `plan` and `apply` locally.

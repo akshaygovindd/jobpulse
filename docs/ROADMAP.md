@@ -104,13 +104,13 @@
 
 ## P4: dbt gold + snapshots + local Airflow/Docker
 
-**Part A (gold + snapshot + daily job): built 2026-11-11, awaiting the first live run.** Part B (local Airflow in Docker Compose) is planned and not started: it waits for the owner to confirm Docker Desktop works.
+**Part A (gold + snapshot + daily job): built 2026-11-11.** It builds and passes tests on local DuckDB (fixtures and real data) and in CI, but **has not run against MotherDuck**: the first live `build-gold` failed with a `CatalogException`, and a re-run on 2026-11-19 could not connect because the MotherDuck trial has ended. **Part B (local Airflow demo, `airflow/`): built and run end to end on 2026-11-19** with local storage and a local DuckDB file.
 
 **Done when**
-- [ ] All gold models and `snap_postings` build, with grain and `accepted_values` tests.
-- [ ] `dbt build` runs against fixtures in CI.
-- [ ] `docker compose up` runs the Airflow DAG end to end against the dev target.
-- [ ] Both environments are documented in ARCHITECTURE.md.
+- [ ] All gold models and `snap_postings` build, with grain and `accepted_values` tests. (Built and tested on local DuckDB and in CI; not yet on MotherDuck. Stays open until the live build passes.)
+- [x] `dbt build` runs against fixtures in CI. (CI #18 on `6a77ec0` and #19 on `76b1490`, confirmed green by the owner.)
+- [x] `docker compose up` runs the Airflow DAG end to end against the dev target. (Local directory storage and a local DuckDB file; verified 2026-11-19, all 8 tasks green. See `airflow/README.md`.)
+- [x] Both environments are documented in ARCHITECTURE.md.
 
 ## P5: Streamlit MVP (5 pages) + visa enrichment
 
