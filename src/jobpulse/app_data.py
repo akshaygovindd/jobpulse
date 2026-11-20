@@ -113,6 +113,14 @@ def connect(environ: Mapping[str, str] | None = None) -> duckdb.DuckDBPyConnecti
         ) from None
 
 
+def check_gold_url(url: str, cfg: PublishConfig) -> None:
+    """Accept only the exact release asset URL (prefix + tag + asset): no `..`, no encoded path
+    tricks, no query, fragment or credentials, so the URL cannot be normalised to another repo."""
+    expected = f"{cfg.release.url_prefix}{cfg.release.tag}/{cfg.release.asset}"
+    if url != expected:
+        raise AppDataError(f"{GOLD_URL_ENV} must be exactly {expected}")
+
+
 def published_path(cfg: PublishConfig) -> Path:
     return Path(tempfile.gettempdir()) / cfg.app.cache_dir_name / cfg.release.asset
 
@@ -146,8 +154,7 @@ def connect_published(
     older than `app.refresh_s`. A failed or invalid download keeps the previous copy; with no copy
     at all the app reports that its data is unavailable. No credential is involved."""
     cfg = cfg or load_publish()
-    if not url.startswith(cfg.release.url_prefix):
-        raise AppDataError(f"{GOLD_URL_ENV} must start with {cfg.release.url_prefix}")
+    check_gold_url(url, cfg)
     path = published_path(cfg)
     fresh = path.exists() and clock() - path.stat().st_mtime < cfg.app.refresh_s
     if not fresh:
@@ -188,11 +195,17 @@ def read_gold(con: duckdb.DuckDBPyConnection, sql: str, params: Sequence[Any] | 
     """Run one validated read-only query and return a pandas DataFrame (pandas ships with
     Streamlit, so there is no new dependency)."""
     text = validate_statement(sql)
+    # Streamlit runs one thread per visitor session over one shared connection, and DuckDB keeps a
+    # query's result on the connection object: interleaved sessions would read each other's rows.
+    # A cursor per call has its own result state and is cheap.
+    cur = con.cursor()
     try:
-        return con.execute(text, list(params or [])).df()
+        return cur.execute(text, list(params or [])).df()
     except duckdb.CatalogException:
         raise AppDataError(
             "the gold tables are not built yet (run `jobpulse build-gold`)"
         ) from None
     except duckdb.Error as e:
         raise AppDataError(f"query failed: {e}") from None
+    finally:
+        cur.close()

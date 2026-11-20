@@ -207,10 +207,28 @@ def test_a_file_that_is_not_a_gold_export_is_rejected(cache: Path, source_db: Pa
 
 
 def test_only_the_configured_release_url_is_accepted(cache: Path) -> None:
-    with pytest.raises(AppDataError, match="must start with"):
+    with pytest.raises(AppDataError, match="must be exactly"):
         connect_published("https://evil.example/gold.duckdb", cfg=CFG)
-    with pytest.raises(AppDataError, match="must start with"):
+    with pytest.raises(AppDataError, match="must be exactly"):
         connect({GOLD_URL_ENV: "http://github.com/akshaygovindd/jobpulse/releases/download/x"})
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    [
+        "../../../evil/x.duckdb",
+        "gold-latest/../../evil/x.duckdb",
+        "gold-latest/%2e%2e/evil/x.duckdb",
+        "gold-latest/jobpulse_gold.duckdb?x=1",
+        "gold-latest/jobpulse_gold.duckdb#frag",
+        "other-tag/jobpulse_gold.duckdb",
+        "gold-latest/jobpulse_gold.duckdb/",
+        "gold-latest/other.duckdb",
+    ],
+)
+def test_url_guard_rejects_anything_but_the_exact_asset_path(cache: Path, suffix: str) -> None:
+    with pytest.raises(AppDataError, match="must be exactly"):
+        connect_published(CFG.release.url_prefix + suffix, cfg=CFG)
 
 
 def test_connection_precedence_and_the_no_config_message() -> None:
