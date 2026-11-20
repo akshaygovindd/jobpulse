@@ -75,7 +75,7 @@ from jobpulse.app_data import LOCAL_DB_ENV  # noqa: E402
 from jobpulse.config import load_app  # noqa: E402
 from jobpulse.ingest.storage import LocalStorage  # noqa: E402
 from tests.unit.test_app import APP, _text  # noqa: E402
-from tests.unit.test_gold import add_extraction, gold  # noqa: E402
+from tests.unit.test_gold import add_extraction, gold, seed  # noqa: E402
 from tests.unit.test_gold_visa import lca_case, load_ref  # noqa: E402
 from tests.warehouse_helpers import gh_job, ingest_day, run_pipeline  # noqa: E402
 
@@ -383,3 +383,66 @@ def test_pipeline_health_tables_show_dashes_not_none(
     at = _page(history_db, monkeypatch, "app_pages/pipeline_health.py")
     for frame in (d.value for d in at.dataframe):
         assert not frame.isin([None, "None", "nan", "NaN"]).any().any()
+
+
+def test_pipeline_health_separates_eval_cost_counts_boards_once_and_explains_failures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import shutil
+    from datetime import UTC, datetime
+
+    from jobpulse.config import load_extraction, load_pipeline
+    from jobpulse.extract.store import ensure_extract_tables
+    from jobpulse.ops.load_ops import ensure_ops_tables
+
+    db = tmp_path / "wh.duckdb"
+    now = datetime(2026, 11, 20, 8, tzinfo=UTC)
+    later = datetime(2026, 11, 20, 12, tzinfo=UTC)
+    seed(LocalStorage(tmp_path / "s3"), db, [gh_job("1"), gh_job("2", content="x")])
+    add_extraction(db, "1", skills=["Python"])
+    con = duckdb.connect(str(db))
+    ensure_ops_tables(con, load_pipeline().warehouse)
+    ensure_extract_tables(con, load_extraction())
+    runs = [("a1", "silver", "failed", now), ("a2", "silver", "success", later)]
+    for attempt, task, status, at_time in runs:
+        con.execute(
+            "INSERT INTO ops.pipeline_runs VALUES (?, DATE '2026-11-20', ?, 'greenhouse', ?, ?, "
+            "5.0, ?, 1, 1, 0, 10, 10, NULL, 0.0, 'prod')",
+            [attempt, task, at_time, at_time, status],
+        )
+    for attempt, auth in (("a1", False), ("a2", True), ("a3", True)):  # 3 attempts, 2 kept
+        con.execute(
+            "INSERT INTO ops.company_snapshots VALUES (?, DATE '2026-11-20', 'greenhouse', ?, 'X', "
+            "'complete', NULL, NULL, 1, 2, 'k', ?, 'set', ?, ?)",
+            [attempt, f"b{attempt}", auth, now, now],
+        )
+    for i, (mode, cost) in enumerate([("sync", 0.10), ("sync", 0.20), ("eval", 0.50)]):
+        con.execute(
+            "INSERT INTO extract.llm_calls VALUES (?,?,?,'m1', ?, 100, 50, 0, ?, 10, 'ok', ?)",
+            [f"c{i}", "a1", f"h{i}", mode, cost, now],
+        )
+    con.close()
+    gold(db)
+    con = duckdb.connect(str(db))
+    con.execute("CHECKPOINT")
+    con.close()
+    out = tmp_path / "copy.duckdb"
+    shutil.copy(db, out)
+    at = _page(out, monkeypatch, "app_pages/pipeline_health.py")
+    metrics = {m.label: m.value for m in at.metric}
+    assert metrics["Pipeline spend"] == "$0.30"  # the eval call is not in it
+    assert metrics["AI calls"] == "2"
+    assert metrics["Model evaluation (one-off)"] == "$0.50"
+    warnings = " ".join(str(w.value) for w in at.warning)
+    assert "1 of the last 2 runs did not succeed" in warnings
+    assert "Clean and link" in warnings
+    assert "later succeeded" in warnings
+
+
+def test_every_page_warns_when_the_data_is_older_than_the_freshness_limit(
+    history_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # the fixture's snapshots are from 2026-11-13, far older than max_age_hours
+    for page in ("app_pages/market_overview.py", "app_pages/salary.py"):
+        at = _page(history_db, monkeypatch, page)
+        assert any("last refreshed on" in str(w.value) for w in at.warning), page

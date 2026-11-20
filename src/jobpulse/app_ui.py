@@ -6,9 +6,10 @@ Pages read through `load()` only (see app_data.py for what that allows).
 from __future__ import annotations
 
 import functools
+import logging
 import os
 from collections.abc import Sequence
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import duckdb
@@ -49,7 +50,9 @@ def load(sql: str, params: Sequence[Any] | None = None) -> Any:
     try:
         return _cached(sql, tuple(params or ()), source_key)
     except AppDataError as e:
-        st.error(str(e), icon=":material/error:")
+        # Visitors see only the public text; the detail goes to the server log.
+        logging.getLogger("jobpulse.app").warning("app data error: %s", e)
+        st.error(e.public, icon=":material/error:")
         st.stop()
 
 
@@ -412,6 +415,27 @@ def key_insight(text: str | None) -> None:
     if text:
         st.markdown(f":material/lightbulb: **Key insight.** {text}")
         st.space("small")  # room above the chart, so its hover toolbar cannot cover the text
+
+
+def stale_banner() -> None:
+    """A banner on every page when the newest snapshot is older than the configured freshness
+    limit (age is computed at view time, so it is right between daily builds)."""
+    row = load(
+        "SELECT max(newest_completed_at) AS newest, max(max_age_hours) AS limit_h "
+        "FROM gold.fct_snapshot_freshness"
+    ).iloc[0]
+    if is_missing(row["newest"]) or is_missing(row["limit_h"]):
+        return
+    newest = row["newest"].to_pydatetime()
+    if newest.tzinfo is None:
+        newest = newest.replace(tzinfo=UTC)
+    age_h = (datetime.now(UTC) - newest).total_seconds() / 3600
+    if age_h > float(row["limit_h"]):
+        st.warning(
+            f"The data was last refreshed on {newest:%d %b %Y} ({age_h / 24:.0f} days ago), so "
+            "the numbers may be behind.",
+            icon=":material/schedule:",
+        )
 
 
 def kpi_label(days: int) -> str:

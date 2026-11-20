@@ -319,3 +319,36 @@ def test_publish_job_follows_the_rules() -> None:
     assert "aws-actions" not in yaml.safe_dump(job)
     assert "if" not in export  # default: runs only if earlier steps succeeded
     assert "if" not in upload
+
+
+def test_a_schema_mismatch_is_one_clear_message_and_hides_sql_details(
+    source_db: Path, tmp_path: Path
+) -> None:
+    broken = tmp_path / "broken.duckdb"
+    shutil.copy(source_db, broken)
+    con = duckdb.connect(str(broken))
+    con.execute("ALTER TABLE gold.fct_postings DROP COLUMN apply_url")
+    con.close()
+    with pytest.raises(AppDataError, match="schema mismatch") as e:
+        connect({LOCAL_DB_ENV: str(broken)})
+    assert "apply_url" in str(e.value)  # for the log
+    assert "apply_url" not in e.value.public  # never shown to visitors
+    assert "Binder" not in e.value.public
+
+
+def test_a_failing_download_is_not_retried_on_every_rerun(cache: Path) -> None:
+    from jobpulse import app_data
+
+    app_data._LAST_FAILURE.clear()
+    down = Server(b"", status=503)
+    now = [1000.0]
+    transport = httpx.MockTransport(down)
+    for _ in range(3):  # three reruns in a row
+        with pytest.raises(AppDataError, match="could not be downloaded"):
+            connect_published(URL, cfg=CFG, transport=transport, clock=lambda: now[0])
+    assert down.calls <= CFG.app.download_attempts  # one attempt series, not three
+    now[0] += CFG.app.failure_cooldown_s + 1
+    with pytest.raises(AppDataError):
+        connect_published(URL, cfg=CFG, transport=transport, clock=lambda: now[0])
+    assert down.calls <= 2 * CFG.app.download_attempts  # tried again after the cooldown
+    app_data._LAST_FAILURE.clear()

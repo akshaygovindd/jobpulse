@@ -463,6 +463,9 @@ class PublishAppConfig(_Strict):
     refresh_s: int = Field(ge=0)
     max_download_bytes: int = Field(ge=1)
     cache_dir_name: str = Field(pattern=r"^[A-Za-z0-9._-]+$")
+    download_attempts: int = Field(ge=1)
+    download_timeout_s: float = Field(gt=0)
+    failure_cooldown_s: float = Field(ge=0)
 
 
 class PublishConfig(_Strict):

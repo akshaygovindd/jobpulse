@@ -46,6 +46,21 @@ GOLD_TABLES = frozenset(
         "agg_llm_cost_daily",
     }
 )
+# Columns the app's pages read from the key tables. Code and data deploy independently, so a file
+# built by an older (or newer) pipeline can lack one; checking at connect time turns a page-level
+# "Binder Error" into one clear message.
+_FCT_POSTINGS_COLUMNS = (
+    "posting_key company_id title apply_url has_extraction is_target_role role_family seniority "
+    "remote_policy city city_country sponsorship_class sponsorship_quote salary_min_annual "
+    "salary_max_annual salary_currency salary_period has_advertised_salary first_seen_date "
+    "closed_date is_active is_probable_duplicate"
+)
+REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
+    "fct_postings": frozenset(_FCT_POSTINGS_COLUMNS.split()),
+    "dim_company": frozenset(["company_id", "name", "n_lca_certified", "visa_evidence_class"]),
+    "dim_skill": frozenset(["skill_id", "canonical_name"]),
+    "bridge_posting_skill": frozenset(["posting_key", "skill_id"]),
+}
 LOCAL_DB_ENV = "JOBPULSE_APP_DB"  # a local DuckDB file (dev, tests)
 READ_TOKEN_ENV = "MOTHERDUCK_READ_TOKEN"  # MotherDuck read-scaling token (never a write token)
 GOLD_URL_ENV = "JOBPULSE_GOLD_URL"  # the published gold file (public deploy; no token at all)
@@ -59,8 +74,16 @@ _FORBIDDEN = re.compile(
 _TABLE_REF = re.compile(r"\b(?:from|join)\s+([A-Za-z_][\w.\"]*)", re.IGNORECASE)
 
 
+GENERIC_PUBLIC_MESSAGE = "The data is temporarily unavailable. Please try again in a few minutes."
+
+
 class AppDataError(Exception):
-    """The app cannot reach its data, or a statement was refused. The text is safe to show."""
+    """The app cannot reach its data, or a statement was refused. `str(e)` is for logs and tests
+    (it may name settings or SQL); `e.public` is the only text a visitor is shown."""
+
+    def __init__(self, message: str, public: str = GENERIC_PUBLIC_MESSAGE) -> None:
+        super().__init__(message)
+        self.public = public
 
 
 def validate_statement(sql: str) -> str:
@@ -94,7 +117,9 @@ def connect(environ: Mapping[str, str] | None = None) -> duckdb.DuckDBPyConnecti
         path = Path(local)
         if not path.exists():
             raise AppDataError(f"{LOCAL_DB_ENV} points to a file that does not exist")
-        return duckdb.connect(str(path), read_only=True)
+        con = duckdb.connect(str(path), read_only=True)
+        check_schema(con)
+        return con
     url = env.get(GOLD_URL_ENV)
     if url:
         return connect_published(url)
@@ -121,6 +146,9 @@ def check_gold_url(url: str, cfg: PublishConfig) -> None:
         raise AppDataError(f"{GOLD_URL_ENV} must be exactly {expected}")
 
 
+_LAST_FAILURE: dict[str, float] = {}  # path -> time of the last failed download (this process)
+
+
 def published_path(cfg: PublishConfig) -> Path:
     return Path(tempfile.gettempdir()) / cfg.app.cache_dir_name / cfg.release.asset
 
@@ -143,6 +171,25 @@ def _is_gold_only(path: Path) -> bool:
     return {(r[0], r[1]) for r in rows} == {("gold", t) for t in GOLD_TABLES}
 
 
+def check_schema(con: duckdb.DuckDBPyConnection) -> None:
+    """Raise AppDataError when a key gold table lacks a column the pages read."""
+    have: dict[str, set[str]] = {}
+    for table, column in con.execute(
+        "SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = 'gold'"
+    ).fetchall():
+        have.setdefault(table, set()).add(column)
+    missing = {
+        t: sorted(cols - have.get(t, set()))
+        for t, cols in REQUIRED_COLUMNS.items()
+        if cols - have.get(t, set())
+    }
+    if missing:
+        raise AppDataError(
+            f"gold schema mismatch, missing columns: {missing}",
+            public="The data and the app are being updated. Please reload in a few minutes.",
+        )
+
+
 def connect_published(
     url: str,
     *,
@@ -157,27 +204,34 @@ def connect_published(
     check_gold_url(url, cfg)
     path = published_path(cfg)
     fresh = path.exists() and clock() - path.stat().st_mtime < cfg.app.refresh_s
-    if not fresh:
+    cooling = clock() - _LAST_FAILURE.get(str(path), -1e18) < cfg.app.failure_cooldown_s
+    if not fresh and not cooling:
         try:
             _download(url, path, cfg, transport)
         except (FetchError, OSError, AppDataError):
+            _LAST_FAILURE[str(path)] = clock()  # do not hammer a failing server on every rerun
             if not path.exists():
                 raise AppDataError("the published data could not be downloaded") from None
+    elif not fresh and not path.exists():
+        raise AppDataError("the published data could not be downloaded (cooling down)")
     try:
-        return duckdb.connect(str(path), read_only=True)
+        con = duckdb.connect(str(path), read_only=True)
     except duckdb.Error:
         raise AppDataError("the published data file could not be opened") from None
+    check_schema(con)
+    return con
 
 
 def _download(
     url: str, path: Path, cfg: PublishConfig, transport: httpx.BaseTransport | None
 ) -> None:
-    with HttpClient(load_pipeline().http, transport=transport) as http:
+    http_cfg = load_pipeline().http.model_copy(update={"max_attempts": cfg.app.download_attempts})
+    with HttpClient(http_cfg, transport=transport) as http:
         data = http.request(
             "GET",
             url,
             headers={"Accept": "application/octet-stream"},
-            timeout=120.0,
+            timeout=cfg.app.download_timeout_s,
             expect="bytes",
         )
     if len(data) > cfg.app.max_download_bytes:
@@ -203,9 +257,11 @@ def read_gold(con: duckdb.DuckDBPyConnection, sql: str, params: Sequence[Any] | 
         return cur.execute(text, list(params or [])).df()
     except duckdb.CatalogException:
         raise AppDataError(
-            "the gold tables are not built yet (run `jobpulse build-gold`)"
+            "the gold tables are not built yet (run `jobpulse build-gold`)",
+            public="The data is not ready yet. Please check back soon.",
         ) from None
     except duckdb.Error as e:
+        # The detail (table and column names, bindings) stays server-side.
         raise AppDataError(f"query failed: {e}") from None
     finally:
         cur.close()

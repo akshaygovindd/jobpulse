@@ -183,7 +183,9 @@ def test_missing_data_source_shows_a_message_not_a_traceback(
     monkeypatch.delenv(READ_TOKEN_ENV, raising=False)
     at = AppTest.from_file(str(APP), default_timeout=20).run()
     assert not at.exception
-    assert any(READ_TOKEN_ENV in str(e.value) for e in at.error)
+    shown = " ".join(str(e.value) for e in at.error)
+    assert "temporarily unavailable" in shown
+    assert READ_TOKEN_ENV not in shown  # setting names are not shown to visitors
 
 
 # ---- read-only and gold-only guarantees ------------------------------------------------------

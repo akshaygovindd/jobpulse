@@ -73,6 +73,10 @@ if not quality.empty:
     quality["numerator"] = quality["numerator"].map(dash)
     quality["denominator"] = quality["denominator"].map(dash)
     quality["description"] = quality["description"].map(sentence)
+    st.caption(
+        "A low share is expected where only some postings are read by the AI: a title filter "
+        "chooses the data and AI roles, and the rest are counted but not analyzed."
+    )
     st.dataframe(
         quality[["description", "numerator", "denominator", "share"]],
         hide_index=True,
@@ -87,16 +91,39 @@ if not quality.empty:
 
 st.subheader("Recent runs")
 runs = load(
-    "SELECT snapshot_date, task, source_id, status, duration_s, companies_complete, "
-    "companies_failed, rows_kept FROM gold.fct_pipeline_runs "
+    "SELECT snapshot_date, started_at, task, source_id, status, duration_s, "
+    "companies_complete, companies_failed, rows_kept FROM gold.fct_pipeline_runs "
     "ORDER BY started_at DESC NULLS LAST LIMIT 40"
 )
 if runs.empty:
-    st.info("No run records loaded yet (`jobpulse load-ops`).")
+    st.info("No run records are available yet.")
 else:
     failed = runs[runs["status"] != "success"]
     if len(failed):
-        st.warning(f"{len(failed)} of the last {len(runs)} runs did not succeed.")
+        # Say which step failed and when, and whether a later run of the same step succeeded.
+        notes = []
+        for _, f in failed.iterrows():
+            later_ok = runs[
+                (runs["task"] == f["task"])
+                & (runs["status"] == "success")
+                & (runs["started_at"] > f["started_at"])
+            ]
+            when = (
+                f"{f['started_at']:%d %b %H:%M} UTC" if f["started_at"] == f["started_at"] else "?"
+            )
+            notes.append(
+                f"{human(f['task'], TASK_LABELS)} (data date {f['snapshot_date']}, started {when})"
+                + (", later succeeded" if len(later_ok) else ", not yet re-run successfully")
+            )
+        st.warning(
+            f"{len(failed)} of the last {len(runs)} runs did not succeed: "
+            + "; ".join(notes)
+            + ".",
+            icon=":material/warning:",
+        )
+        runs = runs.sort_values(
+            "status", key=lambda s: s == "success", kind="stable"
+        )  # failures first
     runs["Step"] = runs["task"].map(lambda v: human(v, TASK_LABELS))
     runs["Source"] = runs["source_id"].map(lambda v: human(v, SOURCE_LABELS))
     runs["Result"] = runs["status"].map(lambda v: human(v, STATUS_LABELS))
@@ -131,26 +158,43 @@ else:
 
 st.subheader("Ingest outcomes by day")
 ingest = load(
-    "SELECT strftime(snapshot_date, '%Y-%m-%d') AS day, status, sum(n_boards) AS boards "
-    "FROM gold.agg_ingest_status_daily GROUP BY 1, 2 ORDER BY 1"
+    "SELECT strftime(snapshot_date, '%Y-%m-%d') AS day, sum(n_authoritative) AS boards "
+    "FROM gold.agg_ingest_status_daily GROUP BY 1 ORDER BY 1"
 )
 if not ingest.empty:
-    ingest["status"] = ingest["status"].map(lambda v: human(v, STATUS_LABELS))
-    date_chart(ingest, x="day", y="boards", series="status", y_title="Company job boards")
+    # Re-runs of the same day fetch each board again; only the snapshot that was kept counts.
+    date_chart(ingest, x="day", y="boards", y_title="Companies with a complete snapshot")
+    st.caption(
+        "Each company is counted once per day, for the snapshot that the analytics use. "
+        "Re-runs and failed attempts on the same day are not added up."
+    )
 
 st.subheader("AI extraction cost")
 cost = load(
-    "SELECT strftime(call_date, '%Y-%m-%d') AS day, model, sum(cost_usd) AS cost_usd, "
-    "sum(n_calls) AS calls FROM gold.agg_llm_cost_daily GROUP BY 1, 2 ORDER BY 1"
+    "SELECT strftime(call_date, '%Y-%m-%d') AS day, model, mode, sum(cost_usd) AS cost_usd, "
+    "sum(n_calls) AS calls FROM gold.agg_llm_cost_daily GROUP BY 1, 2, 3 ORDER BY 1"
 )
 if cost.empty:
     st.info("No extraction calls recorded yet.")
 else:
+    # Evaluation calls (a one-off model comparison) are not part of what the pipeline costs to run.
+    prod = cost[cost["mode"] != "eval"]
+    evaluation = cost[cost["mode"] == "eval"]
     with st.container(horizontal=True):
-        st.metric("Total spend", f"${cost['cost_usd'].sum():,.2f}", border=True)
-        st.metric("AI calls", f"{int(cost['calls'].sum()):,}", border=True)
-    date_chart(cost, x="day", y="cost_usd", series="model", y_title="Spend (US dollars)")
+        st.metric("Pipeline spend", f"${prod['cost_usd'].sum():,.2f}", border=True)
+        st.metric("AI calls", f"{int(prod['calls'].sum()):,}", border=True)
+        if not evaluation.empty:
+            st.metric(
+                "Model evaluation (one-off)",
+                f"${evaluation['cost_usd'].sum():,.2f}",
+                help=f"{int(evaluation['calls'].sum())} calls to compare two models; not part of "
+                "the daily pipeline.",
+                border=True,
+            )
+    if not prod.empty:
+        date_chart(prod, x="day", y="cost_usd", series="model", y_title="Spend (US dollars)")
     st.caption(
-        "Cost is computed from token counts and the prices in config at call time. Shown to the "
-        "cent because the amounts are small."
+        "Pipeline spend is the daily extraction of new and changed postings; evaluation calls are "
+        "shown separately. Cost is computed from token counts and the prices in config at call "
+        "time, shown to the cent because the amounts are small."
     )

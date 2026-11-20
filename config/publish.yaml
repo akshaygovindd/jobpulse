@@ -20,3 +20,8 @@ app:
   refresh_s: 3600               # re-download the file when the local copy is older than this
   max_download_bytes: 200000000
   cache_dir_name: jobpulse_gold # under the system temp dir
+  # A visitor must never wait minutes on a failing download: few attempts, a short timeout, and
+  # after a failure the app does not try again for this long (it serves the old copy, or a message).
+  download_attempts: 2
+  download_timeout_s: 20
+  failure_cooldown_s: 60

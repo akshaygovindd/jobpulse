@@ -25,7 +25,7 @@ counts = load(
 ).iloc[0]
 
 if not counts["n"]:
-    st.warning("No postings yet. Run the pipeline, then `jobpulse build-gold`.")
+    st.warning("No postings yet. The data is refreshed daily; please check back soon.")
     st.stop()
 
 target = load(

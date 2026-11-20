@@ -75,6 +75,13 @@ page = st.navigation(
 )
 if page.title != "Home":  # Home has its own hero
     st.title(page.title, icon=page.icon)
+if page.title != "Pipeline health":  # that page has its own, more detailed freshness check
+    try:
+        from jobpulse.app_ui import stale_banner
+
+        stale_banner()
+    except ImportError:
+        pass  # handled below, with the page itself
 try:
     page.run()
 except ImportError:
