@@ -47,7 +47,8 @@ jobpulse/
 │   ├── gold.py        (stages skill/city mapping tables, then runs the dbt gold models + snapshot)
 │   ├── insights.py    (one-sentence data-computed insights; pure)
 │   ├── publish.py     (export-gold: allow-listed gold tables to one validated DuckDB file)
-│   ├── app_data.py  app_ui.py   (the app's read-only door to gold; shared page helpers)
+│   ├── app_data.py  app_ui.py   (the app's read-only door to gold; shared page helpers, palette, chart template)
+│   ├── app_components.py  (Resume match and Visa cards; escaping of posting and resume text)
 │   ├── skills.py  location.py   (skill-name normalization shared with eval; place heuristic)
 │   ├── env.py         (prod/dev switch: dev prefix guard, prefixed storage, local-only warehouse)
 │   ├── warehouse.py   (MotherDuck / local DuckDB connection)
@@ -56,7 +57,7 @@ jobpulse/
 │   ├── visa/          lca_loader.py  employer_match.py
 │   └── resume/        parse.py  match.py
 ├── dbt/               models/{staging,silver,gold}/  snapshots/  tests/generic/  macros/  profiles.yml
-├── app/               streamlit_app.py  app_pages/  requirements.txt   (5 MVP pages + Resume match)
+├── app/               streamlit_app.py  style.css  app_pages/  requirements.txt   (5 MVP pages + Resume match)
 ├── eval/              sample.py  sponsorship_sample.py  export_predictions.py  score.py  README.md  reports/
 │                      label_app.py + label_io.py (local Streamlit labeling app; never reads predictions)
 │                      pilot_analysis.py  salary_rules.py  salary_crosscheck.py  grounding_report.py  agreement.py (automated, no human labels)
@@ -252,7 +253,8 @@ Run locally: `JOBPULSE_APP_DB=path/to/warehouse.duckdb uv run streamlit run app/
 
 ### Look and feel (Home, insights, map, theme)
 
-- **One chart style.** Every chart goes through `app_ui._chart`, which applies one Vega-Lite config (`CHART_CONFIG`); every hex colour lives in one palette block at the top of `app_ui.py` (blue and slate only: colour never implies a verdict, no red/green). `.streamlit/config.toml` sets the matching blue theme (`primaryColor`, `linkColor`, `baseRadius`). Label colour is a mid slate that reads on the light and the dark theme. `tests/unit/test_app_style.py` fails if a page draws its own chart or hard-codes a colour.
+- **One look.** A dark, locked Streamlit theme (`.streamlit/config.toml`: Inter, no appearance toggle) and one palette block at the top of `app_ui.py` hold every colour; a test keeps the two equal. Each page has its own accent (`ACCENTS`), used for its chart marks and as `--accent` in the one stylesheet `app/style.css` (hero gradient, card hover, page glow, avatars, heatmap scroll, phone padding). The CSS has no colour literals, only the variables `theme_css_variables()` injects. Every chart goes through `app_ui._chart`, which applies one Vega-Lite config (`CHART_CONFIG`, soft gridlines, hover highlight, value labels, tooltips, axes fitted inside the container so nothing clips on a phone). Text colours are tested at 4.5:1 or better on the page and card backgrounds. Red and green appear only as the "missing" and "have" skill chips on Resume match, each with a check or cross icon so colour is never the only cue; they say nothing about the person or the company.
+- **Posting and resume text is never markup.** Cards (`app_components.py`) pass company, title, city and skills through `md_escape` / `badge_text` (every markdown, directive, emoji-shortcode, entity and LaTeX trigger becomes a plain character) and the only HTML is the avatar: two letters or digits and an integer hue. Tested with hostile strings. Apply buttons are shown only for https URLs.
 - **Home** (`app_pages/home.py`, the default page): a hero and four cards whose numbers are all read from gold (open postings with a weekly change, the most requested skill, the median advertised yearly USD pay, companies with H-1B filings), a resume-match call to action, and the visa disclaimer.
 - **Key insight lines.** `jobpulse/insights.py` holds pure functions that turn the rows a chart is drawn from into one sentence ("Databricks has the most open postings: 921, 11% of all 8,464."). They return nothing when there is no data and carry the evidence caveat for visa sentences; the remote-policy sentence never crowns "Not stated"; there is no per-day average where empty days are absent from the rows.
 - **KPI deltas** (`app_ui.kpi_comparison`, `config/app.yaml` `kpi.delta_days`, default 7). Open postings, companies hiring and cities are rebuilt from `fct_postings` (first seen on or before the day and not closed by then) for the last **settled** day (the day before the newest snapshot, because a posting counts as closed only after two missed snapshots) and `delta_days` earlier. The change shows only when the data goes back that far, in neutral colour, and the Home card names the two settled days it compares. "Data & AI roles analyzed" has no delta because extraction time is not in gold.

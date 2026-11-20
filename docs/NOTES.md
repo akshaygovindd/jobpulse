@@ -888,3 +888,35 @@ README: added a Highlights section near the top, and changed the architecture di
 3. **Stop-list.** "inference" is a skill again; "agent" stays ignored alone, phrases like "AI agents" and "multi-agent systems" are recognized.
 
 Checks: `make check` green (see the last run); not verified in a browser. **Reboot the Streamlit app after the push.**
+
+---
+
+## 2026-11-20 (evening): visual design pass
+
+**What changed and why.** The app worked but looked like a default Streamlit app. It now has one design.
+
+- **Theme.** `.streamlit/config.toml` is a locked dark theme with Inter. Every colour is also in one palette block in `src/jobpulse/app_ui.py`, and a test keeps the two equal. Each page has its own accent (Home blue, Market teal, Trends violet, Salary amber, Visa pink, Resume orange, Health slate), used for its chart marks and, through CSS variables, for the page glow and card hover.
+- **One stylesheet.** `app/style.css` is the only custom CSS (hero gradient, cards, avatars, section spacing, phone padding, the sideways scroll for the salary heatmap). It has no colour literals; a test enforces that.
+- **Home.** Hero banner with a one-line pitch, four KPI cards with icons, a 7-day sparkline on Open postings (the only KPI with history; same query as the weekly delta), and the postings map right below them at 520 px.
+- **Resume match.** Results are cards: avatar, company, title, match bar, green "have" chips with a check icon, red "missing" chips with a cross icon (+N more), visa evidence badge with the filing count, location, remote, salary, and an Apply button (https links only). Ten cards at a time with "Show more matches"; the old table is in a "Show as table" expander.
+- **Visa.** A grid of the 12 companies with the most certified filings: coloured initials avatar, evidence badge, counts and a filings-per-fiscal-year mini chart. The full table and the by-year table are in "Show data" expanders.
+- **Charts.** One template: soft gridlines, value labels, hover highlight and tooltips, muted axis text; axes and padding fit inside the container so nothing is clipped on a phone.
+- **Tables.** Raw tables on Salary (3), Pipeline health (3) and Visa (2) moved into "Show data" expanders. Key insight lines, disclaimers and the privacy notice are unchanged.
+- **P2-18 (mobile).** I checked Market overview, Salary, Hiring trends and Visa in headless Chrome at a real 390 px viewport and fixed what clipped (see QA_REPORT.md).
+- **Safety.** Text from postings or resumes is never rendered as HTML or markdown: cards escape it (`md_escape`, `badge_text` in the new `src/jobpulse/app_components.py`), the only HTML is the avatar (two letters or digits and a number). Tested with hostile strings. Reads are still gold-only (the existing test passes). No new dependency.
+
+**Checks run.** `make check`: ruff check and format, mypy strict, pytest (555 passed, 3 live deselected), terraform fmt and validate for both roots, gitleaks (no leaks). New or updated tests: palette equals theme, contrast of every text colour at 4.5:1 or better on the page and card backgrounds, avatar text readable at every hue, no colour literals in the CSS, escaping, card contents, Home hero, sparkline and map, per-page accent, Visa cards and expanders, Resume cards.
+
+**Not verified.**
+- The postings map is blank in headless Chrome (no WebGL), so I have not seen it drawn; it is the same pydeck map as before.
+- The Resume match page was checked with the same card code on demo data at 390 px and 1100 px, and by AppTest on the fixture warehouse, not with an uploaded resume in a browser.
+- One long chart label ("Reinforcement learning") was clipped once on Hiring trends at 390 px; it may depend on the font loading before the chart measures it.
+- Hover states and the Inter font on the live Streamlit Cloud build.
+
+**Open questions for the owner.**
+1. Red and green chips on Resume match were your request; the check and cross icons carry the meaning too. Fine as is?
+2. The map still captures touch scroll on phones (pydeck has no switch for it). Hide the map below a width, or leave it?
+3. The theme is locked to dark (no light mode). Add a light variant later, or keep one look?
+
+**Owner step: reboot the Streamlit app after the push** (the theme, `app/style.css` and the Inter font load on a restart).
+
