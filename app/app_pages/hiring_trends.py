@@ -1,6 +1,7 @@
 import streamlit as st
 
-from jobpulse.app_ui import ROLE_LABELS, bar, date_chart, load, role_label
+from jobpulse import insights
+from jobpulse.app_ui import ROLE_LABELS, bar, date_chart, key_insight, load, role_label
 
 bounds = load(
     "SELECT min(first_seen_date) AS first_day, max(first_seen_date) AS last_day "
@@ -21,6 +22,7 @@ with left:
         "AND first_seen_date > (SELECT min(first_seen_date) FROM gold.fct_postings) "
         "GROUP BY 1 ORDER BY 1"
     )
+    key_insight(insights.daily_flow_insight(list(zip(new["day"], new["postings"], strict=True))))
     date_chart(new, x="day", y="postings", y_title="New postings")
 with right:
     st.markdown("**Closed postings**")
@@ -28,6 +30,11 @@ with right:
         "SELECT strftime(closed_date, '%Y-%m-%d') AS day, count(*) AS postings "
         "FROM gold.fct_postings WHERE NOT is_probable_duplicate AND closed_date IS NOT NULL "
         "GROUP BY 1 ORDER BY 1"
+    )
+    key_insight(
+        insights.daily_flow_insight(
+            list(zip(closed["day"], closed["postings"], strict=True)), noun="closed postings"
+        )
     )
     date_chart(closed, x="day", y="postings", y_title="Closed postings")
 st.caption(
@@ -68,6 +75,12 @@ top["Share of postings (%)"] = 100 * top["share"]
 st.caption(
     f"Share of analyzed {ROLE_LABELS.get(role, role)} postings open in the week starting "
     f"{latest} that mention the skill."
+)
+key_insight(
+    insights.skill_insight(
+        list(zip(top["skill"], top["Share of postings (%)"], strict=True)),
+        ROLE_LABELS.get(role, role),
+    )
 )
 bar(top, x="skill", y="Share of postings (%)", horizontal=True, sort="-Share of postings (%)")
 

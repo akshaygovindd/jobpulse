@@ -1,22 +1,18 @@
 import streamlit as st
 
+from jobpulse import insights
 from jobpulse.app_ui import (
     REMOTE_LABELS,
+    app_config,
     bar,
     human,
+    key_insight,
+    kpi_comparison,
+    kpi_label,
     load,
     pct,
     role_label,
 )
-
-GITHUB_URL = "https://github.com/akshaygovindd/jobpulse"
-
-st.markdown(
-    "**Daily job-market intelligence from 43 tech employers' public job boards.** "
-    "Open roles, hiring trends, advertised pay and public H-1B filing evidence for data and AI "
-    "jobs."
-)
-st.link_button("View the project on GitHub", GITHUB_URL, icon=":material/code:")
 
 counts = load(
     "SELECT count(*) AS n, count(*) FILTER (WHERE is_active) AS active, "
@@ -37,10 +33,42 @@ target = load(
 t_done = int(target["numerator"].iloc[0]) if len(target) else int(counts["analyzed"])
 t_all = int(target["denominator"].iloc[0]) if len(target) else 0
 
+st.markdown(
+    f"**Open roles across {int(counts['companies'])} tech employers' public job boards**, with "
+    "hiring trends, advertised pay and public H-1B filing evidence for data and AI jobs."
+)
+days = app_config().kpi.delta_days
+now_kpi, before_kpi = kpi_comparison(days)
+
+
+def _delta(name: str) -> str | None:
+    return insights.delta_text(
+        now_kpi[name], None if before_kpi is None else before_kpi[name], unit=kpi_label(days)
+    )
+
+
 with st.container(horizontal=True):
-    st.metric("Open postings", f"{int(counts['active']):,}", border=True)
-    st.metric("Companies hiring", f"{int(counts['companies']):,}", border=True)
-    st.metric("Cities", f"{int(counts['cities']):,}", border=True)
+    st.metric(
+        "Open postings",
+        f"{int(counts['active']):,}",
+        delta=_delta("postings"),
+        delta_color="off",
+        border=True,
+    )
+    st.metric(
+        "Companies hiring",
+        f"{int(counts['companies']):,}",
+        delta=_delta("companies"),
+        delta_color="off",
+        border=True,
+    )
+    st.metric(
+        "Cities",
+        f"{int(counts['cities']):,}",
+        delta=_delta("cities"),
+        delta_color="off",
+        border=True,
+    )
     st.metric(
         "Data & AI roles analyzed",
         f"{t_done:,}",
@@ -55,6 +83,12 @@ st.caption(
     f"those roles, {t_done:,} ({pct(t_done, t_all)}) have been analyzed so far. The other "
     f"{int(counts['active']) - t_all:,} open postings are counted here but not read by the AI, so "
     "the role, remote and pay breakdowns below cover analyzed postings only. Duplicates excluded."
+    + (
+        " Changes compare the last two fully settled days (a posting counts as closed only after "
+        "it is missing twice in a row)."
+        if before_kpi
+        else f" Changes {kpi_label(days)} appear once the data goes back that far."
+    )
 )
 
 left, right = st.columns(2)
@@ -63,6 +97,12 @@ with left:
     by_company = load(
         "SELECT name AS company, n_active AS postings FROM gold.dim_company WHERE n_active > 0 "
         "ORDER BY n_active DESC LIMIT 15"
+    )
+    key_insight(
+        insights.company_insight(
+            list(zip(by_company["company"], by_company["postings"], strict=True)),
+            int(counts["active"]),
+        )
     )
     bar(by_company, x="company", y="postings", horizontal=True, sort="-postings")
 with right:
@@ -73,6 +113,7 @@ with right:
         "GROUP BY 1 ORDER BY 2 DESC"
     )
     by_role["role"] = by_role["role_family"].map(role_label)
+    key_insight(insights.role_insight(list(zip(by_role["role"], by_role["postings"], strict=True))))
     bar(by_role, x="role", y="postings", horizontal=True, sort="-postings")
 
 left, right = st.columns(2)
@@ -84,6 +125,9 @@ with left:
         "GROUP BY 1 ORDER BY 2 DESC"
     )
     remote["policy"] = remote["remote_policy"].map(lambda v: human(v, REMOTE_LABELS))
+    key_insight(
+        insights.remote_insight(list(zip(remote["policy"], remote["postings"], strict=True)))
+    )
     bar(remote, x="policy", y="postings", horizontal=True, sort="-postings")
 with right:
     st.subheader("Top cities")
@@ -92,10 +136,14 @@ with right:
         "WHERE is_active AND NOT is_probable_duplicate AND city IS NOT NULL "
         "GROUP BY 1 ORDER BY 2 DESC LIMIT 15"
     )
-    bar(cities, x="city", y="postings", horizontal=True, sort="-postings")
     quality = load(
         "SELECT numerator, denominator FROM gold.agg_data_quality WHERE metric = 'city_parsed'"
     )
+    with_city = int(quality["numerator"].iloc[0]) if len(quality) else 0
+    key_insight(
+        insights.city_insight(list(zip(cities["city"], cities["postings"], strict=True)), with_city)
+    )
+    bar(cities, x="city", y="postings", horizontal=True, sort="-postings")
     if len(quality):
         row = quality.iloc[0]
         st.caption(

@@ -1,8 +1,10 @@
 import streamlit as st
 
+from jobpulse import insights
 from jobpulse.app_ui import (
     SENIORITY_LABELS,
     human,
+    key_insight,
     load,
     pct,
     role_label,
@@ -105,6 +107,18 @@ with advertised_tab:
                     "Not enough salaries yet for a median (at least five per group are needed)."
                 )
             else:
+                key_insight(
+                    insights.salary_insight(
+                        [
+                            (
+                                f"{r['Seniority']} {r['Role family']}",
+                                r["Median"],
+                                int(r["n_annualized"]),
+                            )
+                            for _, r in chart.iterrows()
+                        ]
+                    )
+                )
                 salary_chart(chart)
                 st.caption(
                     "Midpoint of the advertised range, converted to a yearly figure, for groups "

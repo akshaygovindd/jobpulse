@@ -36,6 +36,7 @@ from tests.warehouse_helpers import gh_job
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "app" / "streamlit_app.py"
 PAGES = [
+    "app_pages/home.py",
     "app_pages/market_overview.py",
     "app_pages/hiring_trends.py",
     "app_pages/salary.py",
@@ -271,8 +272,9 @@ def test_market_overview_explains_what_the_ai_reads(
 ) -> None:
     monkeypatch.setenv(LOCAL_DB_ENV, str(full_db))
     at = AppTest.from_file(str(APP), default_timeout=20).run()
+    at.switch_page("app_pages/market_overview.py").run()
     assert not at.exception
-    assert "43 tech employers" in _text(at)
+    assert "tech employers' public job boards" in _text(at)
     assert "Data & AI roles analyzed" in {m.label for m in at.metric}
     assert "only data and AI roles" in _text(at)
 

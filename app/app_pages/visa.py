@@ -1,11 +1,13 @@
 import streamlit as st
 
+from jobpulse import insights
 from jobpulse.app_ui import (
     DATA_ROLES,
     MATCH_LABELS,
     ROLE_LABELS,
     bar,
     human,
+    key_insight,
     load,
     role_label,
     visa_disclaimer,
@@ -58,6 +60,9 @@ if picked:
         f"JOIN gold.dim_company c USING (company_id) WHERE r.role_family IN ({marks}) "
         "GROUP BY 1 ORDER BY 2 DESC LIMIT 15",
         picked,
+    )
+    key_insight(
+        insights.sponsors_insight(list(zip(sponsors["company"], sponsors["filings"], strict=True)))
     )
     bar(sponsors, x="company", y="filings", horizontal=True, sort="-filings")
     st.caption(

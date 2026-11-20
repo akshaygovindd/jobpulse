@@ -5,14 +5,17 @@ Pages read through `load()` only (see app_data.py for what that allows).
 
 from __future__ import annotations
 
+import functools
 import os
 from collections.abc import Sequence
+from datetime import date, timedelta
 from typing import Any
 
 import duckdb
 import streamlit as st
 
 from jobpulse.app_data import GOLD_URL_ENV, LOCAL_DB_ENV, AppDataError, connect, read_gold
+from jobpulse.config import AppConfig, load_app, load_city_coords
 
 VISA_DISCLAIMER = (
     "Evidence from public filings, not a promise of sponsorship. LCAs are employer filings with "
@@ -344,3 +347,105 @@ def salary_range(low: Any, high: Any, currency: Any) -> str:
     if lo is not None and hi is not None and round(lo) != round(hi):
         return f"{sign}{lo:.0f}K to {sign}{hi:.0f}K"
     return f"{sign}{(lo if lo is not None else hi):.0f}K"
+
+
+@functools.lru_cache(maxsize=1)
+def app_config() -> AppConfig:
+    return load_app()
+
+
+def key_insight(text: str | None) -> None:
+    """A one-sentence, data-computed takeaway above a chart. Nothing is shown without data."""
+    if text:
+        st.markdown(f":material/lightbulb: **Key insight.** {text}")
+
+
+def kpi_label(days: int) -> str:
+    if days == 7:
+        return "vs last week"
+    return "vs the day before" if days == 1 else f"vs {days} days ago"
+
+
+_ACTIVE_ON = (
+    "SELECT count(*) AS postings, count(DISTINCT company_id) AS companies, "
+    "count(DISTINCT city) AS cities FROM gold.fct_postings "
+    "WHERE NOT is_probable_duplicate AND first_seen_date <= CAST(? AS DATE) "
+    "AND (closed_date IS NULL OR closed_date > CAST(? AS DATE))"
+)
+
+
+def kpi_comparison(days: int) -> tuple[dict[str, int], dict[str, int] | None]:
+    """Open postings, companies hiring and cities on the newest *settled* day and `days` before.
+
+    A posting is closed only after it is missing from two consecutive snapshots, so on the newest
+    snapshot day itself closures are not known yet and the count would be too high. Both values
+    therefore use the day before the newest snapshot, rebuilt the same way (first seen on or before
+    the day, not closed by then), so they are comparable. The earlier value is None when the data
+    does not go back that far: the first day of data is a baseline."""
+    latest = load("SELECT max(newest_snapshot_date) AS d FROM gold.fct_snapshot_freshness")[
+        "d"
+    ].iloc[0]
+    first = load("SELECT min(first_seen_date) AS d FROM gold.fct_postings")["d"].iloc[0]
+    if latest is None or latest != latest or first is None or first != first:
+        return {"postings": 0, "companies": 0, "cities": 0}, None
+    latest_day = latest.date() if hasattr(latest, "date") else latest
+    first_day = first.date() if hasattr(first, "date") else first
+    settled: date = latest_day - timedelta(days=1)
+    ref_day: date = settled - timedelta(days=days)
+
+    def at(day: date) -> dict[str, int]:
+        row = load(_ACTIVE_ON, [day.isoformat(), day.isoformat()]).iloc[0]
+        return {k: int(row[k]) for k in ("postings", "companies", "cities")}
+
+    return at(settled), (at(ref_day) if ref_day >= first_day else None)
+
+
+def city_map(rows: Sequence[tuple[str, int]]) -> tuple[int, int]:
+    """Draw open postings per city on a dark CARTO basemap. Returns (postings drawn, postings left
+    off because the city has no coordinates in config/city_coords.yaml)."""
+    import pydeck as pdk
+
+    cfg = app_config().map
+    coords = load_city_coords(app_config())
+    points: dict[tuple[float, float], dict[str, Any]] = {}
+    left_off = 0
+    for city, n in rows:
+        if city in coords:
+            lat, lon = coords[city]
+            p = points.setdefault((lat, lon), {"city": city, "postings": 0, "lat": lat, "lon": lon})
+            p["postings"] += int(n)
+        else:
+            left_off += int(n)
+    data = list(points.values())
+    if not data:
+        st.caption("No mappable cities yet.")
+        return 0, left_off
+    top = max(p["postings"] for p in data)
+    for p in data:  # area-proportional dot size between the configured radii
+        p["radius"] = cfg.min_radius_px + (cfg.max_radius_px - cfg.min_radius_px) * (
+            (p["postings"] / top) ** 0.5
+        )
+    layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=data,
+        get_position="[lon, lat]",
+        get_radius="radius",
+        radius_units="pixels",
+        get_fill_color=[47, 109, 181, 190],
+        get_line_color=[255, 255, 255, 120],
+        line_width_min_pixels=1,
+        stroked=True,
+        pickable=True,
+    )
+    deck = pdk.Deck(
+        layers=[layer],
+        initial_view_state=pdk.ViewState(
+            latitude=cfg.initial_lat, longitude=cfg.initial_lon, zoom=cfg.initial_zoom
+        ),
+        map_provider="carto",
+        map_style=pdk.map_styles.CARTO_DARK,
+        tooltip={"text": "{city}: {postings} open postings"},
+    )
+    st.pydeck_chart(deck, height=420)
+    st.caption(cfg.attribution)
+    return sum(p["postings"] for p in data), left_off

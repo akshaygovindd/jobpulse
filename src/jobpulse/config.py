@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -443,3 +443,50 @@ class PublishConfig(_Strict):
 
 def load_publish(path: Path | None = None) -> PublishConfig:
     return PublishConfig.model_validate(_load_yaml(path or CONFIG_DIR / "publish.yaml"))
+
+
+class KpiConfig(_Strict):
+    delta_days: int = Field(ge=1)
+
+
+class MapConfig(_Strict):
+    coords_file: str = Field(pattern=r"^[A-Za-z0-9._-]+\.yaml$")
+    initial_lat: float = Field(ge=-90, le=90)
+    initial_lon: float = Field(ge=-180, le=180)
+    initial_zoom: float = Field(ge=0, le=20)
+    min_radius_px: int = Field(ge=1)
+    max_radius_px: int = Field(ge=1)
+    attribution: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _radii_ordered(self) -> MapConfig:
+        if self.max_radius_px < self.min_radius_px:
+            raise ValueError("max_radius_px must be at least min_radius_px")
+        return self
+
+
+class HomeConfig(_Strict):
+    top_skills: int = Field(ge=1)
+
+
+class AppConfig(_Strict):
+    kpi: KpiConfig
+    map: MapConfig
+    home: HomeConfig
+
+
+def load_app(path: Path | None = None) -> AppConfig:
+    return AppConfig.model_validate(_load_yaml(path or CONFIG_DIR / "app.yaml"))
+
+
+def load_city_coords(cfg: AppConfig | None = None) -> dict[str, tuple[float, float]]:
+    """City label -> (latitude, longitude), validated. Hand-entered reference points."""
+    cfg = cfg or load_app()
+    raw = cast("dict[str, list[float]]", _load_yaml(CONFIG_DIR / cfg.map.coords_file))
+    out: dict[str, tuple[float, float]] = {}
+    for label, pair in raw.items():
+        lat, lon = float(pair[0]), float(pair[1])
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            raise ValueError(f"coordinates out of range for {label!r}")
+        out[str(label)] = (lat, lon)
+    return out

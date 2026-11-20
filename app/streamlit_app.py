@@ -20,6 +20,13 @@ st.set_page_config(page_title="JobPulse", page_icon=":material/monitoring:", lay
 page = st.navigation(
     [
         st.Page(
+            "app_pages/home.py",
+            title="Home",
+            icon=":material/home:",
+            default=True,
+            help="What JobPulse is, with the headline numbers.",
+        ),
+        st.Page(
             "app_pages/market_overview.py",
             title="Market overview",
             icon=":material/public:",
@@ -58,5 +65,6 @@ page = st.navigation(
     ],
     position="top",
 )
-st.title(page.title, icon=page.icon)
+if page.title != "Home":  # Home has its own hero
+    st.title(page.title, icon=page.icon)
 page.run()
