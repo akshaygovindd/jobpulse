@@ -229,6 +229,20 @@ Built from silver and `extract.extractions`; it reads both and writes neither. A
 
 The **company** class (`dim_company.visa_evidence_class`) reflects **filing history only**: `HISTORICAL_EVIDENCE` when the employer has certified LCAs under a name matched at or above the threshold, else `UNKNOWN`. It is always shown with `n_lca_certified` (for example, 3 filings is thin evidence). A posting statement is about that posting, so it is **not** rolled up into the company class: `fct_postings.sponsorship_class` is `CONFIRMED_OFFERED` / `EXPLICITLY_UNAVAILABLE` when the posting says so (with `sponsorship_quote`) and takes precedence over LCA history for that posting; an extracted posting that says nothing, and any posting not yet extracted, falls back to the company's LCA evidence (for an unextracted posting this means "the employer has filings", not "the posting is silent"). `dim_company` carries `n_active_offered` / `n_active_not_offered` so the app shows them beside the company class. Only plain `CERTIFIED` cases count as LCA evidence. By-role LCA counts are **lower bounds**: the role family is a title keyword match with the extraction rules, so titles like "Software Engineer, Data" fall in `other`.
 
+## Streamlit app (`app/`, P5; deployment is P6)
+
+`app/streamlit_app.py` is the entry point (`st.navigation`, five pages in `app/app_pages/`: Market overview, Hiring trends, Salary, Visa intelligence, Pipeline health). The layout uses Streamlit's responsive containers, so columns stack on a phone.
+
+**Gold only, read only.** All reads go through `jobpulse.app_data.read_gold`: one `SELECT`/`WITH` statement, no comments, no write/DDL/attach/pragma/load keywords, and every table must be `gold.<name>` with the name in the `GOLD_TABLES` allow-list (the `gold_stage` working tables, bronze, silver, ops, extract and ref are refused). The connection is a read-only local DuckDB file (`JOBPULSE_APP_DB`) or MotherDuck with a **read-scaling token** (`MOTHERDUCK_READ_TOKEN`; never the write token). Pages never import duckdb. Pipeline Health reads the gold models over ops and LLM-call data (`fct_snapshot_freshness`, `fct_pipeline_runs`, `agg_ingest_status_daily`, `agg_data_quality`, `agg_llm_cost_daily`).
+
+**Cost control.** Every query is cached for one hour (`st.cache_data`, `app_ui.CACHE_TTL_S`); gold changes once a day, and a longer cache spends fewer MotherDuck compute-unit hours. Freshness age is computed against the current time at view, so the stale banner stays right between builds.
+
+**Rules the pages follow.** Advertised salary and LCA wages are separate tabs and are never blended; currencies are chosen, never converted; coverage is always shown. Visa views carry "Evidence from public filings, not a promise of sponsorship", show `n_certified` next to the company class, label by-role LCA counts as lower bounds, and quote the posting text for sponsorship statements. Sponsorship is a filter, never part of a match score.
+
+**Tests (`tests/unit/test_app.py`, run in CI with pytest).** `AppTest` renders every page against a gold fixture built by the real pipeline (with data, and with no extraction/visa/ops data), plus the stale-data banner, the visa disclaimer/quote/count, the separate salary tabs, a missing-data message, the read-only connection, the refused statements and a static check that app code names only allow-listed gold tables.
+
+Run locally: `JOBPULSE_APP_DB=path/to/warehouse.duckdb uv run streamlit run app/streamlit_app.py`.
+
 ## GitHub OIDC → AWS
 
 Trust policy on the ingest role (exact):

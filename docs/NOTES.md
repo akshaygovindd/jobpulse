@@ -679,3 +679,26 @@ Read-only queries against MotherDuck (token from `.env` inside Python; the scrip
 - `config/lca.yaml` `wage.plausible_annual_min/max` = 15,000 / 1,000,000 USD/year. An annualized offered wage outside it is NULL (`int_lca_certified.wage_excluded`), never repaired; `agg_lca_wage_by_soc_city` has `n_wage_excluded` and coverage = n_with_wage / n_certified. The filings still count as evidence.
 - `dim_company.visa_evidence_class` is filing history only (HISTORICAL_EVIDENCE / UNKNOWN); posting statements stay per posting with `n_active_offered` / `n_active_not_offered` on the company row. The app must show `n_lca_certified` next to the class and label by-role LCA counts as lower bounds. ARCHITECTURE.md updated.
 - Checks: `make check` green, pytest 351 passed. Not yet rebuilt on MotherDuck: run `uv run jobpulse build-gold` to apply (no reload of LCA needed).
+
+---
+
+## 2026-11-20 (evening): P5 Pipeline Health gold models and the Streamlit app
+
+**What was built**
+- Gold: `fct_snapshot_freshness`, `fct_pipeline_runs`, `agg_ingest_status_daily`, `agg_data_quality`, `agg_llm_cost_daily` (over `ops.*`, `bronze.snapshot_pointers`, `extract.llm_calls`), so the app reads gold only. `build-gold` creates empty ops tables if missing. Verified on the real data shape: 120 run rows, 506 board snapshots and 675 LLM calls all had unique grains.
+- `src/jobpulse/app_data.py`: the only door to the warehouse (single read-only SELECT, gold allow-list, read-only connection). `src/jobpulse/app_ui.py`: cached reads (1 h), wording, charts. `app/streamlit_app.py` + five pages. No new dependency (pandas and Streamlit's own charts).
+- 24 tests in `tests/unit/test_app.py` (AppTest on every page with and without data, stale banner, visa disclaimer and quote and counts, separate salary tabs, refused statements, read-only connection, gold-only static check). The bare-warehouse test caught a real bug (a company with no filings crashed the Visa page); fixed.
+- Ran the app headless against a fixture warehouse with the Streamlit agent API: all pages load, no warnings in the server log. **Not run against MotherDuck or your real data in a browser.**
+
+**Not proven yet / caveats**
+- Layout is responsive by construction (stacked columns, no fixed widths) but I have not looked at it on a phone or in a browser; the tests check content, not appearance.
+- `MOTHERDUCK_READ_TOKEN` path (read-scaling token) is untested against MotherDuck.
+- ROADMAP P5 boxes are not ticked yet: they need CI green on the push and your look at the pages; the employer-match precision box needs your labels. Gold needs `build-gold` on MotherDuck to pick up the new models and the wage range/class changes.
+- Pipeline Health will show a stale banner whenever the newest snapshot is older than 30 h (the real data currently ends 2026-11-19 13:18 US Eastern, so it may already show one).
+
+**Checks:** `make check` green, pytest 377 passed (3 live deselected).
+
+**Owner steps**
+1. `uv run jobpulse build-gold` against MotherDuck (applies the wage range, company class and health models).
+2. In MotherDuck create a read-scaling token, put `MOTHERDUCK_READ_TOKEN=...` in `.env` (never commit), then: `set -a` is not needed, the app reads the environment, so run `MOTHERDUCK_READ_TOKEN=<token> uv run streamlit run app/streamlit_app.py` in your own terminal and look at all five pages (phone width too: browser dev tools). Tell me what looks wrong.
+3. Label the employer-match sheet (see the earlier entry).
