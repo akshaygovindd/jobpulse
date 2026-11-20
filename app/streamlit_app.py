@@ -7,13 +7,21 @@ Reads the gold layer only (see src/jobpulse/app_data.py). Run locally:
 The public deploy sets JOBPULSE_GOLD_URL (the published gold file; no token of any kind).
 """
 
-import sys
 from pathlib import Path
 
 import streamlit as st
+from code_reload import purge_jobpulse_modules, refresh
 
-# On Streamlit Community Cloud the project is not pip-installed; make `jobpulse` importable.
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+@st.cache_resource
+def _code_state() -> dict[str, str]:
+    """Lives as long as the server process, across reruns and page reloads."""
+    return {}
+
+
+# On Streamlit Community Cloud the project is not pip-installed: make `jobpulse` importable (once)
+# and drop its modules from sys.modules when the files changed, so pages never see old code.
+refresh(Path(__file__).resolve().parents[1] / "src", _code_state())
 
 st.set_page_config(page_title="JobPulse", page_icon=":material/monitoring:", layout="wide")
 
@@ -67,4 +75,9 @@ page = st.navigation(
 )
 if page.title != "Home":  # Home has its own hero
     st.title(page.title, icon=page.icon)
-page.run()
+try:
+    page.run()
+except ImportError:
+    # Old modules were still loaded when the code changed. Drop them; the next load is clean.
+    purge_jobpulse_modules()
+    st.warning("The app was just updated. Please reload this page.", icon=":material/refresh:")

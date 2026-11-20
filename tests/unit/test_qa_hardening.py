@@ -5,6 +5,9 @@ from __future__ import annotations
 
 import contextlib
 import resource
+import subprocess
+import sys
+import textwrap
 import threading
 import zlib
 from pathlib import Path
@@ -88,7 +91,7 @@ def test_a_decompression_bomb_is_refused_without_a_memory_spike() -> None:
     with pytest.raises(ResumeError, match=r"could not be read|longer than"):
         read_resume("bomb.pdf", data, CFG)
     after = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    growth = (after - before) / (1 if "darwin" in __import__("sys").platform else 1024)
+    growth = (after - before) / (1 if "darwin" in sys.platform else 1024)
     assert growth < 150_000_000  # bytes; unprotected it is 300 MB and more
 
 
@@ -116,3 +119,36 @@ def test_an_unexpected_parser_exception_never_escapes(monkeypatch: pytest.Monkey
         read_resume("cv.pdf", pdf_bytes("x"), CFG)
     assert "secret-fragment" not in str(e.value)
     assert "could not be read" in str(e.value)
+
+
+def test_changed_source_files_drop_the_stale_jobpulse_modules(tmp_path: Path) -> None:
+    """Runs in a subprocess: it purges `jobpulse` modules, which must not touch this process."""
+    app_dir = Path(__file__).resolve().parents[2] / "app"
+    pkg = tmp_path / "src" / "jobpulse"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    (pkg / "helper.py").write_text("VALUE = 1\n")
+    script = textwrap.dedent(
+        f"""
+        import importlib, sys
+        from pathlib import Path
+        sys.path.insert(0, {str(app_dir)!r})
+        from code_reload import refresh
+        src = Path({str(tmp_path / "src")!r})
+        state = {{}}
+        assert refresh(src, state) is False
+        assert refresh(src, state) is False
+        assert sys.path.count(str(src)) == 1
+        assert importlib.import_module("jobpulse.helper").VALUE == 1
+        (src / "jobpulse" / "helper.py").write_text("VALUE = 2\\nNEW_NAME = 3\\n")
+        assert refresh(src, state) is True
+        assert "jobpulse.helper" not in sys.modules
+        from jobpulse.helper import NEW_NAME
+        assert NEW_NAME == 3
+        print("ok")
+        """
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, check=False
+    )
+    assert out.stdout.strip() == "ok", out.stderr
