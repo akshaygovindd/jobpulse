@@ -120,46 +120,91 @@ MATCH_LABELS = {
     "normalized": "Name match (punctuation and Inc/LLC ignored)",
 }
 ACRONYMS = {"ai": "AI", "ml": "ML", "bi": "BI", "llm": "LLM", "usd": "USD", "lca": "LCA"}
-# One chart style for the whole app. Blue and slate only: colour never implies a verdict (no
-# red/green). Every chart goes through `_chart`, which applies CHART_CONFIG, so changing the look
-# means editing this block (and `.streamlit/config.toml` for the Streamlit theme).
-PRIMARY = "#2F6DB5"  # same blue as the Streamlit theme's primaryColor
-# Series colours: the first two are far apart in lightness (navy and light blue, about 6:1) and
-# the rest differ in hue, so a legend stays readable; lines also differ in dash pattern.
-NEUTRAL = ["#0B2545", "#6BA6E6", "#9AA5B1", "#2F6DB5"]
+# One look for the whole app: a dark theme, one accent colour per page, and one chart template.
+# Every colour lives in this block (and `.streamlit/config.toml` for the Streamlit theme); the CSS
+# file `app/style.css` only uses the variables injected from here. Every chart goes through
+# `_chart`, which applies CHART_CONFIG. Text colours are checked at 4.5:1 or better on the page and
+# card backgrounds by tests/unit/test_app_style.py.
+PRIMARY = "#2F6FD0"  # Streamlit's primaryColor (buttons, selected tabs): white text reads at 4.8:1
+BG = "#0B0F17"
+SURFACE = "#131A28"  # cards
+SURFACE_2 = "#1B2434"  # raised parts of a card: chips, avatars, hover
+BORDER = "#2A3548"
+TEXT = "#E8ECF4"
+MUTED = "#A3AFC4"  # captions, axis labels, value labels
+LINK = "#8FB8FF"
+HAVE = "#6EE7A0"  # chips: a skill you have (the check icon says it too, colour is not the only cue)
+MISSING = "#FF8A8A"  # chips: a skill you lack
+ACCENTS = {  # one per page; also the colour of that page's chart marks
+    "Home": "#7FB0FF",
+    "Market overview": "#2DD4BF",
+    "Hiring trends": "#B79CFF",
+    "Salary": "#FBBF24",
+    "Visa intelligence": "#F9A8D4",
+    "Resume match": "#FDA974",
+    "Pipeline health": "#A9B8CF",
+}
+DEFAULT_ACCENT = ACCENTS["Home"]
+# Series colours: the first two are far apart in lightness (about 6:1) and the rest differ in hue,
+# so a legend stays readable; lines also differ in dash pattern.
+NEUTRAL = ["#F2F5FA", "#4A7FE8", "#9AA5B1", "#2DD4BF"]
 # Five discrete steps (the scale is quantized). The first three are light enough for dark text and
 # the last two dark enough for white text, both at 4.5:1 or better, so every cell label is legible.
 HEATMAP_RAMP = ["#DCE9F7", "#9ECAE1", "#6BAED6", "#2F6DB5", "#08306B"]
 TEXT_ON_LIGHT = "#1B2A3A"
 TEXT_ON_DARK = "#FFFFFF"
-# Bar-end value labels: no single slate passes 4.5:1 on both themes, so pick by theme.
-LABEL_COLOR_LIGHT = "#4A5A70"  # on white: 6.9:1
-LABEL_COLOR_DARK = "#A9B6C9"  # on the dark theme background: 8:1
 CHART_CONFIG: dict[str, Any] = {
-    "font": "sans-serif",
+    "font": "Inter, sans-serif",
+    "background": None,  # transparent: the card or page behind shows through
     "view": {"stroke": None},
     "axis": {
         "labelOverlap": False,  # never hide a category label
         "labelFontSize": 12,
+        "labelColor": MUTED,
         "titleFontSize": 12,
         "titleFontWeight": "normal",
-        "gridOpacity": 0.25,
-        "domainOpacity": 0.4,
-        "tickOpacity": 0.4,
+        "titleColor": MUTED,
+        "gridColor": BORDER,  # soft gridlines
+        "gridOpacity": 0.6,
+        "domainColor": BORDER,
+        "tickColor": BORDER,
     },
-    "legend": {"labelFontSize": 12, "titleFontSize": 12},
-    "bar": {"cornerRadiusEnd": 2},
+    "legend": {"labelFontSize": 12, "titleFontSize": 12, "labelColor": MUTED, "titleColor": MUTED},
+    "bar": {"cornerRadiusEnd": 3},
     "line": {"strokeWidth": 2},
 }
 
 
+def accent() -> str:
+    """The current page's accent colour (set once per run by `set_page_accent`)."""
+    return str(st.session_state.get("_accent", DEFAULT_ACCENT))
+
+
+def set_page_accent(page_title: str) -> str:
+    color = ACCENTS.get(page_title, DEFAULT_ACCENT)
+    st.session_state["_accent"] = color
+    return color
+
+
+def theme_css_variables(page_accent: str) -> str:
+    """`:root{...}` for app/style.css, built from the palette above (the one source of colour)."""
+    pairs = {
+        "bg": BG,
+        "surface": SURFACE,
+        "surface-2": SURFACE_2,
+        "border": BORDER,
+        "text": TEXT,
+        "muted": MUTED,
+        "have": HAVE,
+        "missing": MISSING,
+        "accent": page_accent,
+    }
+    return ":root{" + ";".join(f"--{k}:{v}" for k, v in pairs.items()) + "}"
+
+
 def label_color() -> str:
-    """Value-label colour for the viewer's theme (light unless Streamlit says the theme is dark)."""
-    try:
-        dark = st.context.theme.type == "dark"
-    except Exception:  # an old Streamlit, or no theme information: assume light
-        dark = False
-    return LABEL_COLOR_DARK if dark else LABEL_COLOR_LIGHT
+    """Value-label colour (the theme is dark and locked)."""
+    return MUTED
 
 
 def human(value: Any, mapping: dict[str, str] | None = None) -> str:
@@ -234,6 +279,10 @@ def _chart(data: Any, spec: dict[str, Any], height: int) -> None:
     spec = {
         "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
         "height": height,
+        # Axes and padding count inside the container's width, so long category labels on the left
+        # and value labels past the longest bar are never clipped on a narrow screen.
+        "autosize": {"type": "fit", "contains": "padding"},
+        "padding": {"top": 8, "left": 10, "right": 36, "bottom": 4},
         "config": CHART_CONFIG,
         **spec,
     }
@@ -278,7 +327,19 @@ def bar(
         "axis": {"title": val, "format": "~s"},
     }
     cat_ch, val_ch = ("y", "x") if horizontal else ("x", "y")
-    bar_layer = {"mark": {"type": "bar", "color": PRIMARY}}
+    # hovering a bar lights it up (the others dim a little); the tooltip names the exact value
+    bar_layer = {
+        "params": [
+            {
+                "name": "hover",
+                "select": {"type": "point", "on": "mouseover", "clear": "mouseout"},
+            }
+        ],
+        "mark": {"type": "bar", "color": accent()},
+        "encoding": {
+            "opacity": {"condition": {"param": "hover", "empty": False, "value": 1}, "value": 0.8}
+        },
+    }
     text_layer = {
         "mark": {
             "type": "text",
@@ -302,6 +363,44 @@ def bar(
         },
     }
     _chart(data, spec, max(120, 30 * len(data) + 40) if horizontal else 280)
+
+
+def mini_bars(data: Any, *, x: str, y: str, height: int = 90) -> None:
+    """A small bar chart for a card (for example filings per fiscal year): value labels above the
+    bars, years underneath, a tooltip on hover. Same template as every other chart."""
+    if data is None or len(data) == 0:
+        return
+    data, names = _titles(data)
+    cat, val = names.get(x, x), names.get(y, y)
+    spec = {
+        "padding": {"top": 16, "left": 4, "right": 4, "bottom": 4},  # room for the value labels
+        "encoding": {
+            "x": {
+                "field": cat,
+                "type": "ordinal",
+                "axis": {"title": None, "labelAngle": 0, "grid": False},
+            },
+            "y": {"field": val, "type": "quantitative", "axis": None},
+            "tooltip": [
+                {"field": cat, "type": "ordinal"},
+                {"field": val, "type": "quantitative", "format": ",.0f"},
+            ],
+        },
+        "layer": [
+            {"mark": {"type": "bar", "color": accent(), "size": 22}},
+            {
+                "mark": {
+                    "type": "text",
+                    "baseline": "bottom",
+                    "dy": -2,
+                    "fontSize": 11,
+                    "color": label_color(),
+                },
+                "encoding": {"text": {"field": val, "type": "quantitative", "format": ",.0f"}},
+            },
+        ],
+    }
+    _chart(data, spec, height)
 
 
 def date_chart(
@@ -351,7 +450,7 @@ def date_chart(
         }
         enc["tooltip"].insert(1, {"field": series, "type": "nominal"})
     else:
-        mark["color"] = PRIMARY
+        mark["color"] = accent()
     _chart(data, {"mark": mark, "encoding": enc}, 280)
 
 
@@ -391,7 +490,7 @@ def salary_chart(data: Any) -> None:
         },
         "layer": [
             {
-                "mark": {"type": "rect", "stroke": TEXT_ON_DARK, "strokeWidth": 1},
+                "mark": {"type": "rect", "stroke": BG, "strokeWidth": 1},
                 "encoding": {
                     "color": {
                         "field": "Median",
@@ -414,7 +513,8 @@ def salary_chart(data: Any) -> None:
             },
         ],
     }
-    _chart(data, spec, max(160, 44 * data["Role family"].nunique() + 90))
+    with st.container(key="wide_chart"):  # scrolls sideways on a phone (see app/style.css)
+        _chart(data, spec, max(160, 44 * data["Role family"].nunique() + 90))
 
 
 def salary_range(low: Any, high: Any, currency: Any) -> str:
@@ -519,6 +619,27 @@ def kpi_comparison(days: int) -> tuple[dict[str, int], dict[str, int] | None]:
     return at(settled), (at(ref_day) if ref_day >= first_day else None)
 
 
+def kpi_series(days: int = 7) -> list[int] | None:
+    """Open postings on each of the last `days` settled days, oldest first, for a sparkline. None
+    until the data goes back at least three days (a line needs a few points to mean anything)."""
+    latest = load("SELECT max(newest_snapshot_date) AS d FROM gold.fct_snapshot_freshness")[
+        "d"
+    ].iloc[0]
+    first = load("SELECT min(first_seen_date) AS d FROM gold.fct_postings")["d"].iloc[0]
+    if is_missing(latest) or is_missing(first):
+        return None
+    latest_day = latest.date() if hasattr(latest, "date") else latest
+    first_day = first.date() if hasattr(first, "date") else first
+    settled = latest_day - timedelta(days=1)
+    wanted = [settled - timedelta(days=i) for i in range(days - 1, -1, -1)]
+    values = [
+        int(load(_ACTIVE_ON, [d.isoformat(), d.isoformat()]).iloc[0]["postings"])
+        for d in wanted
+        if d >= first_day
+    ]
+    return values if len(values) >= 3 else None
+
+
 def map_points(
     rows: Sequence[tuple[str, int]],
     coords: dict[str, tuple[float, float]],
@@ -544,7 +665,7 @@ def map_points(
     return data, left_off
 
 
-def city_map(rows: Sequence[tuple[str, int]]) -> tuple[int, int]:
+def city_map(rows: Sequence[tuple[str, int]], height: int = 420) -> tuple[int, int]:
     """Draw open postings per city on a dark CARTO basemap. Returns (postings drawn, postings left
     off because the city has no coordinates in config/city_coords.yaml)."""
     import pydeck as pdk
@@ -575,7 +696,7 @@ def city_map(rows: Sequence[tuple[str, int]]) -> tuple[int, int]:
         map_style=pdk.map_styles.CARTO_DARK,
         tooltip={"text": "{city}: {postings} open postings"},
     )
-    st.pydeck_chart(deck, height=420)
+    st.pydeck_chart(deck, height=height)
     st.caption(cfg.attribution)
     return sum(p["postings"] for p in data), left_off
 

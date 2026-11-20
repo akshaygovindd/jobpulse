@@ -73,6 +73,16 @@ page = st.navigation(
     ],
     position="top",
 )
+try:
+    from jobpulse.app_ui import set_page_accent, theme_css_variables
+
+    # The one stylesheet (app/style.css) plus the palette as CSS variables, with this page's accent.
+    st.html(
+        f"<style>{theme_css_variables(set_page_accent(page.title))}\n"
+        f"{(Path(__file__).parent / 'style.css').read_text()}</style>"
+    )
+except ImportError:
+    pass  # old modules still loaded; handled below, with the page itself
 if page.title != "Home":  # Home has its own hero
     st.title(page.title, icon=page.icon)
 if page.title != "Pipeline health":  # that page has its own, more detailed freshness check

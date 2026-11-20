@@ -137,35 +137,43 @@ with advertised_tab:
             shown = table.copy()
             for col in ("P25", "Median", "P75"):
                 shown[col] = shown[col].map(lambda v: dash(v, "${:,.0f}K"))  # "—", never "None"
-            st.dataframe(
-                shown[
-                    [
-                        "Role family",
-                        "Seniority",
-                        "n_postings",
-                        "n_with_salary",
-                        "coverage_pct",
-                        "n_annualized",
-                        "P25",
-                        "Median",
-                        "P75",
-                    ]
-                ],
-                hide_index=True,
-                column_config={
-                    "Role family": st.column_config.TextColumn(width="medium"),
-                    "Seniority": st.column_config.TextColumn(width="small"),
-                    "n_postings": st.column_config.NumberColumn("Postings", format="%d"),
-                    "n_with_salary": st.column_config.NumberColumn("With a salary", format="%d"),
-                    "coverage_pct": st.column_config.NumberColumn(
-                        "Coverage", format="%.0f%%", help="Share of postings that state a salary."
-                    ),
-                    "n_annualized": st.column_config.NumberColumn(
-                        "Yearly figure known", format="%d"
-                    ),
-                },
-                alt="Advertised yearly salary percentiles by role family and seniority",
-            )
+            with st.expander(
+                "Show data: salary percentiles",
+                icon=":material/table:",
+            ):
+                st.dataframe(
+                    shown[
+                        [
+                            "Role family",
+                            "Seniority",
+                            "n_postings",
+                            "n_with_salary",
+                            "coverage_pct",
+                            "n_annualized",
+                            "P25",
+                            "Median",
+                            "P75",
+                        ]
+                    ],
+                    hide_index=True,
+                    column_config={
+                        "Role family": st.column_config.TextColumn(width="medium"),
+                        "Seniority": st.column_config.TextColumn(width="small"),
+                        "n_postings": st.column_config.NumberColumn("Postings", format="%d"),
+                        "n_with_salary": st.column_config.NumberColumn(
+                            "With a salary", format="%d"
+                        ),
+                        "coverage_pct": st.column_config.NumberColumn(
+                            "Coverage",
+                            format="%.0f%%",
+                            help="Share of postings that state a salary.",
+                        ),
+                        "n_annualized": st.column_config.NumberColumn(
+                            "Yearly figure known", format="%d"
+                        ),
+                    },
+                    alt="Advertised yearly salary percentiles by role family and seniority",
+                )
             st.caption("Percentiles appear only where at least five yearly salaries exist.")
 
     st.subheader("Internship pay (as posted)")
@@ -184,15 +192,16 @@ with advertised_tab:
         intern["Pay period"] = intern["period"].map(lambda v: f"per {v}")
         for col, name in (("low", "Lowest"), ("mid", "Median midpoint"), ("high", "Highest")):
             intern[name] = intern[col].map(lambda v: dash(v, "{:,.0f}"))
-        st.dataframe(
-            intern[["currency", "Pay period", "n", "Lowest", "Median midpoint", "Highest"]],
-            hide_index=True,
-            column_config={
-                "currency": st.column_config.TextColumn("Currency", width="small"),
-                "n": st.column_config.NumberColumn("Postings", format="%d"),
-            },
-            alt="Internship pay in the unit it was posted",
-        )
+        with st.expander("Show data: internship pay", icon=":material/table:"):
+            st.dataframe(
+                intern[["currency", "Pay period", "n", "Lowest", "Median midpoint", "Highest"]],
+                hide_index=True,
+                column_config={
+                    "currency": st.column_config.TextColumn("Currency", width="small"),
+                    "n": st.column_config.NumberColumn("Postings", format="%d"),
+                },
+                alt="Internship pay in the unit it was posted",
+            )
         st.caption(
             "Shown in the unit and currency of the posting, never converted to a yearly figure: "
             "an hourly or monthly internship rate is not a yearly salary."
@@ -237,32 +246,36 @@ with lca_tab:
         wages = wages if show_all else wages[wages["Median"].notna()]
         for col in ("P25", "Median", "P75"):
             wages[col] = wages[col].map(lambda v: dash(v, "${:,.0f}K"))
-        st.dataframe(
-            wages[
-                [
-                    "Role family",
-                    "State",
-                    "City",
-                    "n_certified",
-                    "n_with_wage",
-                    "n_wage_excluded",
-                    "coverage_pct",
-                    "P25",
-                    "Median",
-                    "P75",
-                ]
-            ],
-            hide_index=True,
-            column_config={
-                "Role family": st.column_config.TextColumn(width="medium"),
-                "State": st.column_config.TextColumn(width="small"),
-                "City": st.column_config.TextColumn(width="medium"),
-                "n_certified": st.column_config.NumberColumn("Certified filings", format="%d"),
-                "n_with_wage": st.column_config.NumberColumn("With a usable wage", format="%d"),
-                "n_wage_excluded": st.column_config.NumberColumn(
-                    "Excluded as implausible", format="%d"
-                ),
-                "coverage_pct": st.column_config.NumberColumn("Coverage", format="%.0f%%"),
-            },
-            alt="Offered wages on certified LCAs by role family and worksite",
-        )
+        with st.expander(
+            "Show data: LCA wages",
+            icon=":material/table:",
+        ):
+            st.dataframe(
+                wages[
+                    [
+                        "Role family",
+                        "State",
+                        "City",
+                        "n_certified",
+                        "n_with_wage",
+                        "n_wage_excluded",
+                        "coverage_pct",
+                        "P25",
+                        "Median",
+                        "P75",
+                    ]
+                ],
+                hide_index=True,
+                column_config={
+                    "Role family": st.column_config.TextColumn(width="medium"),
+                    "State": st.column_config.TextColumn(width="small"),
+                    "City": st.column_config.TextColumn(width="medium"),
+                    "n_certified": st.column_config.NumberColumn("Certified filings", format="%d"),
+                    "n_with_wage": st.column_config.NumberColumn("With a usable wage", format="%d"),
+                    "n_wage_excluded": st.column_config.NumberColumn(
+                        "Excluded as implausible", format="%d"
+                    ),
+                    "coverage_pct": st.column_config.NumberColumn("Coverage", format="%.0f%%"),
+                },
+                alt="Offered wages on certified LCAs by role family and worksite",
+            )

@@ -35,7 +35,7 @@ def test_every_chart_goes_through_the_shared_helper() -> None:
     assert ui.count("st.vega_lite_chart(") == 1
 
 
-def test_chart_specs_carry_the_shared_config_and_primary_blue() -> None:
+def test_chart_specs_carry_the_shared_config_and_the_page_accent() -> None:
     def script() -> None:
         import pandas as pd
 
@@ -48,20 +48,53 @@ def test_chart_specs_carry_the_shared_config_and_primary_blue() -> None:
     assert not at.exception, at.exception
     charts = at.get("vega_lite_chart")
     assert len(charts) == 2
-    from jobpulse.app_ui import CHART_CONFIG, PRIMARY
+    from jobpulse.app_ui import CHART_CONFIG, DEFAULT_ACCENT
 
     for chart in charts:
         spec = json.loads(chart.proto.spec)
         assert spec["config"] == CHART_CONFIG
-        assert PRIMARY in json.dumps(spec)
+        assert DEFAULT_ACCENT in json.dumps(spec)
+        assert spec["autosize"]["contains"] == "padding"  # labels are never clipped on a phone
 
 
-def test_streamlit_theme_is_blue() -> None:
-    from jobpulse.app_ui import PRIMARY
+def test_streamlit_theme_is_dark_and_matches_the_palette() -> None:
+    from jobpulse import app_ui as ui
 
     theme = tomllib.loads((ROOT / ".streamlit/config.toml").read_text())["theme"]
-    assert theme["primaryColor"] == PRIMARY
-    assert theme["linkColor"] == PRIMARY
+    assert theme["base"] == "dark"  # locked: no light/dark sections, so no appearance toggle
+    assert "light" not in theme
+    assert "dark" not in theme
+    for key, value in {
+        "primaryColor": ui.PRIMARY,
+        "linkColor": ui.LINK,
+        "backgroundColor": ui.BG,
+        "secondaryBackgroundColor": ui.SURFACE,
+        "textColor": ui.TEXT,
+        "borderColor": ui.BORDER,
+    }.items():
+        assert theme[key].upper() == value.upper(), key
+    assert theme["font"].startswith("Inter:")
+    assert set(theme["chartCategoricalColors"]) == {
+        v for v in ui.ACCENTS.values() if v != ui.ACCENTS["Pipeline health"]
+    }
+
+
+def test_the_one_stylesheet_has_no_colour_literals_and_every_page_has_an_accent() -> None:
+    css = (ROOT / "app/style.css").read_text()
+    assert not HEX.findall(css), HEX.findall(css)  # colours come from the palette variables
+    assert len(list((ROOT / "app").glob("*.css"))) == 1
+    from jobpulse import app_ui as ui
+
+    titles = {
+        "Home", "Market overview", "Hiring trends", "Salary",
+        "Visa intelligence", "Resume match", "Pipeline health",
+    }  # fmt: skip
+    assert set(ui.ACCENTS) == titles
+    assert len(set(ui.ACCENTS.values())) == len(titles)  # one accent per page, none shared
+    variables = ui.theme_css_variables(ui.ACCENTS["Salary"])
+    assert "--accent:" + ui.ACCENTS["Salary"] in variables
+    for name in re.findall(r"var\(--([a-z0-9-]+)\)", css):
+        assert name == "hue" or f"--{name}:" in variables, name  # --hue is set per avatar
 
 
 # ---- Home, key insights and KPI deltas (AppTest on a fixture warehouse) -----------------------
@@ -461,18 +494,45 @@ def _contrast(a: str, b: str) -> float:
     return (hi + 0.05) / (lo + 0.05)
 
 
-def test_chart_text_and_series_colours_meet_contrast_targets() -> None:
+def test_text_colours_meet_contrast_targets_on_every_background() -> None:
     from jobpulse import app_ui as ui
 
-    # value labels on the page background of each theme (white; Streamlit's dark #0E1117)
-    assert _contrast(ui.LABEL_COLOR_LIGHT, "#FFFFFF") >= 4.5
-    assert _contrast(ui.LABEL_COLOR_DARK, "#0E1117") >= 4.5
+    backgrounds = [ui.BG, ui.SURFACE, ui.SURFACE_2]
+    texts = {
+        "text": ui.TEXT, "muted (captions, axis and value labels)": ui.MUTED, "link": ui.LINK,
+        "have chip": ui.HAVE, "missing chip": ui.MISSING,
+        **{f"accent {k}": v for k, v in ui.ACCENTS.items()},
+    }  # fmt: skip
+    for name, color in texts.items():
+        for bg in backgrounds:
+            assert _contrast(color, bg) >= 4.5, (name, color, bg)
+    assert _contrast("#FFFFFF", ui.PRIMARY) >= 4.5  # button labels
     # heatmap: each of the five steps has a text colour at 4.5:1 or better
     for i, step in enumerate(ui.HEATMAP_RAMP):
         text = ui.TEXT_ON_LIGHT if i < 3 else ui.TEXT_ON_DARK
         assert _contrast(step, text) >= 4.5, (i, step)
-    # the two first series colours are far apart in lightness
+    # the two first series colours are far apart in lightness, and chart marks show on the page
     assert _contrast(ui.NEUTRAL[0], ui.NEUTRAL[1]) >= 3
+    for color in [*ui.ACCENTS.values(), *ui.NEUTRAL]:
+        assert _contrast(color, ui.BG) >= 3, color
+
+
+def test_avatar_initials_are_readable_for_every_hue() -> None:
+    import colorsys
+
+    def rgb(h: int, s: float, light: float) -> str:
+        r, g, b = colorsys.hls_to_rgb(h / 360, light, s)
+        return "#" + "".join(f"{round(c * 255):02X}" for c in (r, g, b))
+
+    css = (ROOT / "app/style.css").read_text()
+    bg = re.search(r"background: hsl\(var\(--hue\) (\d+)% (\d+)%\)", css)
+    fg = re.search(r"color: hsl\(var\(--hue\) (\d+)% (\d+)%\)", css)
+    assert bg
+    assert fg
+    for hue in range(0, 360, 5):
+        a = rgb(hue, int(bg[1]) / 100, int(bg[2]) / 100)
+        b = rgb(hue, int(fg[1]) / 100, int(fg[2]) / 100)
+        assert _contrast(a, b) >= 4.5, hue
 
 
 def test_market_overview_filters_apply_to_the_numbers_and_say_what_they_cover(
@@ -524,3 +584,53 @@ def test_interns_are_out_of_the_yearly_salary_view_and_shown_as_posted(
     assert list(interns["n"]) == [2]
     assert list(interns["Lowest"]) == ["40"]
     assert list(interns["Highest"]) == ["50"]
+
+
+# ---- the visual pass: hero, sparkline, map, cards, accents, expanders ---------------------------
+
+
+def test_home_has_a_hero_kpi_icons_a_sparkline_and_the_map(
+    history_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    at = _page(history_db, monkeypatch, None)
+    text = _text(at)
+    assert "Daily job-market intelligence for data and AI roles" in text
+    assert "Data through" in text
+    opens = next(m for m in at.metric if m.label == "Open postings")
+    assert opens.proto.icon  # every KPI card has an icon
+    assert all(m.proto.icon for m in at.metric)
+    # three settled days of history (Nov 10 to 12): a sparkline, taken from the same query as the
+    # delta; the other cards have no history and draw none
+    assert list(opens.proto.chart_data) == [3.0, 3.0, 4.0]
+    assert all(not m.proto.chart_data for m in at.metric if m.label != "Open postings")
+    assert at.get("deck_gl_json_chart")  # the postings map is on Home
+    assert any("not a promise of sponsorship" in str(i.value) for i in at.info)  # disclaimer kept
+
+
+def test_each_page_gets_its_own_accent_and_the_shared_stylesheet(
+    history_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jobpulse.app_ui import ACCENTS, theme_css_variables
+
+    seen = {}
+    for title, page in (("Home", None), ("Salary", "app_pages/salary.py")):
+        at = _page(history_db, monkeypatch, page)
+        style = next(h.proto.body for h in at.get("html") if "<style>" in h.proto.body)
+        assert theme_css_variables(ACCENTS[title]) in style
+        assert ".st-key-hero" in style  # the one stylesheet, not a copy per page
+        seen[title] = at.session_state["_accent"]
+    assert seen == {"Home": ACCENTS["Home"], "Salary": ACCENTS["Salary"]}
+
+
+def test_visa_page_has_company_cards_and_keeps_raw_tables_in_expanders(
+    history_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    at = _page(history_db, monkeypatch, "app_pages/visa.py")
+    avatars = [h.proto.body for h in at.get("html") if "jp-avatar" in h.proto.body]
+    assert len(avatars) >= 2  # one per company card, one in the lookup
+    assert any(m.label == "Certified filings" for m in at.metric)
+    labels = [e.label for e in at.expander]
+    assert any(label.startswith("Show data") for label in labels), labels
+    # the data tables are inside expanders, not loose on the page
+    assert not [d for d in at.main if getattr(d, "type", "") == "arrow_data_frame"]
+    assert any("not a promise of sponsorship" in str(i.value) for i in at.info)

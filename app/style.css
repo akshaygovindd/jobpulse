@@ -1,0 +1,53 @@
+/* The only custom CSS in the app. Colours come from the variables that app_ui.theme_css_variables()
+   injects (one palette, in src/jobpulse/app_ui.py), so there are no colour literals here. */
+
+/* A soft glow in the page's accent colour behind the title. */
+.stApp {
+  background:
+    radial-gradient(900px 360px at 8% -60px, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%),
+    var(--bg);
+}
+
+/* Section rhythm: a little more air above every section heading. */
+[data-testid="stHeading"] h3 { margin-top: 1.25rem; }
+
+/* Home hero. */
+.st-key-hero {
+  padding: 2rem 2.25rem 1.75rem;
+  border: 1px solid var(--border);
+  border-radius: 1.25rem;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 24%, var(--surface)) 0%, var(--surface) 62%);
+}
+.st-key-hero h1 { font-size: 2.75rem; margin-bottom: 0.25rem; }
+.st-key-hero h3 { margin-top: 0; font-weight: 500; color: var(--text); }
+
+/* Cards (bordered containers whose key starts with card_). */
+[class*="st-key-card_"] {
+  background: var(--surface);
+  border-radius: 1rem;
+  transition: border-color 0.15s ease;
+}
+[class*="st-key-card_"]:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+
+/* Company avatar: the hue comes from the company name. */
+.jp-avatar {
+  width: 2.5rem; height: 2.5rem; flex: none;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  font-weight: 700; font-size: 0.95rem; letter-spacing: 0.02em;
+  background: hsl(var(--hue) 55% 26%);
+  color: hsl(var(--hue) 90% 90%);
+}
+
+/* The salary heatmap needs room for nine columns of '$276K': below that width it scrolls sideways. */
+.st-key-wide_chart { overflow-x: auto; }
+.st-key-wide_chart [data-testid="stVegaLiteChart"] { min-width: 640px; }
+
+/* Phones: tighter hero and page padding. Columns and horizontal containers already stack and wrap. */
+@media (max-width: 640px) {
+  .st-key-hero { padding: 1.25rem 1.1rem; border-radius: 1rem; }
+  .st-key-hero h1 { font-size: 2rem; }
+  .st-key-hero h3 { font-size: 1.1rem; }
+  [data-testid="stMainBlockContainer"] { padding-left: 1rem; padding-right: 1rem; }
+}

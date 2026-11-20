@@ -3,6 +3,7 @@ from typing import Any
 
 import streamlit as st
 
+from jobpulse.app_components import match_card
 from jobpulse.app_ui import (
     REMOTE_LABELS,
     clean,
@@ -276,6 +277,8 @@ pool = collapse_locations(
             "apply_url": clean(r.apply_url),
             "visa": CLASS_LABELS.get(str(r.sponsorship_class), "Unknown")
             + f" ({int(r.n_lca_certified)} filings)",
+            "visa_class": str(r.sponsorship_class),
+            "filings": int(r.n_lca_certified),
             "salary": _salary(r),
         },
     )
@@ -323,6 +326,71 @@ def _where(m: Match) -> str:
     return places[0] if len(places) == 1 else f"{len(places)} locations: " + "; ".join(places)
 
 
+def _table(rows: list[dict[str, Any]]) -> None:
+    st.dataframe(
+        rows,
+        hide_index=True,
+        column_config={
+            "Match": st.column_config.ProgressColumn(
+                "Match", format="%d%%", min_value=0, max_value=100, width="small"
+            ),
+            "Company": st.column_config.TextColumn(width="small"),
+            "Title": st.column_config.TextColumn(width="large"),
+            "Location": st.column_config.TextColumn(width="medium"),
+            "Remote": st.column_config.TextColumn(width="small"),
+            "Matched skills": st.column_config.TextColumn(width="large"),
+            "Top missing skills": st.column_config.TextColumn(width="large"),
+            "Visa evidence": st.column_config.TextColumn(width="medium"),
+            "Advertised salary": st.column_config.TextColumn(width="medium"),
+            "Apply": st.column_config.LinkColumn("Apply", display_text="Open", width="small"),
+        },
+    )
+
+
+# Short wording, colour and icon for the visa evidence badge. Blue is evidence, gray is "nothing
+# found", orange is a posting that says no: none of it is part of the match score.
+VISA_BADGE = {
+    "CONFIRMED_OFFERED": ("Posting offers sponsorship", "blue", ":material/verified:"),
+    "EXPLICITLY_UNAVAILABLE": ("Posting: no sponsorship", "orange", ":material/block:"),
+    "HISTORICAL_EVIDENCE": ("Company has certified filings", "blue", ":material/verified:"),
+    "UNKNOWN": ("No matching filings found", "gray", ":material/help:"),
+}
+PAGE_SIZE = 10
+SHOWN = "resume_shown"
+
+
+def _show_more() -> None:
+    st.session_state[SHOWN] = st.session_state.get(SHOWN, PAGE_SIZE) + PAGE_SIZE
+
+
+shown = st.session_state.get(SHOWN, PAGE_SIZE)
+for rank, m in enumerate(matches[:shown]):
+    info = m.posting.info
+    label, color, icon = VISA_BADGE.get(info["visa_class"], VISA_BADGE["UNKNOWN"])
+    match_card(
+        key=str(rank),
+        company=info["company"],
+        title=info["title"],
+        score=m.score,
+        matched=[skill_label(v) for v in m.matched],
+        missing=[skill_label(v) for v in m.missing],
+        location=_where(m),
+        remote=human(info["remote"], REMOTE_LABELS),
+        salary=info["salary"],
+        visa_label=label,
+        visa_color=color,
+        visa_icon=icon,
+        filings=info["filings"],
+        apply_url=info["apply_url"],
+    )
+if len(matches) > shown:
+    st.button(
+        f"Show {min(PAGE_SIZE, len(matches) - shown)} more matches",
+        icon=":material/expand_more:",
+        on_click=_show_more,
+        key="resume_more",
+    )
+
 rows = [
     {
         "Match": round(100 * m.score),
@@ -338,24 +406,8 @@ rows = [
     }
     for m in matches
 ]
-st.dataframe(
-    rows,
-    hide_index=True,
-    column_config={
-        "Match": st.column_config.ProgressColumn(
-            "Match", format="%d%%", min_value=0, max_value=100, width="small"
-        ),
-        "Company": st.column_config.TextColumn(width="small"),
-        "Title": st.column_config.TextColumn(width="large"),
-        "Location": st.column_config.TextColumn(width="medium"),
-        "Remote": st.column_config.TextColumn(width="small"),
-        "Matched skills": st.column_config.TextColumn(width="large"),
-        "Top missing skills": st.column_config.TextColumn(width="large"),
-        "Visa evidence": st.column_config.TextColumn(width="medium"),
-        "Advertised salary": st.column_config.TextColumn(width="medium"),
-        "Apply": st.column_config.LinkColumn("Apply", display_text="Open", width="small"),
-    },
-)
+with st.expander("Show as table", icon=":material/table:"):
+    _table(rows)
 st.caption(
     "Advertised salary is what the posting states, converted to a yearly figure where the period "
     "is known; hourly and monthly pay is a yearly equivalent, not a salary. It is not the wage "

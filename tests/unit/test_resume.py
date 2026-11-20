@@ -476,3 +476,21 @@ def test_inference_is_a_skill_and_agent_needs_a_phrase() -> None:
     assert "inference" in got
     assert "agent" not in got  # the single word stays on the stop-list
     assert {"ai agent", "multi agent system"} <= got
+
+
+def test_results_are_cards_with_chips_a_match_bar_and_the_table_in_an_expander(
+    resume_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    at = _analyze(_open(resume_db, monkeypatch), RESUME)
+    assert not at.exception, at.exception
+    badges = [m.value for m in at.markdown if "-badge[" in str(m.value)]
+    assert ":green-badge[:material/check: Python]" in badges  # a skill the resume has
+    assert any(b.startswith(":blue-badge[") and "sponsorship" in b for b in badges)
+    assert [p.proto.value for p in at.get("progress")] == [100]  # 100% match bar
+    assert "100% match" in at.get("progress")[0].proto.text
+    # the company and title are in the card as plain text (escaped), and the old table is kept
+    assert any("Acme" in str(c.value) for c in at.caption)  # the company, as a caption
+    assert "Show as table" in [e.label for e in at.expander]
+    assert not [b for b in at.get("link_button") if not b.proto.url.startswith("https://")]
+    # raw resume text never reaches a card
+    assert MARKER not in " ".join(str(m.value) for m in at.markdown)

@@ -11,6 +11,20 @@ maxUploadSize = 2           # MB; matches config/resume.yaml upload.max_bytes
 folderWatchList = ["src"]   # also watch the jobpulse package so a code-only push reloads it
 
 [theme]
-primaryColor = "#2F6DB5"    # blue: filters, tabs and progress bars must not read as errors
-linkColor = "#2F6DB5"
-baseRadius = "0.6rem"
+# Dark and locked (no appearance toggle): the charts, cards and map are all designed for it. Every
+# colour here is also in the palette block of src/jobpulse/app_ui.py; a test keeps them equal.
+base = "dark"
+primaryColor = "#2F6FD0"      # buttons and selected tabs; white text on it reads at 4.8:1
+linkColor = "#8FB8FF"
+backgroundColor = "#0B0F17"
+secondaryBackgroundColor = "#131A28"
+textColor = "#E8ECF4"
+borderColor = "#2A3548"
+baseRadius = "0.75rem"
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+headingFont = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800&display=swap"
+headingFontWeights = [800, 700, 650, 600, 600, 600]
+metricValueFontSize = "2rem"
+metricValueFontWeight = 700
+paddingTop = "2rem"
+chartCategoricalColors = ["#7FB0FF", "#2DD4BF", "#B79CFF", "#FBBF24", "#F9A8D4", "#FDA974"]

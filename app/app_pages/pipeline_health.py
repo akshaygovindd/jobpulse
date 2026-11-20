@@ -43,22 +43,23 @@ else:
             f"All sources have a snapshot newer than {limit:g} hours.",
             icon=":material/check_circle:",
         )
-    st.dataframe(
-        fresh[["Source", "boards", "newest", "age_h", "oldest_age_h"]],
-        hide_index=True,
-        column_config={
-            "Source": st.column_config.TextColumn(width="medium"),
-            "boards": st.column_config.NumberColumn("Companies", format="%d"),
-            "newest": st.column_config.DatetimeColumn(
-                "Newest snapshot (UTC)", format="YYYY-MM-DD HH:mm"
-            ),
-            "age_h": st.column_config.NumberColumn("Newest age (hours)", format="%.0f"),
-            "oldest_age_h": st.column_config.NumberColumn(
-                "Oldest company age (hours)", format="%.0f"
-            ),
-        },
-        alt="Snapshot freshness per source",
-    )
+    with st.expander("Show data: snapshot freshness per source", icon=":material/table:"):
+        st.dataframe(
+            fresh[["Source", "boards", "newest", "age_h", "oldest_age_h"]],
+            hide_index=True,
+            column_config={
+                "Source": st.column_config.TextColumn(width="medium"),
+                "boards": st.column_config.NumberColumn("Companies", format="%d"),
+                "newest": st.column_config.DatetimeColumn(
+                    "Newest snapshot (UTC)", format="YYYY-MM-DD HH:mm"
+                ),
+                "age_h": st.column_config.NumberColumn("Newest age (hours)", format="%.0f"),
+                "oldest_age_h": st.column_config.NumberColumn(
+                    "Oldest company age (hours)", format="%.0f"
+                ),
+            },
+            alt="Snapshot freshness per source",
+        )
     st.caption(f"Analytics tables last built {fresh['built_at'].max():%d %b %Y, %H:%M} UTC.")
 
 st.subheader("Data quality")
@@ -77,17 +78,18 @@ if not quality.empty:
         "A low share is expected where only some postings are read by the AI: a title filter "
         "chooses the data and AI roles, and the rest are counted but not analyzed."
     )
-    st.dataframe(
-        quality[["description", "numerator", "denominator", "share"]],
-        hide_index=True,
-        column_config={
-            "description": st.column_config.TextColumn("Field", width="large"),
-            "numerator": st.column_config.TextColumn("Have it", width="small"),
-            "denominator": st.column_config.TextColumn("Out of", width="small"),
-            "share": st.column_config.TextColumn("Share", width="small"),
-        },
-        alt="Coverage of key fields",
-    )
+    with st.expander("Show data: coverage of key fields", icon=":material/table:"):
+        st.dataframe(
+            quality[["description", "numerator", "denominator", "share"]],
+            hide_index=True,
+            column_config={
+                "description": st.column_config.TextColumn("Field", width="large"),
+                "numerator": st.column_config.TextColumn("Have it", width="small"),
+                "denominator": st.column_config.TextColumn("Out of", width="small"),
+                "share": st.column_config.TextColumn("Share", width="small"),
+            },
+            alt="Coverage of key fields",
+        )
 
 st.subheader("Recent runs")
 runs = load(
@@ -129,32 +131,35 @@ else:
     runs["Result"] = runs["status"].map(lambda v: human(v, STATUS_LABELS))
     for col in ("duration_s", "companies_complete", "companies_failed", "rows_kept"):
         runs[col] = runs[col].map(dash)  # a missing figure shows as an em dash, never "None"
-    st.dataframe(
-        runs[
-            [
-                "snapshot_date",
-                "Step",
-                "Source",
-                "Result",
-                "duration_s",
-                "companies_complete",
-                "companies_failed",
-                "rows_kept",
-            ]
-        ],
-        hide_index=True,
-        column_config={
-            "Step": st.column_config.TextColumn(width="medium"),
-            "Source": st.column_config.TextColumn(width="small"),
-            "Result": st.column_config.TextColumn(width="small"),
-            "snapshot_date": st.column_config.DateColumn("Data date"),
-            "duration_s": st.column_config.TextColumn("Seconds", width="small"),
-            "companies_complete": st.column_config.TextColumn("Companies complete", width="small"),
-            "companies_failed": st.column_config.TextColumn("Companies failed", width="small"),
-            "rows_kept": st.column_config.TextColumn("Rows kept", width="small"),
-        },
-        alt="Most recent pipeline runs",
-    )
+    with st.expander("Show data: most recent pipeline runs", icon=":material/table:"):
+        st.dataframe(
+            runs[
+                [
+                    "snapshot_date",
+                    "Step",
+                    "Source",
+                    "Result",
+                    "duration_s",
+                    "companies_complete",
+                    "companies_failed",
+                    "rows_kept",
+                ]
+            ],
+            hide_index=True,
+            column_config={
+                "Step": st.column_config.TextColumn(width="medium"),
+                "Source": st.column_config.TextColumn(width="small"),
+                "Result": st.column_config.TextColumn(width="small"),
+                "snapshot_date": st.column_config.DateColumn("Data date"),
+                "duration_s": st.column_config.TextColumn("Seconds", width="small"),
+                "companies_complete": st.column_config.TextColumn(
+                    "Companies complete", width="small"
+                ),
+                "companies_failed": st.column_config.TextColumn("Companies failed", width="small"),
+                "rows_kept": st.column_config.TextColumn("Rows kept", width="small"),
+            },
+            alt="Most recent pipeline runs",
+        )
 
 st.subheader("Ingest outcomes by day")
 ingest = load(

@@ -1,6 +1,7 @@
 import streamlit as st
 
 from jobpulse import insights
+from jobpulse.app_components import avatar, company_card
 from jobpulse.app_ui import (
     DATA_ROLES,
     MATCH_LABELS,
@@ -97,37 +98,60 @@ if picked:
 else:
     st.info("Pick at least one role family.")
 
-st.subheader("All companies")
+st.subheader("Companies with the most certified filings")
 st.caption(
     "Read the evidence together with the number of certified filings: three filings is thin "
-    "evidence, hundreds is not."
+    "evidence, hundreds is not. Use the lookup below for any other company."
 )
-st.dataframe(
-    companies[
-        [
-            "name",
-            "Evidence",
-            "n_lca_certified",
-            "n_lca_not_certified",
-            "How the filings were matched",
-            "n_active",
-        ]
-    ],
-    hide_index=True,
-    column_config={
-        "name": st.column_config.TextColumn("Company", width="medium"),
-        "Evidence": st.column_config.TextColumn(width="medium"),
-        "How the filings were matched": st.column_config.TextColumn(width="large"),
-        "n_lca_certified": st.column_config.NumberColumn("Certified filings", format="%d"),
-        "n_lca_not_certified": st.column_config.NumberColumn(
-            "Withdrawn or denied",
-            format="%d",
-            help="Not counted as evidence. Includes filings certified and then withdrawn.",
-        ),
-        "n_active": st.column_config.NumberColumn("Open postings", format="%d"),
-    },
-    alt="Visa filing history per company",
-)
+CARDS = 12
+top_companies = companies.head(CARDS)
+yearly = load("SELECT company_id, fiscal_year, n_certified FROM gold.agg_lca_company_year")
+for start in range(0, len(top_companies), 3):
+    for col, (_, c) in zip(
+        st.columns(3), top_companies.iloc[start : start + 3].iterrows(), strict=False
+    ):
+        with col:
+            mine = yearly[yearly["company_id"] == c["company_id"]].sort_values("fiscal_year")
+            company_card(
+                key=str(c["company_id"]),
+                name=str(c["name"]),
+                evidence=str(c["Evidence"]),
+                has_evidence=c["visa_evidence_class"] == "HISTORICAL_EVIDENCE",
+                certified=int(c["n_lca_certified"]),
+                not_certified=int(c["n_lca_not_certified"]),
+                open_postings=int(c["n_active"]),
+                by_year=mine.assign(
+                    fiscal_year=mine["fiscal_year"].astype(int).astype(str),
+                    certified=mine["n_certified"],
+                )[["fiscal_year", "certified"]],
+            )
+with st.expander("Show data: all companies", icon=":material/table:"):
+    st.dataframe(
+        companies[
+            [
+                "name",
+                "Evidence",
+                "n_lca_certified",
+                "n_lca_not_certified",
+                "How the filings were matched",
+                "n_active",
+            ]
+        ],
+        hide_index=True,
+        column_config={
+            "name": st.column_config.TextColumn("Company", width="medium"),
+            "Evidence": st.column_config.TextColumn(width="medium"),
+            "How the filings were matched": st.column_config.TextColumn(width="large"),
+            "n_lca_certified": st.column_config.NumberColumn("Certified filings", format="%d"),
+            "n_lca_not_certified": st.column_config.NumberColumn(
+                "Withdrawn or denied",
+                format="%d",
+                help="Not counted as evidence. Includes filings certified and then withdrawn.",
+            ),
+            "n_active": st.column_config.NumberColumn("Open postings", format="%d"),
+        },
+        alt="Visa filing history per company",
+    )
 
 st.subheader("Company lookup")
 name = st.selectbox(
@@ -161,6 +185,7 @@ named_roles = roles[roles["role_family"] != "other"]
 named_levels = levels[levels["wage_level"] != "unknown"]
 with st.container(border=True):
     with st.container(horizontal=True, vertical_alignment="center"):
+        avatar(str(name))
         st.markdown(f"### {name}")
         badge_color = "blue" if row["visa_evidence_class"] == "HISTORICAL_EVIDENCE" else "gray"
         st.markdown(f":{badge_color}-badge[{EVIDENCE[row['visa_evidence_class']]}]")
@@ -208,20 +233,21 @@ with st.container(border=True):
     )
 
 if not by_year.empty:
-    st.dataframe(
-        by_year,
-        hide_index=True,
-        column_config={
-            "fiscal_year": st.column_config.NumberColumn("Fiscal year", format="%d"),
-            "n_certified": st.column_config.NumberColumn("Certified", format="%d"),
-            "n_certified_withdrawn": st.column_config.NumberColumn(
-                "Certified, then withdrawn", format="%d"
-            ),
-            "n_withdrawn": st.column_config.NumberColumn("Withdrawn", format="%d"),
-            "n_denied": st.column_config.NumberColumn("Denied", format="%d"),
-        },
-        alt="H-1B filings by fiscal year and outcome",
-    )
+    with st.expander("Show data: filings by fiscal year", icon=":material/table:"):
+        st.dataframe(
+            by_year,
+            hide_index=True,
+            column_config={
+                "fiscal_year": st.column_config.NumberColumn("Fiscal year", format="%d"),
+                "n_certified": st.column_config.NumberColumn("Certified", format="%d"),
+                "n_certified_withdrawn": st.column_config.NumberColumn(
+                    "Certified, then withdrawn", format="%d"
+                ),
+                "n_withdrawn": st.column_config.NumberColumn("Withdrawn", format="%d"),
+                "n_denied": st.column_config.NumberColumn("Denied", format="%d"),
+            },
+            alt="H-1B filings by fiscal year and outcome",
+        )
     left, right = st.columns(2)
     with left:
         st.markdown("**Certified filings by role family (lower bounds)**")
