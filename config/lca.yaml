@@ -44,3 +44,7 @@ match:
   fuzzy_suggestion_min_similarity: 0.8
   legal_suffixes: [inc, incorporated, llc, llp, lp, corp, corporation, ltd, limited, co, company,
                    plc, pbc, pc]
+
+review:            # the blind sheet of (LCA name, company) pairs the owner labels yes/no
+  sample_size: 60
+  seed: 20261120

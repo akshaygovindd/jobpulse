@@ -325,6 +325,11 @@ class LcaMatchConfig(_Strict):
         return self
 
 
+class LcaReviewConfig(_Strict):
+    sample_size: int = Field(ge=1)  # employer-match pairs drawn for the owner to label yes/no
+    seed: int
+
+
 class LcaConfig(_Strict):
     """Which DOL OFLC LCA disclosure files to load and how to read and match them."""
 
@@ -335,6 +340,7 @@ class LcaConfig(_Strict):
     certified_statuses: list[str]  # CASE_STATUS values counted as certified (upper-case)
     required: list[str]  # canonical columns that must be present, else the load fails loudly
     match: LcaMatchConfig
+    review: LcaReviewConfig
 
     @model_validator(mode="after")
     def _required_known(self) -> LcaConfig:
