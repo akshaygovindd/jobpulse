@@ -1,8 +1,60 @@
 # JobPulse: QA audit before final fixes
 
-**Date:** 2026-11-20 · **Status:** audit only, no code changed · **Awaiting:** owner approval of the fix plan (last section)
+**Date:** 2026-11-20 · **Status:** all P0, P1 and P2 findings fixed or explicitly deferred (see "Fix status" below); the audit text after that section is unchanged, as written before the fixes
 
 > Related: [SPEC.md](SPEC.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [ROADMAP.md](ROADMAP.md) · [NOTES.md](NOTES.md)
+
+## Fix status (2026-11-20, after the owner approved all P0, P1 and P2)
+
+Everything below was fixed in small commits on `main`, each after a green `make check`. Gold was rebuilt on MotherDuck (`build-gold`, 107 dbt checks passed), exported and uploaded to the `gold-latest` release (6,041,600 bytes, 16 tables, 9,681 postings), so the live app has the new schema. Every page and a sample resume ran without exceptions on that exact file (`AppTest`). Tests: 456 before, 536 now.
+
+**Not verified:** no browser look (mobile layout, chart appearance, Vega labels); the stale-module fix has not been triggered on Streamlit Cloud; the `publish` job has not run with the new code (the file was exported and uploaded by hand from this machine, the next daily run will do it in CI).
+
+| ID | Status | What was done / why deferred |
+|---|---|---|
+| P0-1 | **Fixed** | `read_gold` runs on its own cursor per query. `tests/unit/test_qa_hardening.py`: 8 threads x 300 distinct queries; it fails on the old code (verified) and passes now. |
+| P0-2 | **Fixed** | pypdf `apply_configuration` limits (2 MB per decoded stream, `config/resume.yaml` `upload.max_pdf_decoded_bytes`). A 60 MB-decoded bomb is refused without a memory spike (tested). |
+| P0-3 | **Fixed, not seen on Cloud** | `app/code_reload.py`: a stamp of `src/jobpulse/**/*.py` in a process-lifetime cache; on change every `jobpulse*` module is dropped before the pages import. Also `server.folderWatchList = ["src"]`, a friendly "reload this page" on a late `ImportError`, and `sys.path` is extended once (P3-4). Tested in a subprocess. |
+| P1-1, P1-2 | **Fixed** | Shared `app_ui.clean()` / `is_missing()`: NaN, NA, None and blanks never print as "None" or "nan" (Resume match City, Visa quote cards). |
+| P1-3 | **Fixed** | "Experience level" filter on Resume match (groups in `config/resume.yaml` `levels`), pre-selected from years and titles (up to 2 years or an intern title: entry and mid; 6+ years: senior and staff). A filter and default only, never in the score. |
+| P1-4 | **Fixed** | `norm_skill` keeps series, bias, Kubernetes, Databricks, pandas, analytics, statistics and the *Ops names, turns -ies into -y, merges api/apis and kpi/kpis; gold rebuilt (2,612 skills). Resume skills need 3 open analyzed postings (`parse.min_posting_frequency`) and a reviewed stop-list (`parse.ignore_skills`, 22 words added: cte, demo, english, join, language, star, agent, dag, delta, ci, risk, research, training, inference, vision, modeling...). Please review that list: some entries (inference, agent) are real skills in other resumes. |
+| P1-5 | **Fixed** | Home says "over N of the M non-intern postings with a USD salary (of K analyzed)". Median is now $218K (interns left out). |
+| P1-6 | **Fixed, with a coverage limit** | `fct_postings.apply_url`: https only, host exactly one of `gold.apply_url_hosts` in `config/pipeline.yaml` (Greenhouse x2, Lever, Ashby), no credentials, port or spaces. `LinkColumn` "Apply" in Resume match. **Only 232 of the 515 analyzed open roles (45%) get a link**: the others point to the employer's own domain (pinterestcareers.com, stripe.com, careers.airbnb.com, careerpuck, databricks.com, coinbase.com...). Allow-listing those domains is a one-line config change if you want it. The Visa quote cards do not show a link. |
+| P1-7 | **Fixed** | The same company and title in several places is one row with a "Location" column ("3 locations: ..."). |
+| P1-8 | **Fixed** | Resume text is shown with `st.text`; title lines with an email, phone, URL or profile link are dropped; the privacy sentence now says what is kept. **A person's name inside a title line ("Alex Kim, Data Scientist") is still kept for the session**; it is not detected. |
+| P1-9 | **Fixed** | Fewer than 3 recognized skills: "Add your tools and methods", nothing ranked; zero skills has its own message; "English resumes only" note. |
+| P1-10 | **Fixed** | Three cards: skills, years and education, roles. Years come from date ranges (overlaps counted once, education lines excluded) or "N years of ... experience", else "Not found". |
+| P2-1 | **Fixed** | "Top skills to learn" from the best 20 matches, with the stop-list applied. |
+| P2-2 | **Fixed** | `_pdf_text` converts any parser exception into "That PDF could not be read" without echoing it. |
+| P2-3 | **Fixed** | `check_schema` compares the key tables' columns at connect (one friendly message); `AppDataError.public` is all visitors see; setting names and SQL detail go to the server log (P3-3). |
+| P2-4 | **Fixed** | A banner on every page (except Pipeline health, which has its own) when the newest snapshot is older than the freshness limit. |
+| P2-5 | **Partly fixed** | 2 attempts, 20 s timeout, no new attempt for 60 s after a failure (was 5 attempts, 17.5 s per rerun). Not done: a spinner and a "Retry" button. |
+| P2-6 | **Fixed** | City coordinates parsed once per process. |
+| P2-7 | **Fixed (relabelled)** | The Home card says "The change compares settled days: 19 Nov vs 12 Nov". The headline stays today's count, consistent with the other pages. |
+| P2-8 | **Fixed** | Hiring trends opens on the largest role, hides roles under 10 analyzed postings (`app.yaml` `samples.min_group_n`), shows n; the salary insight ignores groups under 10. |
+| P2-9 | **Fixed** | README numbers re-run from the cited scripts (9,681 / 8,445; 515 (100%); 72.8%; 62.3%; 2,612; 91,119 / 98,700; 2.3%; $0.25) with the regenerate commands. |
+| P2-10 | **Fixed** | Pipeline health shows pipeline spend ($0.25, 641 sync calls and 15 escalations) and evaluation ($0.27, 100 calls) separately. |
+| P2-11 | **Fixed** | The ingest chart counts each company once per day (the kept snapshot). |
+| P2-12 | **Fixed** | The warning names the step, data date and start time and says whether a later run of the step succeeded; failed runs sort first. |
+| P2-13 | **Fixed** | Hourly inference only for 10 to 150 per hour (`config/extraction.yaml`); earlier inferences outside that range were reverted in `extract.extractions` (never a model-stated period); the $354K to $532K posting no longer appears. Interns are left out of the Home median; Salary and Resume match say hourly and monthly pay is a yearly equivalent. The heatmap's intern row is kept, labelled in the caption. |
+| P2-14 | **Fixed** | `ignored_locations`, aliases, `FI`, more `known_places` and a `not_state` hint: the junk labels are gone, Austin and Denver have their state, "Munich, DE" is Germany. City labels 385 to 365. The three Washington-DC spellings in the report were not reproduced and were not changed. |
+| P2-15 | **Fixed** | Top 5 missing skills with "+N more", wider Title. No per-row detail panel. |
+| P2-16 | **Fixed** | Percentile cells show "—" and groups under five salaries are behind a toggle (Salary, LCA tab). |
+| P2-17 | **Fixed in code, not seen** | Theme-aware value-label colour, a series palette with a 6:1 lightness gap, dashed lines per series, a quantized heatmap whose text is at 4.5:1 or better (tested). Charts still have no text alternative beyond the key-insight sentence; `user-scalable=no` is Streamlit's. |
+| P2-18 | **Deferred** | Needs a real 390 px viewport. Done blind: category labels capped at 260 px, heatmap headers angled. Not done: a detail view for the wide tables, a map touch-scroll guard. |
+| P2-19 | **Fixed** | Shares use all companies' filings for the selected roles; the caption says the named roles are about 17% of filings; "No matching filings found"; fiscal years come from data. |
+| P2-20 | **Fixed** | Market overview filter bar (role family, seniority, remote policy) applies to KPIs, charts and the map; a filtered view covers analyzed postings only and says so. |
+| P3-1 | **Half fixed** | URL guard is exact. Deferred: a `.sha256` next to the asset. |
+| P3-2 | **Fixed** | Comma joins are refused. |
+| P3-3, P3-4, P3-10 | **Fixed** | See P2-3, P0-3, P1-4. |
+| P3-5 | **Half fixed** | The query cache key includes the file's modified time; a corrupt local copy is deleted so the next run downloads again. Old connections are still not closed. |
+| P3-7, P3-8, P3-12, P3-15 | **Fixed** | Fiscal years and company count from data; 99.7% shows as 99.7%; the 6% explanation; a weekend note. |
+| P3-9 | **Fixed** | NFKC and zero-width normalization; an oversize paste is cleared. |
+| P3-11, P3-16 | **Mostly fixed** | Developer wording removed from Home, Market overview and Pipeline health; Home says "refreshed daily". |
+| P3-13 | **Fixed** | Regression tests for concurrency, decompression, malformed PDFs, NaN, reload, schema, outage cooldown, contrast. The DuckDB `Pandas4Warning` remains (library). |
+| P3-6, P3-14, P3-17, P3-18 | **Deferred** | Date formats (cosmetic); screenshots (owner); Streamlit's response headers (not ours); `pip-audit` (a new tool, needs your OK). |
+
+**Reboot the Streamlit app** after pushing: the code on Cloud changed in `src/`, and the old process still holds the old modules.
 
 ## 1. Scope, method and limits
 

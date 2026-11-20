@@ -70,21 +70,21 @@ Design points worth knowing:
 
 ## Key numbers
 
-All figures are as of 2026-11-20 and come from the script named in the last column. Run the script to refresh them.
+All figures are as of 2026-11-20 (data through that day's snapshot) and come from the script named in the last column. Refresh them with `uv run python scripts/gold_report.py`, `scripts/extraction_counts.py` and `scripts/report_extraction_cost.py` (and `scripts/warehouse_counts.py`, which needs the MotherDuck token). The live app shows the same counts on Home, Market overview and Pipeline health.
 
 | Figure | Value | Produced by |
 |---|---|---|
 | Employers tracked | 43 | `scripts/gold_report.py` |
-| Postings seen since 10 Nov 2026 / open now | 9,516 / 8,464 | `scripts/gold_report.py` |
-| Open data and AI roles (title filter) | 511 | `scripts/extraction_counts.py` |
-| Of those, read by the LLM | 441 (86%) | `scripts/gold_report.py`, `scripts/extraction_counts.py` |
-| Analyzed postings with an advertised salary | 73.2% | `scripts/gold_report.py` |
-| Open postings with a parsed city | 62.4% | `scripts/gold_report.py` |
-| Canonical skills | 2,484 | `scripts/gold_report.py` |
-| Raw posting rows / observations | 82,849 / 89,019 | `scripts/warehouse_counts.py` |
+| Postings seen since 10 Nov 2026 / open now | 9,681 / 8,445 | `scripts/gold_report.py` |
+| Open data and AI roles (title filter) | 515 | `scripts/extraction_counts.py` |
+| Of those, read by the LLM | 515 (100%) | `scripts/gold_report.py`, `scripts/extraction_counts.py` |
+| Analyzed postings with an advertised salary | 72.8% | `scripts/gold_report.py` |
+| Open postings with a parsed city | 62.3% | `scripts/gold_report.py` |
+| Canonical skills | 2,612 | `scripts/gold_report.py` |
+| Raw posting rows / observations | 91,119 / 98,700 | `scripts/warehouse_counts.py` |
 | LLM cost per 1,000 postings | $0.39 | `scripts/report_extraction_cost.py` |
-| Escalation to the stronger model / quarantined | 2.1% / 0.0% | `scripts/report_extraction_cost.py` |
-| Total extraction spend (excluding evaluation-only calls) | $0.22 | `scripts/report_extraction_cost.py` |
+| Escalation to the stronger model / quarantined | 2.3% / 0.0% | `scripts/report_extraction_cost.py` |
+| Total extraction spend (excluding evaluation-only calls) | $0.25 | `scripts/report_extraction_cost.py` |
 | Companies matched to H-1B filings | 42 of 43 | `scripts/gold_report.py` |
 | Certified H-1B filings matched (FY2025-FY2026) | 9,874 | `scripts/gold_report.py` |
 | Employer-match precision | 100% (35 of 35 matched pairs; 95% interval 90.1% to 100%) | `eval/employer_match_score.py` |
@@ -97,10 +97,10 @@ All figures are as of 2026-11-20 and come from the script named in the last colu
 
 - **Extraction accuracy is only lightly measured.** The only human-labeled benchmark is 38 postings (labeling was stopped at the owner's decision, not the planned 200). Skill recall there is about 45%. The other reports (salary cross-check, grounding, cross-model agreement) measure consistency, not accuracy.
 - **Short history.** Data starts on 10 Nov 2026. Closures need two consecutive daily snapshots, so trends are thin and early numbers are baselines.
-- **Not the whole market.** 43 hand-picked employers on three applicant-tracking systems. Only postings whose titles look like data and AI roles are read by the LLM (86% of them so far); the rest are counted but not analyzed.
+- **Not the whole market.** 43 hand-picked employers on three applicant-tracking systems. Only postings whose titles look like data and AI roles are read by the LLM (all 515 open ones today); the rest are counted but not analyzed.
 - **Visa data is evidence, not a promise.** H-1B filings show that an employer has filed, not that any role is sponsored. By-role filing counts are lower bounds (role family is a title keyword match). Sponsorship statements exist for very few postings.
-- **Advertised pay is incomplete.** About 73% of analyzed postings state a salary. Wages on filings are offered wages (a lower bound of the filed range) and are shown separately.
-- **Resume match is overlap, not fit.** Skills are looked up deterministically in a vocabulary built from the postings: unknown spellings, synonyms and scanned PDFs are missed, and years of experience or seniority do not affect the ranking.
+- **Advertised pay is incomplete.** About 73% of analyzed postings state a salary. Hourly and monthly pay (interns especially) is shown as a yearly equivalent, not a salary, and the Home median leaves interns out. Wages on filings are offered wages (a lower bound of the filed range) and are shown separately.
+- **Resume match is overlap, not fit.** Skills are looked up deterministically in a vocabulary built from the postings: unknown spellings, synonyms, non-English text and scanned PDFs are missed. Experience level is a pre-selected filter (from years and titles in the resume), never part of the score; short postings that list few skills can score high; and only about half of the postings carry an apply link (links are shown only for the main applicant-tracking hosts).
 - **Freshness.** The public file is rebuilt once a day after the pipeline finishes (GitHub's scheduler can start hours late), and the app caches it for an hour.
 - **Free hosting.** The app can sleep when idle on Streamlit Community Cloud.
 
@@ -108,7 +108,7 @@ All figures are as of 2026-11-20 and come from the script named in the last colu
 
 - P7: a guarded text-to-SQL agent and RAG over postings, with a 50-question benchmark that includes refusals and red-team prompts.
 - A larger labeled evaluation, to replace the 38-row pilot with real accuracy numbers.
-- Resume skill synonyms or embeddings, and seniority-aware ranking.
+- Resume skill synonyms or embeddings, and a fit score that understands experience.
 - More employers and sources (USAJobs, Remotive; Adzuna if the API becomes affordable); FY2024 H-1B data.
 
 ## Development
