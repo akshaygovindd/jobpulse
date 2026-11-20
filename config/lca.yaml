@@ -2,7 +2,7 @@
 # The files are downloaded by hand into data/oflc/ (dol.gov refuses automated requests) and loaded
 # with `jobpulse load-lca`. This is evidence from public filings, not a promise of sponsorship.
 
-fiscal_years: [2024, 2025, 2026]   # files whose name contains FY<year> and a listed year are read
+fiscal_years: [2025, 2026]   # files whose name contains FY<year> and a listed year are read
 visa_classes: ["H-1B"]             # VISA_CLASS values kept (exact match; H-1B1 and E-3 are separate)
 
 # canonical name -> DOL header names accepted for it, first present wins (case-insensitive).
