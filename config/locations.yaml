@@ -4,6 +4,22 @@
 # Places are keyed by city + state/province + country (us_states ... known_places below), so
 # same-named cities in different places (Dublin, CA vs Dublin, Ireland) never merge.
 
+# Exact (case-insensitive) strings that are not a place: region codes, labels, and data-entry errors
+# found in the QA audit (docs/QA_REPORT.md P2-14). They give no city.
+ignored_locations:
+  - location
+  - na
+  - amer
+  - usca
+  - sea
+  - asia pacific
+  - us hybrid
+  - canada hybrid (ontario)
+  - fins only-au-sydney
+  - fins only-de-munich-mso
+  - chicago, new york
+  - towson, ma
+
 remote_pattern: '(?i)\b(remote|anywhere|n/a)\b'
 multi_pattern: '(?i)(;|•|\||/|\bor\b|\band\b| - | – )'
 noise_pattern: '(?i)(\(\s*hq\s*\)|\bhq\b|\boffice\b|\bheadquarters\b)'
@@ -171,6 +187,7 @@ regions:
   - new zealand
   - brazil
   - mexico
+  - costa rica
   - argentina
   - chile
   - colombia
@@ -216,6 +233,8 @@ aliases:
   sf: San Francisco
   "gurugram": Gurugram
   gurgaon: Gurugram
+  nyc-privy: New York
+  san francsico: San Francisco
 
 # --- Place keys (city + state/province + country) ---
 # A place is identified by (city, state/province, country) so Dublin, CA and Dublin, Ireland never merge.
@@ -333,13 +352,29 @@ countries:
   Greece: [greece]
 
 # ISO country codes used in prefixed locations such as GB-London, CA-Ontario-Toronto, US-CA-Dublin.
-country_codes: {US: United States, CA: Canada, GB: United Kingdom, IE: Ireland, DE: Germany, FR: France, ES: Spain, IT: Italy, NL: Netherlands, SE: Sweden, PL: Poland, PT: Portugal, CH: Switzerland, IN: India, JP: Japan, SG: Singapore, AU: Australia, NZ: New Zealand, BR: Brazil, MX: Mexico, IL: Israel, KR: South Korea, CN: China}
+country_codes: {FI: Finland, US: United States, CA: Canada, GB: United Kingdom, IE: Ireland, DE: Germany, FR: France, ES: Spain, IT: Italy, NL: Netherlands, SE: Sweden, PL: Poland, PT: Portugal, CH: Switzerland, IN: India, JP: Japan, SG: Singapore, AU: Australia, NZ: New Zealand, BR: Brazil, MX: Mexico, IL: Israel, KR: South Korea, CN: China}
 
 # Bare city names that are unambiguous enough to fill in a missing state or country. Applied only when
 # the location gives no state, and its country (if any) matches. Cities NOT listed here stay
 # unresolved: they never merge with a qualified one. Dublin is listed as Ireland by owner decision;
 # "Dublin, CA" and "US-CA-Dublin" carry an explicit state, so they stay Dublin, California.
 known_places:
+  "austin": {state: Texas}
+  "denver": {state: Colorado}
+  "los angeles": {state: California}
+  "san diego": {state: California}
+  "houston": {state: Texas}
+  "dallas": {state: Texas}
+  "miami": {state: Florida}
+  "philadelphia": {state: Pennsylvania}
+  "pittsburgh": {state: Pennsylvania}
+  "minneapolis": {state: Minnesota}
+  "phoenix": {state: Arizona}
+  "nashville": {state: Tennessee}
+  "salt lake city": {state: Utah}
+  "munich": {country: Germany, not_state: de}  # "Munich, DE" is the country code, not Delaware
+  "berlin": {country: Germany}
+  "helsinki": {country: Finland}
   "new york": {state: New York}
   "san francisco": {state: California}
   "palo alto": {state: California}

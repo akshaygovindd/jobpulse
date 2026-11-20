@@ -120,7 +120,7 @@ def test_locations_config_is_consistent() -> None:
             assert set(aliases) <= known_words
     state_names = {*cfg.us_states, *cfg.ca_provinces}
     for city, fill in cfg.known_places.items():
-        assert set(fill) in ({"state"}, {"country"}), city
+        assert set(fill) in ({"state"}, {"country"}, {"country", "not_state"}), city
         if "state" in fill:
             assert fill["state"] in state_names, city
         else:
@@ -157,3 +157,30 @@ def test_norm_skill_collapses_variants() -> None:
     assert norm_skill("Data Pipelines") == norm_skill("data pipeline")
     assert norm_skill("SQL") == "sql"
     assert norm_skill("") == ""
+
+
+@pytest.mark.parametrize(
+    ("raw", "label"),
+    [
+        ("LOCATION", None),
+        ("na", None),
+        ("AMER", None),
+        ("USCA", None),
+        ("SEA", None),
+        ("Asia Pacific", None),
+        ("US Hybrid", None),
+        ("Costa Rica", None),
+        ("Chicago, New York", None),
+        ("Fins Only-AU-Sydney", None),
+        ("NYC-Privy", "New York, New York"),
+        ("San Francsico", "San Francisco, California"),
+        ("Munich, DE", "Munich, Germany"),
+        ("FI-Helsinki-MSO", "Helsinki, Finland"),
+        ("Austin", "Austin, Texas"),
+        ("Austin, Texas", "Austin, Texas"),
+        ("Denver", "Denver, Colorado"),
+    ],
+)
+def test_junk_and_misspelled_locations_from_the_qa_audit(raw: str, label: str | None) -> None:
+    place = PARSER.parse(raw)
+    assert (place.label if place else None) == label

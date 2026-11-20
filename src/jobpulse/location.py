@@ -44,6 +44,7 @@ class Place:
 
 class CityParser:
     def __init__(self, cfg: LocationsConfig) -> None:
+        self._ignored = {s.lower() for s in cfg.ignored_locations}
         self._remote = re.compile(cfg.remote_pattern)
         self._multi = re.compile(cfg.multi_pattern)
         self._noise = re.compile(cfg.noise_pattern)
@@ -66,7 +67,7 @@ class CityParser:
 
     def parse(self, location_raw: str | None) -> Place | None:
         raw = (location_raw or "").strip()
-        if not raw:
+        if not raw or raw.lower() in self._ignored:
             return None
         if self._remote.search(raw):
             return None
@@ -125,6 +126,8 @@ class CityParser:
             low = p.lower()
             if low == "ca" and canadian:
                 low = "canada"  # "Toronto, CA": the country code, not California
+            if low == known.get("not_state") and known.get("country"):
+                low = known["country"].lower()  # "Munich, DE": Germany's code, not Delaware
             if low in self._states and state is None:
                 state, implied = self._states[low]
             elif low in self._countries and explicit is None:

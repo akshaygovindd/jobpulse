@@ -143,6 +143,7 @@ class LocationsConfig(_Strict):
     """Rules for the city heuristic (src/jobpulse/location.py). No structured location exists in
     the source data, so `city` is derived from location_raw and is NULL when it is ambiguous."""
 
+    ignored_locations: list[str]  # exact strings (any case) that are not a place: no city
     remote_pattern: str  # a location matching this has no single city
     multi_pattern: str  # a location matching this lists several places
     noise_pattern: str  # office/HQ decorations stripped before parsing
