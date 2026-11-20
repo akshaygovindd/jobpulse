@@ -5,6 +5,7 @@
 upload:
   max_bytes: 2000000          # 2 MB; larger files are rejected before any parsing
   max_pdf_pages: 10
+  max_pdf_decoded_bytes: 2000000   # cap on any decompressed PDF stream (a small file can expand hugely)
   max_text_chars: 60000       # extracted or pasted text beyond this is rejected, not truncated
   allowed_extensions: [pdf, txt, md]
 

@@ -381,6 +381,7 @@ def load_lca_aliases(path: Path | None = None) -> LcaAliases:
 class ResumeUploadConfig(_Strict):
     max_bytes: int = Field(ge=1)
     max_pdf_pages: int = Field(ge=1)
+    max_pdf_decoded_bytes: int = Field(ge=1)
     max_text_chars: int = Field(ge=1)
     allowed_extensions: list[str] = Field(min_length=1)
 

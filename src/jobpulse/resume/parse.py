@@ -14,9 +14,10 @@ import re
 from collections.abc import Collection
 from dataclasses import dataclass
 from io import BytesIO
+from typing import Any
 
 from pypdf import PdfReader
-from pypdf.errors import PyPdfError
+from pypdf._configuration import apply_configuration
 
 from jobpulse.config import ResumeConfig
 from jobpulse.skills import norm_skill
@@ -50,7 +51,7 @@ def read_resume(name: str, data: bytes, cfg: ResumeConfig) -> str:
     if ext == "pdf":
         if not data.startswith(b"%PDF-"):
             raise ResumeError("That file is not a PDF.")
-        text = _pdf_text(data, up.max_pdf_pages)
+        text = _pdf_text(data, up.max_pdf_pages, up.max_pdf_decoded_bytes)
     else:
         if b"\x00" in data:
             raise ResumeError("That file is not plain text.")
@@ -69,17 +70,31 @@ def check_text(text: str, cfg: ResumeConfig) -> str:
     return text
 
 
-def _pdf_text(data: bytes, max_pages: int) -> str:
+def _pdf_text(data: bytes, max_pages: int, max_decoded_bytes: int) -> str:
+    # A few KB of compressed stream can expand to hundreds of MB. pypdf's limits make it stop
+    # decoding at the cap (an error, not a crash), so memory stays small.
+    limits: dict[str, Any] = {
+        "zlib_maximum_output_length": max_decoded_bytes,
+        "lzw_maximum_output_length": max_decoded_bytes,
+        "run_length_maximum_output_length": max_decoded_bytes,
+        "jbig2_maximum_output_length": max_decoded_bytes,
+        "brotli_maximum_output_length": max_decoded_bytes,
+        "array_based_stream_maximum_output_length": max_decoded_bytes,
+        "image_maximum_buffer_size": max_decoded_bytes,
+        "maximum_declared_stream_length": max_decoded_bytes,
+    }
     try:
-        reader = PdfReader(BytesIO(data))
-        if reader.is_encrypted:
-            raise ResumeError("Encrypted PDFs cannot be read.")
-        if len(reader.pages) > max_pages:
-            raise ResumeError(f"The PDF has more than {max_pages} pages.")
-        return "\n".join((page.extract_text() or "") for page in reader.pages)
+        with apply_configuration(**limits):
+            reader = PdfReader(BytesIO(data))
+            if reader.is_encrypted:
+                raise ResumeError("Encrypted PDFs cannot be read.")
+            if len(reader.pages) > max_pages:
+                raise ResumeError(f"The PDF has more than {max_pages} pages.")
+            return "\n".join((page.extract_text() or "") for page in reader.pages)
     except ResumeError:
         raise
-    except (PyPdfError, ValueError, KeyError, TypeError, RecursionError):
+    except Exception:  # any parser failure is "could not be read"
+        # Never echo the exception: its text can hold fragments of the file.
         raise ResumeError("That PDF could not be read.") from None
 
 
