@@ -40,6 +40,7 @@ PAGES = [
     "app_pages/hiring_trends.py",
     "app_pages/salary.py",
     "app_pages/visa.py",
+    "app_pages/resume_match.py",
     "app_pages/pipeline_health.py",
 ]
 NOW = datetime(2026, 11, 20, 8, tzinfo=UTC)

@@ -1,0 +1,58 @@
+# Resume Match (app page "Resume match"). Validated by jobpulse.config.ResumeConfig.
+# The resume is processed in memory only: these settings bound what is accepted and how skills
+# are found. No LLM is involved; skills are looked up deterministically in gold.dim_skill.
+
+upload:
+  max_bytes: 2000000          # 2 MB; larger files are rejected before any parsing
+  max_pdf_pages: 10
+  max_text_chars: 60000       # extracted or pasted text beyond this is rejected, not truncated
+  allowed_extensions: [pdf, txt, md]
+
+parse:
+  max_ngram: 4                # longest skill phrase looked up, in words (e.g. "natural language processing")
+  # Canonical skill names that are ordinary words or single letters. They count only when written
+  # with exactly this casing as a single token ("R", "C", "Go"), never from lower-case prose.
+  case_sensitive_skills:
+    r: R
+    c: C
+    go: Go
+    ray: Ray
+    hex: Hex
+    cursor: Cursor
+    sigma: Sigma
+  # Canonical names too generic to count as a skill claim when found in running text.
+  ignore_skills:
+    - map
+    - log
+    - fix
+    - zip
+    - sam
+    - ads
+    - ham
+    - pos
+    - soc
+    - search
+    - testing
+    - ranking
+    - monitoring
+    - optimization
+    - evaluation
+    - automation
+    - reporting
+    - deployment
+    - streaming
+    - retrieval
+    - regression
+    - alerting
+    - guardrail
+    - observability
+    - personalization
+  title_keywords: [analyst, engineer, scientist, developer, researcher, architect, manager, intern]
+  max_title_chars: 60         # a "title" is a short line containing one of the keywords
+  max_titles: 5
+  max_years: 50               # a larger "N years" figure is ignored as not a career length
+
+match:
+  min_posting_skills: 5       # postings with fewer extracted skills are not ranked (score would be noise)
+  min_matched: 1
+  max_results: 50
