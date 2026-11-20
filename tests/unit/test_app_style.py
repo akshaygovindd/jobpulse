@@ -302,7 +302,11 @@ def test_horizontal_bars_ask_for_every_category_label() -> None:
     assert spec["height"] >= 30 * 4  # room for every row
 
 
-def test_daily_bars_are_wide_bands_and_lines_stay_temporal() -> None:
+def test_daily_charts_use_calendar_labels_never_javascript_dates() -> None:
+    """Regression (QA P0-2): a date-only string is midnight UTC for a browser, which US time zones
+    draw as the evening before, so every daily bar sat one day early. The x axis is now a list of
+    text labels made from the calendar dates, in date order."""
+
     def bars() -> None:
         import pandas as pd
 
@@ -315,14 +319,42 @@ def test_daily_bars_are_wide_bands_and_lines_stay_temporal() -> None:
 
         from jobpulse.app_ui import date_chart
 
-        frame = pd.DataFrame({"week": ["2026-11-09", "2026-11-16"], "s": [1, 2]})
+        frame = pd.DataFrame({"week": ["2026-11-16", "2026-11-09"], "s": [1, 2]})
         date_chart(frame, x="week", y="s", kind="line")
 
     b = _spec_of(bars)
-    assert b["encoding"]["x"]["type"] == "ordinal"
-    assert b["encoding"]["x"]["timeUnit"] == "yearmonthdate"
+    x = b["encoding"]["x"]
+    assert (x["field"], x["type"], x["sort"]) == ("Day", "ordinal", ["Nov 11", "Nov 12"])
+    assert "timeUnit" not in x
     assert b["mark"]["width"] == {"band": 0.7}
-    assert _spec_of(lines)["encoding"]["x"]["type"] == "temporal"
+    ln = _spec_of(lines)["encoding"]["x"]
+    assert (ln["type"], ln["sort"]) == ("ordinal", ["Nov 09", "Nov 16"])  # sorted by date
+
+
+def test_no_chart_in_the_app_uses_a_temporal_axis() -> None:
+    """The audit behind the same fix: no chart spec may hand a date to the browser's time zone."""
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    for path in [root / "src/jobpulse/app_ui.py", *(root / "app").rglob("*.py")]:
+        text = path.read_text()
+        assert not re.search(r"temporal|timeUnit|utcyearmonthdate", text.replace("`", "")), path
+
+
+def test_day_label_is_the_calendar_date_in_any_time_zone(monkeypatch: Any) -> None:
+    import time
+
+    from jobpulse.app_ui import day_label
+
+    monkeypatch.setenv("TZ", "America/New_York")
+    time.tzset()
+    try:
+        assert day_label("2026-11-11") == "Nov 11"
+        assert day_label("2026-11-11 00:00:00") == "Nov 11"
+    finally:
+        monkeypatch.undo()
+        time.tzset()
 
 
 def test_salary_chart_is_a_labelled_heatmap() -> None:

@@ -324,7 +324,7 @@ def bar(
     value: dict[str, Any] = {
         "field": val,
         "type": "quantitative",
-        "axis": {"title": val, "format": "~s"},
+        "axis": {"title": val, "format": "~s", "tickCount": 5, "tickMinStep": 1},  # few, whole
     }
     cat_ch, val_ch = ("y", "x") if horizontal else ("x", "y")
     # hovering a bar lights it up (the others dim a little); the tooltip names the exact value
@@ -403,34 +403,40 @@ def mini_bars(data: Any, *, x: str, y: str, height: int = 90) -> None:
     _chart(data, spec, height)
 
 
+def day_label(iso: Any) -> str:
+    """'Nov 11' from an ISO date string ('2026-11-11'), built in Python from the calendar date so
+    no browser time zone can move it by a day. (A date-only string parsed by a browser is midnight
+    UTC, which US time zones render as the evening before.)"""
+    return date.fromisoformat(str(iso)[:10]).strftime("%b %d")
+
+
 def date_chart(
     data: Any, *, x: str, y: str, kind: str = "bar", series: str | None = None, y_title: str = ""
 ) -> None:
     """Daily/weekly chart with dates labelled 'Nov 11' (horizontal, never rotated). `data[x]` holds
-    ISO date strings. Bars use one band per day (so they are wide, never thin lines); lines use a
-    time axis. With `series`, one coloured series per value, in neutral colours."""
+    ISO date strings. The x axis is a list of text labels made from the calendar dates (see
+    `day_label`), never a JavaScript date, so every viewer sees the same day whatever their time
+    zone. Bars have one band per day; lines connect the points in date order. With `series`, one
+    coloured series per value, in neutral colours."""
     if data is None or len(data) == 0:
         st.caption("Nothing to show yet.")
         return
-    axis = {"format": "%b %d", "labelAngle": 0, "title": None, "labelOverlap": True}
-    if kind == "bar":
-        x_enc: dict[str, Any] = {
-            "field": x,
-            "type": "ordinal",
-            "timeUnit": "yearmonthdate",
-            "axis": axis,
-        }
-    else:
-        x_enc = {
-            "field": x,
-            "type": "temporal",
-            "axis": {**axis, "tickCount": {"interval": "day", "step": 1}},
-        }
+    data = data.copy()
+    days = sorted({str(v)[:10] for v in data[x]})
+    data["Day"] = data[x].map(day_label)
+    order = [day_label(d) for d in days]
+    axis = {"labelAngle": 0, "title": None, "labelOverlap": "greedy"}
+    x_enc: dict[str, Any] = {"field": "Day", "type": "ordinal", "sort": order, "axis": axis}
     enc: dict[str, Any] = {
         "x": x_enc,
-        "y": {"field": y, "type": "quantitative", "title": y_title or human(y)},
+        "y": {
+            "field": y,
+            "type": "quantitative",
+            "title": y_title or human(y),
+            "axis": {"tickMinStep": 1, "format": "~s"},  # whole numbers, few ticks
+        },
         "tooltip": [
-            {"field": x, "type": "temporal", "format": "%b %d"},
+            {"field": "Day", "type": "ordinal"},
             {"field": y, "type": "quantitative", "format": ",.2~f"},
         ],
     }
