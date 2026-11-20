@@ -9,6 +9,7 @@ share one normalization; they are rebuilt from scratch each run, so reruns are i
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -18,6 +19,7 @@ from jobpulse.config import (
     ExtractionConfig,
     LocationsConfig,
     PipelineConfig,
+    load_employers,
     load_extraction,
     load_lca,
     load_locations,
@@ -113,6 +115,17 @@ def stage_maps(
     return StagedMaps(skills=len(skill_rows), locations=len(loc_rows))
 
 
+def company_domains() -> dict[str, list[str]]:
+    """company_id -> own career-site domains (config/employers.yaml), for apply links."""
+    out: dict[str, list[str]] = {}
+    for e in load_employers().employers:
+        if e.domains:
+            cid = re.sub(r"[^a-z0-9]+", "-", e.company.lower()).strip("-")
+            out.setdefault(cid, [])
+            out[cid] += [d for d in e.domains if d not in out[cid]]
+    return out
+
+
 def build_gold(
     pipeline: PipelineConfig | None = None,
     *,
@@ -146,6 +159,7 @@ def build_gold(
         "lca_wage_max": lca.wage.plausible_annual_max,
         "annualization": pipeline.gold.annualization,
         "apply_url_hosts": pipeline.gold.apply_url_hosts,
+        "company_domains": company_domains(),
         "min_salaries_for_percentiles": pipeline.gold.min_salaries_for_percentiles,
     }
     result = run_dbt(wh, ["path:models/gold", "path:snapshots"], variables, db_path=db_path)

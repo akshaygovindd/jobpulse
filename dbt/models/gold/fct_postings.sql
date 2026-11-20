@@ -3,6 +3,7 @@
 -- period is known (stated or inferred); `salary_period_inferred` says which.
 {% set factors = var('annualization') %}
 {% set hosts = var('apply_url_hosts') %}
+{% set own = var('company_domains') %}
 
 with ext as (
     select * from {{ ref('int_latest_extraction') }}
@@ -48,8 +49,21 @@ select
     -- https only, and the host must be exactly an allow-listed ATS host (no credentials or port)
     case
         when b.apply_url like 'https://%'
-            and split_part(b.apply_url, '/', 3) in ({% for h in hosts %}'{{ h }}'{{ ',' if not loop.last }}{% endfor %})
+            and split_part(b.apply_url, '/', 3) not like '%@%'
             and b.apply_url not similar to '.*[[:space:]"<>].*'
+            and (
+                split_part(b.apply_url, '/', 3) in ({% for h in hosts %}'{{ h }}'{{ ',' if not loop.last }}{% endfor %})
+                -- the company's own career domain (config/employers.yaml `domains`) or a subdomain
+                {% for cid, doms in own.items() %}
+                or (b.company_id = '{{ cid }}' and (
+                    {% for d in doms %}
+                    split_part(b.apply_url, '/', 3) = '{{ d }}'
+                    or split_part(b.apply_url, '/', 3) like '%.{{ d }}'
+                    {{ 'or' if not loop.last }}
+                    {% endfor %}
+                ))
+                {% endfor %}
+            )
         then b.apply_url
     end as apply_url,
     b.has_extraction,

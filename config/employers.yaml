@@ -3,40 +3,40 @@
 version: 1
 
 employers:  # Greenhouse, Lever, Ashby
-  - {company: "HubSpot", source: greenhouse, board_id: hubspotjobs, validated_at: "2026-11-10T00:18:07Z", open_job_count: 127}
-  - {company: "Toast", source: greenhouse, board_id: toast, validated_at: "2026-11-10T00:18:07Z", open_job_count: 335}
-  - {company: "Klaviyo", source: greenhouse, board_id: klaviyo, validated_at: "2026-11-10T00:18:07Z", open_job_count: 150}
-  - {company: "CarGurus", source: greenhouse, board_id: cargurus, validated_at: "2026-11-10T00:18:07Z", open_job_count: 43}
-  - {company: "EverQuote", source: greenhouse, board_id: everquote, validated_at: "2026-11-10T00:18:07Z", open_job_count: 16}
+  - {company: "HubSpot", source: greenhouse, board_id: hubspotjobs, validated_at: "2026-11-10T00:18:07Z", open_job_count: 127, domains: [hubspot.com]}
+  - {company: "Toast", source: greenhouse, board_id: toast, validated_at: "2026-11-10T00:18:07Z", open_job_count: 335, domains: [toasttab.com]}
+  - {company: "Klaviyo", source: greenhouse, board_id: klaviyo, validated_at: "2026-11-10T00:18:07Z", open_job_count: 150, domains: [klaviyo.com]}
+  - {company: "CarGurus", source: greenhouse, board_id: cargurus, validated_at: "2026-11-10T00:18:07Z", open_job_count: 43, domains: [cargurus.com]}
+  - {company: "EverQuote", source: greenhouse, board_id: everquote, validated_at: "2026-11-10T00:18:07Z", open_job_count: 16, domains: [everquote.com]}
   - {company: "SimpliSafe", source: greenhouse, board_id: simplisafe, validated_at: "2026-11-10T00:18:07Z", open_job_count: 34}
-  - {company: "Formlabs", source: greenhouse, board_id: formlabs, validated_at: "2026-11-10T00:18:08Z", open_job_count: 239}
-  - {company: "Datadog", source: greenhouse, board_id: datadog, validated_at: "2026-11-10T00:18:08Z", open_job_count: 400}
-  - {company: "Databricks", source: greenhouse, board_id: databricks, validated_at: "2026-11-10T00:18:08Z", open_job_count: 915}
-  - {company: "MongoDB", source: greenhouse, board_id: mongodb, validated_at: "2026-11-10T00:18:08Z", open_job_count: 375}
-  - {company: "Stripe", source: greenhouse, board_id: stripe, validated_at: "2026-11-10T00:18:08Z", open_job_count: 772}
+  - {company: "Formlabs", source: greenhouse, board_id: formlabs, validated_at: "2026-11-10T00:18:08Z", open_job_count: 239, domains: [formlabs.com]}
+  - {company: "Datadog", source: greenhouse, board_id: datadog, validated_at: "2026-11-10T00:18:08Z", open_job_count: 400, domains: [datadoghq.com]}
+  - {company: "Databricks", source: greenhouse, board_id: databricks, validated_at: "2026-11-10T00:18:08Z", open_job_count: 915, domains: [databricks.com]}
+  - {company: "MongoDB", source: greenhouse, board_id: mongodb, validated_at: "2026-11-10T00:18:08Z", open_job_count: 375, domains: [mongodb.com]}
+  - {company: "Stripe", source: greenhouse, board_id: stripe, validated_at: "2026-11-10T00:18:08Z", open_job_count: 772, domains: [stripe.com]}
   - {company: "Robinhood", source: greenhouse, board_id: robinhood, validated_at: "2026-11-10T00:18:08Z", open_job_count: 154}
-  - {company: "Coinbase", source: greenhouse, board_id: coinbase, validated_at: "2026-11-10T00:18:09Z", open_job_count: 285}
+  - {company: "Coinbase", source: greenhouse, board_id: coinbase, validated_at: "2026-11-10T00:18:09Z", open_job_count: 285, domains: [coinbase.com]}
   - {company: "Affirm", source: greenhouse, board_id: affirm, validated_at: "2026-11-10T00:18:09Z", open_job_count: 221}
   - {company: "Chime", source: greenhouse, board_id: chime, validated_at: "2026-11-10T00:18:09Z", open_job_count: 67}
-  - {company: "SoFi", source: greenhouse, board_id: sofi, validated_at: "2026-11-10T00:18:09Z", open_job_count: 48}
-  - {company: "Brex", source: greenhouse, board_id: brex, validated_at: "2026-11-10T00:18:09Z", open_job_count: 265}
+  - {company: "SoFi", source: greenhouse, board_id: sofi, validated_at: "2026-11-10T00:18:09Z", open_job_count: 48, domains: [sofi.com]}
+  - {company: "Brex", source: greenhouse, board_id: brex, validated_at: "2026-11-10T00:18:09Z", open_job_count: 265, domains: [brex.com]}
   - {company: "Mercury", source: greenhouse, board_id: mercury, validated_at: "2026-11-10T00:18:09Z", open_job_count: 76}
   - {company: "Carta", source: greenhouse, board_id: carta, validated_at: "2026-11-10T00:18:09Z", open_job_count: 78}
-  - {company: "Betterment", source: greenhouse, board_id: betterment, validated_at: "2026-11-10T00:18:09Z", open_job_count: 25}
-  - {company: "Airbnb", source: greenhouse, board_id: airbnb, validated_at: "2026-11-10T00:18:10Z", open_job_count: 202}
+  - {company: "Betterment", source: greenhouse, board_id: betterment, validated_at: "2026-11-10T00:18:09Z", open_job_count: 25, domains: [betterment.com]}
+  - {company: "Airbnb", source: greenhouse, board_id: airbnb, validated_at: "2026-11-10T00:18:10Z", open_job_count: 202, domains: [airbnb.com]}
   - {company: "DoorDash", source: greenhouse, board_id: doordashusa, validated_at: "2026-11-10T00:18:10Z", open_job_count: 437}
-  - {company: "Instacart", source: greenhouse, board_id: instacart, validated_at: "2026-11-10T00:18:10Z", open_job_count: 90}
+  - {company: "Instacart", source: greenhouse, board_id: instacart, validated_at: "2026-11-10T00:18:10Z", open_job_count: 90, domains: [instacart.careers]}
   - {company: "Reddit", source: greenhouse, board_id: reddit, validated_at: "2026-11-10T00:18:10Z", open_job_count: 154}
-  - {company: "Pinterest", source: greenhouse, board_id: pinterest, validated_at: "2026-11-10T00:18:10Z", open_job_count: 170}
-  - {company: "Duolingo", source: greenhouse, board_id: duolingo, validated_at: "2026-11-10T00:18:10Z", open_job_count: 61}
+  - {company: "Pinterest", source: greenhouse, board_id: pinterest, validated_at: "2026-11-10T00:18:10Z", open_job_count: 170, domains: [pinterestcareers.com]}
+  - {company: "Duolingo", source: greenhouse, board_id: duolingo, validated_at: "2026-11-10T00:18:10Z", open_job_count: 61, domains: [duolingo.com]}
   - {company: "Figma", source: greenhouse, board_id: figma, validated_at: "2026-11-10T00:18:10Z", open_job_count: 146}
-  - {company: "Asana", source: greenhouse, board_id: asana, validated_at: "2026-11-10T00:18:11Z", open_job_count: 111}
-  - {company: "Dropbox", source: greenhouse, board_id: dropbox, validated_at: "2026-11-10T00:18:11Z", open_job_count: 33}
+  - {company: "Asana", source: greenhouse, board_id: asana, validated_at: "2026-11-10T00:18:11Z", open_job_count: 111, domains: [asana.com]}
+  - {company: "Dropbox", source: greenhouse, board_id: dropbox, validated_at: "2026-11-10T00:18:11Z", open_job_count: 33, domains: [dropbox.com]}
   - {company: "Lyft", source: greenhouse, board_id: lyft, validated_at: "2026-11-10T00:18:11Z", open_job_count: 156}
-  - {company: "Squarespace", source: greenhouse, board_id: squarespace, validated_at: "2026-11-10T00:18:11Z", open_job_count: 21}
+  - {company: "Squarespace", source: greenhouse, board_id: squarespace, validated_at: "2026-11-10T00:18:11Z", open_job_count: 21, domains: [squarespace.com]}
   - {company: "Twilio", source: greenhouse, board_id: twilio, validated_at: "2026-11-10T00:18:11Z", open_job_count: 129}
-  - {company: "Okta", source: greenhouse, board_id: okta, validated_at: "2026-11-10T00:18:11Z", open_job_count: 378}
-  - {company: "Peloton", source: greenhouse, board_id: peloton, validated_at: "2026-11-10T00:18:11Z", open_job_count: 43}
+  - {company: "Okta", source: greenhouse, board_id: okta, validated_at: "2026-11-10T00:18:11Z", open_job_count: 378, domains: [okta.com]}
+  - {company: "Peloton", source: greenhouse, board_id: peloton, validated_at: "2026-11-10T00:18:11Z", open_job_count: 43, domains: [onepeloton.com]}
   - {company: "Scale AI", source: greenhouse, board_id: scaleai, validated_at: "2026-11-10T00:18:11Z", open_job_count: 170}
   - {company: "Wealthfront", source: lever, board_id: wealthfront, validated_at: "2026-11-10T00:18:12Z", open_job_count: 23}
   - {company: "Spotify", source: lever, board_id: spotify, validated_at: "2026-11-10T00:18:13Z", open_job_count: 85}

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Literal, cast
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_DIR = REPO_ROOT / "config"
@@ -26,6 +26,20 @@ class Employer(_Strict):
     board_id: str = Field(pattern=r"^[A-Za-z0-9_.-]+$")
     validated_at: datetime
     open_job_count: int = Field(ge=0)
+    # The company's own career-site domains. A posting's apply link on one of these (or a
+    # subdomain), over https, is published as a link; vendors that host many companies' boards
+    # (careerpuck and the like) must not be listed here.
+    domains: list[str] = []
+
+    @field_validator("domains")
+    @classmethod
+    def _plain_domains(cls, v: list[str]) -> list[str]:
+        for d in v:
+            if not re.fullmatch(
+                r"[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+", d
+            ):
+                raise ValueError(f"not a plain lower-case domain name: {d!r}")
+        return v
 
 
 class SkippedEmployer(_Strict):

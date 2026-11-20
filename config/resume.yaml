@@ -70,7 +70,6 @@ parse:
     - risk
     - research
     - training
-    - inference
     - vision
     - modeling
   # A skill must appear in at least this many open, analyzed postings to be recognized in a resume,

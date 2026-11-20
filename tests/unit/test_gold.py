@@ -482,3 +482,39 @@ def test_apply_url_is_published_only_for_https_on_allow_listed_hosts(
     assert got["1"] == urls["1"]
     assert got["2"] == urls["2"]
     assert all(got[p] is None for p in "345678"), got
+
+
+def test_apply_url_accepts_the_companys_own_domain_only(
+    storage: LocalStorage, db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import jobpulse.gold as gold_module
+
+    monkeypatch.setattr(gold_module, "company_domains", lambda: {"acme": ["acme.com"]})
+    urls = {
+        "1": "https://www.acme.com/careers/1",  # subdomain of the company's domain
+        "2": "https://acme.com/careers/2",
+        "3": "https://notacme.com/careers/3",  # another domain that merely ends the same way
+        "4": "https://acme.com.evil.example/careers/4",
+        "5": "https://evil.example@careers.acme.com/x",  # credentials
+        "6": "http://www.acme.com/careers/6",  # not https
+        "7": "https://app.careerpuck.com/job-board/acme/1",  # a vendor, not the company
+    }
+    jobs = []
+    for pid, url in urls.items():
+        job = gh_job(pid)
+        job["absolute_url"] = url
+        jobs.append(job)
+    seed(storage, db, jobs)
+    gold(db)
+    got = {pid: fct(db, pid)["apply_url"] for pid in urls}
+    assert got["1"] == urls["1"]
+    assert got["2"] == urls["2"]
+    assert all(got[p] is None for p in "34567"), got
+
+
+def test_company_domains_come_from_the_employers_file() -> None:
+    from jobpulse.gold import company_domains
+
+    domains = company_domains()
+    assert domains["stripe"] == ["stripe.com"]
+    assert "lyft" not in domains  # its links are on a shared vendor host

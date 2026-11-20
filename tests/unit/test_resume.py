@@ -464,3 +464,15 @@ def test_a_thin_resume_gets_a_request_for_more_not_a_ranking(
     at = _analyze(_open(resume_db, monkeypatch), "I like gardening and long walks.")
     assert "No skills recognized" in _everything(at)
     assert "No postings match" not in _everything(at)
+
+
+def test_inference_is_a_skill_and_agent_needs_a_phrase() -> None:
+    vocab = {"inference", "agent", "ai agent", "multi agent system"}
+    got = extract_profile(
+        "Model inference at scale. Built agent tools, AI agents and multi-agent systems.",
+        vocab,
+        CFG,
+    ).skills
+    assert "inference" in got
+    assert "agent" not in got  # the single word stays on the stop-list
+    assert {"ai agent", "multi agent system"} <= got

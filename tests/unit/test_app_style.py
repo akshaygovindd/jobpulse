@@ -488,3 +488,39 @@ def test_market_overview_filters_apply_to_the_numbers_and_say_what_they_cover(
     # a combination with no match says so instead of drawing empty charts
     at.multiselect(key="mkt_levels").set_value(["director"]).run()
     assert not at.exception, at.exception
+
+
+def test_interns_are_out_of_the_yearly_salary_view_and_shown_as_posted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import shutil
+
+    db = tmp_path / "wh.duckdb"
+    seed(LocalStorage(tmp_path / "s3"), db, [gh_job(str(i), content=f"t{i}") for i in range(1, 8)])
+    for i in range(1, 6):  # five analysts: enough for a median
+        add_extraction(
+            db, str(i), skills=["Python"], role_family="data_analyst", seniority="mid",
+            salary_min=90000.0 + i, salary_max=110000.0, salary_currency="USD",
+            salary_period="year",
+        )  # fmt: skip
+    for i in (6, 7):
+        add_extraction(
+            db, str(i), skills=["SQL"], role_family="data_analyst", seniority="intern",
+            salary_min=40.0, salary_max=50.0, salary_currency="USD", salary_period="hour",
+        )  # fmt: skip
+    gold(db)
+    con = duckdb.connect(str(db))
+    con.execute("CHECKPOINT")
+    con.close()
+    out = tmp_path / "copy.duckdb"
+    shutil.copy(db, out)
+    at = _page(out, monkeypatch, "app_pages/salary.py")
+    assert "Internship pay (as posted)" in [s.value for s in at.subheader]
+    frames = [d.value for d in at.dataframe]
+    main = next(f for f in frames if "Seniority" in f.columns)
+    assert "Intern" not in set(main["Seniority"])
+    interns = next(f for f in frames if "Pay period" in f.columns)
+    assert list(interns["Pay period"]) == ["per hour"]
+    assert list(interns["n"]) == [2]
+    assert list(interns["Lowest"]) == ["40"]
+    assert list(interns["Highest"]) == ["50"]

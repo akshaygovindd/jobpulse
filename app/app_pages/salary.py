@@ -93,6 +93,7 @@ with advertised_tab:
                     "ORDER BY n_annualized DESC, n_postings DESC",
                     [cur, city],
                 )
+            table = table[table["seniority"] != "intern"]  # internship pay: its own table below
             table["Role family"] = table["role_family"].map(role_label)
             table["Seniority"] = table["seniority"].map(lambda v: human(v, SENIORITY_LABELS))
             for src, dst in (
@@ -130,8 +131,8 @@ with advertised_tab:
                 st.caption(
                     "Midpoint of the advertised range, converted to a yearly figure, for groups "
                     "with at least five salaries; a blank cell means fewer than five. Hourly and "
-                    "monthly pay is converted to a yearly equivalent, so intern figures are "
-                    "annualized equivalents of a short internship, not yearly salaries."
+                    "monthly pay is converted to a yearly equivalent. Internships are left out "
+                    "(their pay is not a yearly salary); see the internship table below."
                 )
             shown = table.copy()
             for col in ("P25", "Median", "P75"):
@@ -166,6 +167,36 @@ with advertised_tab:
                 alt="Advertised yearly salary percentiles by role family and seniority",
             )
             st.caption("Percentiles appear only where at least five yearly salaries exist.")
+
+    st.subheader("Internship pay (as posted)")
+    intern = load(
+        "SELECT salary_currency AS currency, salary_period AS period, count(*) AS n, "
+        "min(coalesce(salary_min, salary_max)) AS low, "
+        "median((coalesce(salary_min, salary_max) + coalesce(salary_max, salary_min)) / 2) "
+        "AS mid, max(coalesce(salary_max, salary_min)) AS high "
+        "FROM gold.fct_postings WHERE is_active AND has_extraction AND NOT is_probable_duplicate "
+        "AND seniority = 'intern' AND has_advertised_salary AND salary_period IS NOT NULL "
+        "AND salary_currency IS NOT NULL GROUP BY 1, 2 ORDER BY 3 DESC, 1, 2"
+    )
+    if intern.empty:
+        st.caption("No internship postings with an advertised salary and a known pay period.")
+    else:
+        intern["Pay period"] = intern["period"].map(lambda v: f"per {v}")
+        for col, name in (("low", "Lowest"), ("mid", "Median midpoint"), ("high", "Highest")):
+            intern[name] = intern[col].map(lambda v: dash(v, "{:,.0f}"))
+        st.dataframe(
+            intern[["currency", "Pay period", "n", "Lowest", "Median midpoint", "Highest"]],
+            hide_index=True,
+            column_config={
+                "currency": st.column_config.TextColumn("Currency", width="small"),
+                "n": st.column_config.NumberColumn("Postings", format="%d"),
+            },
+            alt="Internship pay in the unit it was posted",
+        )
+        st.caption(
+            "Shown in the unit and currency of the posting, never converted to a yearly figure: "
+            "an hourly or monthly internship rate is not a yearly salary."
+        )
 
 with lca_tab:
     visa_disclaimer()
