@@ -179,7 +179,16 @@ def usd_k(value: Any) -> float | None:
 
 
 def pct(numerator: float, denominator: float) -> str:
-    return "n/a" if not denominator else f"{100 * numerator / denominator:.0f}%"
+    """A share as text. 99.7% is shown as 99.7%, not rounded up to 100% (which would claim that
+    nothing is missing), and a tiny non-zero share is "<1%"."""
+    if not denominator:
+        return "n/a"
+    value = 100 * numerator / denominator
+    if 99.5 <= value < 100:
+        return f"{min(value, 99.9):.1f}%"
+    if 0 < value < 0.5:
+        return "<1%"
+    return f"{value:.0f}%"
 
 
 def visa_disclaimer() -> None:
@@ -417,6 +426,18 @@ _ACTIVE_ON = (
     "WHERE NOT is_probable_duplicate AND first_seen_date <= CAST(? AS DATE) "
     "AND (closed_date IS NULL OR closed_date > CAST(? AS DATE))"
 )
+
+
+def kpi_basis(days: int) -> str | None:
+    """'19 Nov vs 12 Nov': the two settled days a KPI change compares (None without data)."""
+    latest = load("SELECT max(newest_snapshot_date) AS d FROM gold.fct_snapshot_freshness")[
+        "d"
+    ].iloc[0]
+    if is_missing(latest):
+        return None
+    latest_day = latest.date() if hasattr(latest, "date") else latest
+    settled = latest_day - timedelta(days=1)
+    return f"{settled:%d %b} vs {settled - timedelta(days=days):%d %b}"
 
 
 def kpi_comparison(days: int) -> tuple[dict[str, int], dict[str, int] | None]:

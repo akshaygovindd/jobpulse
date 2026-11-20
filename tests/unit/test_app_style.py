@@ -350,6 +350,12 @@ def test_full_weeks_counts_complete_monday_to_sunday_weeks() -> None:
 def test_skills_over_time_is_hidden_until_enough_full_weeks(
     history_db: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from jobpulse import app_ui
+
+    small = app_ui.app_config().model_copy(
+        update={"samples": app_ui.app_config().samples.model_copy(update={"min_group_n": 1})}
+    )  # the fixture is tiny; the real floor is exercised in test_thin_roles_are_not_offered
+    monkeypatch.setattr(app_ui, "app_config", lambda: small)
     at = _page(history_db, monkeypatch, "app_pages/hiring_trends.py")
     assert "Skills over time (weeks start on Mondays)" not in [m.label for m in at.multiselect]
     text = _text(at)

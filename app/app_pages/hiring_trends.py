@@ -50,15 +50,29 @@ st.caption(
     f"The first day of data ({first_day:%d %b %Y}) is left out of the chart: every open posting "
     "looked new that day, so it is a baseline, not a hiring spike. A posting counts as closed "
     "once it is missing from two daily snapshots in a row, so closures start two days after the "
-    "baseline. Days when the daily fetch was incomplete show as dips."
+    "baseline. Weekends are quiet, and a day when the daily fetch was incomplete can also show "
+    "as a dip."
 )
 
 st.subheader("Skills employers ask for")
-roles = load("SELECT DISTINCT role_family FROM gold.agg_skill_demand_weekly ORDER BY 1")[
-    "role_family"
-].tolist()
-if not roles:
+sizes = load(
+    "SELECT role_family, count(*) AS n FROM gold.fct_postings "
+    "WHERE is_active AND has_extraction AND NOT is_probable_duplicate AND role_family IS NOT NULL "
+    "GROUP BY 1 ORDER BY 2 DESC, 1"
+)
+with_data = set(
+    load("SELECT DISTINCT role_family FROM gold.agg_skill_demand_weekly")["role_family"]
+)
+sizes = sizes[sizes["role_family"].isin(with_data)]
+if sizes.empty:
     st.info("No analyzed postings yet, so there is no skill data.")
+    st.stop()
+min_n = app_config().samples.min_group_n
+n_by_role = dict(zip(sizes["role_family"], sizes["n"].astype(int), strict=True))
+roles = [r for r in sizes["role_family"] if n_by_role[r] >= min_n]  # largest first
+thin = [role_label(r) for r in sizes["role_family"] if n_by_role[r] < min_n]
+if not roles:
+    st.info("Not enough analyzed postings per role family yet.")
     st.stop()
 role = st.segmented_control(
     "Role family",
@@ -67,6 +81,10 @@ role = st.segmented_control(
     format_func=role_label,
     key="trend_role",
 )
+if thin:
+    st.caption(
+        f"Left out because fewer than {min_n} analyzed postings are open: {', '.join(thin)}."
+    )
 if not role:
     st.stop()
 skills = load(
@@ -84,12 +102,13 @@ top = skills[skills["week"] == latest].sort_values("share", ascending=False).hea
 top["Share of postings (%)"] = 100 * top["share"]
 st.caption(
     f"Share of analyzed {ROLE_LABELS.get(role, role)} postings open in the week starting "
-    f"{latest} that mention the skill."
+    f"{latest} that mention the skill. Based on {n_by_role[role]:,} analyzed postings."
 )
 key_insight(
     insights.skill_insight(
         list(zip(top["skill"], top["Share of postings (%)"], strict=True)),
         ROLE_LABELS.get(role, role),
+        n_by_role[role],
     )
 )
 bar(top, x="skill", y="Share of postings (%)", horizontal=True, sort="-Share of postings (%)")

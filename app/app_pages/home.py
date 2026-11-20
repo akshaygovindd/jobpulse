@@ -3,6 +3,7 @@ import streamlit as st
 from jobpulse import insights
 from jobpulse.app_ui import (
     app_config,
+    kpi_basis,
     kpi_comparison,
     kpi_label,
     load,
@@ -20,7 +21,7 @@ counts = load(
 ).iloc[0]
 if not counts["n"]:
     st.title("JobPulse")
-    st.warning("No postings yet. Run the pipeline, then `jobpulse build-gold`.")
+    st.warning("No postings yet. The data is refreshed daily; please check back soon.")
     st.stop()
 
 latest = load("SELECT max(newest_snapshot_date) AS d FROM gold.fct_snapshot_freshness")["d"].iloc[0]
@@ -31,7 +32,7 @@ st.markdown(
     "### Daily job-market intelligence for data and AI roles\n"
     "What is open, what it pays, which skills employers ask for, and which employers have a "
     "public record of H-1B filings, from the job boards of "
-    f"{int(counts['companies'])} tech companies, refreshed every day."
+    f"{int(counts['companies'])} tech companies, refreshed daily."
 )
 with st.container(horizontal=True, vertical_alignment="center"):
     if latest is not None and latest == latest:
@@ -63,11 +64,14 @@ skills = load(
     "GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT ?",
     [cfg.home.top_skills],
 )
+# Interns are left out: their hourly or monthly pay annualized is not a yearly salary.
 pay = load(
     "SELECT median((coalesce(salary_min_annual, salary_max_annual) + "
-    "coalesce(salary_max_annual, salary_min_annual)) / 2) AS median_pay, count(*) AS n "
+    "coalesce(salary_max_annual, salary_min_annual)) / 2) AS median_pay, "
+    "count(*) FILTER (WHERE coalesce(salary_min_annual, salary_max_annual) IS NOT NULL "
+    "AND seniority <> 'intern') AS n, count(*) AS n_usd "
     "FROM gold.fct_postings WHERE is_active AND has_extraction AND NOT is_probable_duplicate "
-    "AND salary_currency = 'USD' AND coalesce(salary_min_annual, salary_max_annual) IS NOT NULL"
+    "AND salary_currency = 'USD' AND has_advertised_salary AND seniority <> 'intern'"
 ).iloc[0]
 analyzed = int(
     load(
@@ -83,6 +87,9 @@ with_filings = int((visa["n_lca_certified"] > 0).sum())
 c1, c2, c3, c4 = st.columns(4)
 with c1, st.container(border=True):
     st.metric("Open postings", f"{int(counts['active']):,}", delta=open_delta, delta_color="off")
+    basis = kpi_basis(days)
+    if open_delta and basis:
+        st.caption(f"The change compares settled days: {basis}.")
     st.caption(
         f"Across {int(counts['companies'])} companies. {t_done:,} of {t_all:,} open data and AI "
         f"roles ({pct(t_done, t_all)}) are analyzed in depth."
@@ -105,8 +112,9 @@ with c3, st.container(border=True):
     if pay["n"]:
         st.metric("Median advertised pay", f"${float(pay['median_pay']) / 1000:,.0f}K")
         st.caption(
-            f"Yearly USD midpoint over {int(pay['n'])} of {analyzed:,} analyzed postings that "
-            "state a salary."
+            f"Midpoint of the advertised range, in USD, over {int(pay['n'])} of the "
+            f"{int(pay['n_usd'])} non-intern postings with a USD salary (of {analyzed:,} "
+            "analyzed). Hourly and monthly pay is converted to a yearly equivalent."
         )
     else:
         st.metric("Median advertised pay", "n/a")

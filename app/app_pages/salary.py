@@ -3,6 +3,8 @@ import streamlit as st
 from jobpulse import insights
 from jobpulse.app_ui import (
     SENIORITY_LABELS,
+    app_config,
+    dash,
     human,
     key_insight,
     load,
@@ -14,7 +16,6 @@ from jobpulse.app_ui import (
 )
 
 NO_CITY = "No single city (remote or multi-location)"
-MONEY = "$%.0fK"
 
 st.caption(
     "Two separate datasets that are never blended: salaries advertised in postings, and wages "
@@ -100,6 +101,11 @@ with advertised_tab:
                 ("p75_annual", "P75"),
             ):
                 table[dst] = table[src].map(usd_k)
+            show_thin = st.toggle(
+                "Include groups with fewer than five salaries (no percentiles)", key="sal_thin"
+            )
+            if not show_thin:
+                table = table[table["Median"].notna()]
             chart = table.dropna(subset=["Median"]).copy()
             st.subheader(f"Median advertised salary ({cur})")
             if chart.empty:
@@ -116,16 +122,22 @@ with advertised_tab:
                                 int(r["n_annualized"]),
                             )
                             for _, r in chart.iterrows()
-                        ]
+                        ],
+                        app_config().samples.min_group_n,
                     )
                 )
                 salary_chart(chart)
                 st.caption(
                     "Midpoint of the advertised range, converted to a yearly figure, for groups "
-                    "with at least five salaries; a blank cell means fewer than five."
+                    "with at least five salaries; a blank cell means fewer than five. Hourly and "
+                    "monthly pay is converted to a yearly equivalent, so intern figures are "
+                    "annualized equivalents of a short internship, not yearly salaries."
                 )
+            shown = table.copy()
+            for col in ("P25", "Median", "P75"):
+                shown[col] = shown[col].map(lambda v: dash(v, "${:,.0f}K"))  # "—", never "None"
             st.dataframe(
-                table[
+                shown[
                     [
                         "Role family",
                         "Seniority",
@@ -150,9 +162,6 @@ with advertised_tab:
                     "n_annualized": st.column_config.NumberColumn(
                         "Yearly figure known", format="%d"
                     ),
-                    "P25": st.column_config.NumberColumn(format=MONEY),
-                    "Median": st.column_config.NumberColumn(format=MONEY),
-                    "P75": st.column_config.NumberColumn(format=MONEY),
                 },
                 alt="Advertised yearly salary percentiles by role family and seniority",
             )
@@ -160,11 +169,12 @@ with advertised_tab:
 
 with lca_tab:
     visa_disclaimer()
+    n_companies = int(load("SELECT count(*) AS n FROM gold.dim_company")["n"].iloc[0])
     st.caption(
         "Wages stated by employers on certified LCAs (lower bound of the filed range), for the "
-        "43 companies we track only. Not a market survey and not comparable one-to-one with "
-        "advertised salary. Wages that are implausible after converting to a yearly figure "
-        "(filer unit errors) are excluded, not corrected."
+        f"{n_companies} companies we track only. Not a market survey and not comparable "
+        "one-to-one with advertised salary. Wages that are implausible after converting to a "
+        "yearly figure (filer unit errors) are excluded, not corrected."
     )
     wages = load(
         "SELECT role_family, worksite_state, worksite_city, n_certified, n_with_wage, "
@@ -190,6 +200,12 @@ with lca_tab:
             wages[dst] = wages[src].map(usd_k)
         wages["State"] = wages["worksite_state"].replace("unspecified", "Not stated")
         wages["City"] = wages["worksite_city"].replace("unspecified", "Not stated")
+        show_all = st.toggle(
+            "Include groups with fewer than five wages (no percentiles)", key="lca_thin"
+        )
+        wages = wages if show_all else wages[wages["Median"].notna()]
+        for col in ("P25", "Median", "P75"):
+            wages[col] = wages[col].map(lambda v: dash(v, "${:,.0f}K"))
         st.dataframe(
             wages[
                 [
@@ -216,9 +232,6 @@ with lca_tab:
                     "Excluded as implausible", format="%d"
                 ),
                 "coverage_pct": st.column_config.NumberColumn("Coverage", format="%.0f%%"),
-                "P25": st.column_config.NumberColumn(format=MONEY),
-                "Median": st.column_config.NumberColumn(format=MONEY),
-                "P75": st.column_config.NumberColumn(format=MONEY),
             },
             alt="Offered wages on certified LCAs by role family and worksite",
         )

@@ -17,5 +17,8 @@ map:
 home:
   top_skills: 3                 # skills named in the Home skill card
 
+samples:
+  min_group_n: 10              # groups with fewer postings are not used for headlines or the role picker
+
 trends:
   min_full_weeks: 3             # "Skills over time" is hidden until this many full Mon-Sun weeks exist

@@ -834,3 +834,22 @@ README: added a Highlights section near the top, and changed the architecture di
 6. **Pipeline health:** missing figures show "—" in the runs and data-quality tables (those columns are now text, so the share bars are gone). Found by running the real data: pandas' NA broke the first version of the helper; fixed and tested.
 
 **Checks run:** `make check` green: ruff, ruff format, mypy strict (52 files), pytest 456 passed (3 live deselected), terraform fmt and validate, gitleaks no leaks. All seven pages ran on the real export without exceptions. Not verified: how the heatmap, wide bars and all four remote labels look in a browser.
+
+---
+
+## 2026-11-20 (late): QA audit before the final fixes (no code changed)
+
+**What and why.** The owner asked for a rigorous QA audit of the live app before the final fixes, with a report and no code changes. I wrote [docs/QA_REPORT.md](QA_REPORT.md): findings ranked P0 to P3, each with page, steps, expected vs actual, proposed fix and effort, plus a number-by-number reconciliation, a resume test matrix, a robustness matrix, performance figures, and a prioritized fix plan (about 36 to 51 hours in total; about 12 to 16 hours for the P0s and the most visible P1/P2s).
+
+**Method.** The real published gold export (the public release asset, built 2026-11-20 17:53 UTC) was downloaded once and opened read-only from the scratchpad. Nothing touched prod S3 or MotherDuck. Every number and insight sentence was recomputed with independent SQL; 20 synthetic resumes and malformed files went through the real resume code and the page; the published-file connector was exercised with mocked HTTP; 200 widget-combination page runs, a 4,000-query concurrency test, a 1,500-case PDF fuzz and decompression-bomb PDFs were run. Only a few read-only GETs were made to the live app's root URL.
+
+**Headline findings.**
+- P0: one DuckDB connection is shared by all visitor sessions (errors at 2 threads, a wrong result at 8; a wrong result would be cached for an hour); a 16 to 136 KB PDF can spike memory by 350 to 470 MB (a verified fix: pypdf's `apply_configuration` limits, which cut it to about 52 MB); `jobpulse` modules go stale after code-only pushes because Streamlit's watcher only covers `app/` (the earlier ImportError).
+- P1: "None"/"nan" cities, Senior and Manager roles first for a student, 11 of 28 recognized skills are noise, the Home pay caption (316) contradicts Salary (376), no apply links, identical-looking rows, resume title lines rendered as markdown (and kept with names/emails).
+- Good news: every headline number that was recomputed matched except the specific items listed; 200 page runs had no crash; upload validation refused all 11 bad inputs cleanly; Delete clears the profile and filters.
+
+**Checks run.** `make check` on current `main`: green (ruff, ruff format, mypy strict, 456 passed / 3 deselected, terraform fmt and validate, gitleaks no leaks). It was run as a baseline; no code changed, so no re-run after the report. DuckDB's `.df()` emits a pandas 3.1 `Pandas4Warning` (a future-break signal, in the report as P3-13).
+
+**Not verified.** No browser rendering (mobile layout, chart appearance, label collisions are reasoned from code and computed contrast); no Streamlit Cloud runtime memory or cold-start measurement; the stale-module fix is based on Streamlit's source and the earlier incident, not re-triggered on Cloud; no dependency CVE audit. The QA scripts are in the session scratchpad and are not committed.
+
+**Open questions for the owner** (also at the end of the report): approve phases A and B; which phase-D features (experience-level filter, apply links, "Top skills to learn", Market filters) are wanted; how to treat intern salaries; the resume stop-list and minimum posting frequency; whether to promote the QA scripts to `scripts/qa/`; anything to remove rather than fix.

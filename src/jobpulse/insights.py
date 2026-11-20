@@ -88,20 +88,22 @@ def daily_flow_insight(rows: Sequence[tuple[str, float]], noun: str = "new posti
     )
 
 
-def skill_insight(rows: Sequence[tuple[str, float]], role: str) -> str | None:
-    """rows: (skill, share in percent) for one role family."""
+def skill_insight(rows: Sequence[tuple[str, float]], role: str, n: int | None = None) -> str | None:
+    """rows: (skill, share in percent) for one role family; n: postings the shares are based on."""
     top = _lead(rows)
     if not top:
         return None
+    basis = "" if n is None else f" (of {n:,} analyzed postings)"
     return (
         f"For {role}, the most requested skill is {top[0]}: it appears in {top[1]:.0f}% of "
-        "postings."
+        f"postings{basis}."
     )
 
 
-def salary_insight(rows: Sequence[tuple[str, float, int]]) -> str | None:
-    """rows: (group label, median in $K, number of salaries). Highest median among the groups."""
-    clean = [r for r in rows if r[1] == r[1]]
+def salary_insight(rows: Sequence[tuple[str, float, int]], min_n: int = 0) -> str | None:
+    """rows: (group label, median in $K, number of salaries). Highest median among the groups
+    with at least `min_n` salaries (a tiny group must not crown itself)."""
+    clean = [r for r in rows if r[1] == r[1] and r[2] >= min_n]
     if not clean:
         return None
     label, median, n = max(clean, key=lambda r: r[1])
