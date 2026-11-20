@@ -11,3 +11,5 @@ maxUploadSize = 2           # MB; matches config/resume.yaml upload.max_bytes
 
 [theme]
 primaryColor = "#2F6DB5"    # blue: filters, tabs and progress bars must not read as errors
+linkColor = "#2F6DB5"
+baseRadius = "0.6rem"

@@ -102,7 +102,31 @@ MATCH_LABELS = {
     "normalized": "Name match (punctuation and Inc/LLC ignored)",
 }
 ACRONYMS = {"ai": "AI", "ml": "ML", "bi": "BI", "llm": "LLM", "usd": "USD", "lca": "LCA"}
-NEUTRAL = ["#4C78A8", "#9AA5B1", "#7A8CA3", "#B7C4D6"]  # no red/green: colour never implies verdict
+# One chart style for the whole app. Blue and slate only: colour never implies a verdict (no
+# red/green). Every chart goes through `_chart`, which applies CHART_CONFIG, so changing the look
+# means editing this block (and `.streamlit/config.toml` for the Streamlit theme).
+PRIMARY = "#2F6DB5"  # same blue as the Streamlit theme's primaryColor
+NEUTRAL = ["#4C78A8", "#9AA5B1", "#7A8CA3", "#B7C4D6"]
+SENIORITY_RAMP = [
+    "#C6DBEF", "#9ECAE1", "#6BAED6", "#4292C6", "#2171B5",
+    "#08519C", "#08306B", "#7A8CA3", "#9AA5B1", "#B7C4D6",
+]  # fmt: skip
+LABEL_COLOR = "#7F8FA6"  # mid slate: readable on both the light and the dark Streamlit theme
+CHART_CONFIG: dict[str, Any] = {
+    "font": "sans-serif",
+    "view": {"stroke": None},
+    "axis": {
+        "labelFontSize": 12,
+        "titleFontSize": 12,
+        "titleFontWeight": "normal",
+        "gridOpacity": 0.25,
+        "domainOpacity": 0.4,
+        "tickOpacity": 0.4,
+    },
+    "legend": {"labelFontSize": 12, "titleFontSize": 12},
+    "bar": {"cornerRadiusEnd": 2},
+    "line": {"strokeWidth": 2},
+}
 
 
 def human(value: Any, mapping: dict[str, str] | None = None) -> str:
@@ -148,7 +172,12 @@ def _titles(data: Any) -> tuple[Any, dict[str, str]]:
 
 
 def _chart(data: Any, spec: dict[str, Any], height: int) -> None:
-    spec = {"$schema": "https://vega.github.io/schema/vega-lite/v5.json", "height": height, **spec}
+    spec = {
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "height": height,
+        "config": CHART_CONFIG,
+        **spec,
+    }
     st.vega_lite_chart(data, spec, width="stretch")
 
 
@@ -184,7 +213,7 @@ def bar(
         "axis": {"title": val, "format": "~s"},
     }
     cat_ch, val_ch = ("y", "x") if horizontal else ("x", "y")
-    bar_layer = {"mark": {"type": "bar", "color": NEUTRAL[0]}}
+    bar_layer = {"mark": {"type": "bar", "color": PRIMARY}}
     text_layer = {
         "mark": {
             "type": "text",
@@ -192,7 +221,7 @@ def bar(
             "baseline": "middle" if horizontal else "bottom",
             "dx": 4 if horizontal else 0,
             "dy": 0 if horizontal else -2,
-            "color": "#44546A",
+            "color": LABEL_COLOR,
         },
         "encoding": {"text": {"field": val, "type": "quantitative", "format": ",.0f"}},
     }
@@ -248,7 +277,7 @@ def date_chart(
         }
         enc["tooltip"].insert(1, {"field": series, "type": "nominal"})
     else:
-        mark["color"] = NEUTRAL[0]
+        mark["color"] = PRIMARY
     _chart(data, {"mark": mark, "encoding": enc}, 280)
 
 
@@ -260,10 +289,6 @@ def salary_chart(data: Any) -> None:
         return
     present = set(data["Seniority"])
     order = [v for v in SENIORITY_LABELS.values() if v in present]
-    shades = [
-        "#C6DBEF", "#9ECAE1", "#6BAED6", "#4292C6", "#2171B5",
-        "#08519C", "#08306B", "#7A8CA3", "#9AA5B1", "#B7C4D6",
-    ]  # fmt: skip
     y = {
         "field": "Role family",
         "type": "nominal",
@@ -289,7 +314,7 @@ def salary_chart(data: Any) -> None:
                     "color": {
                         "field": "Seniority",
                         "type": "nominal",
-                        "scale": {"domain": order, "range": shades[: len(order)]},
+                        "scale": {"domain": order, "range": SENIORITY_RAMP[: len(order)]},
                         "legend": {"title": "Seniority", "orient": "bottom"},
                     },
                     "tooltip": [
@@ -301,7 +326,7 @@ def salary_chart(data: Any) -> None:
             },
             {
                 "mark": {"type": "text", "align": "left", "baseline": "middle", "dx": 4,
-                         "color": "#44546A", "fontSize": 11},
+                         "color": LABEL_COLOR, "fontSize": 11},
                 "encoding": {"text": {"field": "label", "type": "nominal"}},
             },
         ],
