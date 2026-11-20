@@ -1,0 +1,606 @@
+{
+ "note": "Not shown to the labeler: origin, method, confidence, similarity.",
+ "pairs": [
+  {
+   "company_id": "airbnb",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 432,
+   "norm_name": "airbnb",
+   "origin": "matched",
+   "pair_id": "P001",
+   "similarity": null
+  },
+  {
+   "company_id": "carta",
+   "confidence": 1.0,
+   "method": "alias",
+   "n_cases": 54,
+   "norm_name": "eshares",
+   "origin": "matched",
+   "pair_id": "P002",
+   "similarity": null
+  },
+  {
+   "company_id": "doordash",
+   "confidence": 1.0,
+   "method": "exact",
+   "n_cases": 1085,
+   "norm_name": "doordash",
+   "origin": "matched",
+   "pair_id": "P003",
+   "similarity": null
+  },
+  {
+   "company_id": "duolingo",
+   "confidence": null,
+   "method": null,
+   "n_cases": 1,
+   "norm_name": "dowling",
+   "origin": "suggested",
+   "pair_id": "P004",
+   "similarity": 0.8
+  },
+  {
+   "company_id": "peloton",
+   "confidence": 1.0,
+   "method": "alias",
+   "n_cases": 99,
+   "norm_name": "peloton interactive",
+   "origin": "matched",
+   "pair_id": "P005",
+   "similarity": null
+  },
+  {
+   "company_id": "plaid",
+   "confidence": null,
+   "method": null,
+   "n_cases": 1,
+   "norm_name": "placid",
+   "origin": "suggested",
+   "pair_id": "P006",
+   "similarity": 0.909
+  },
+  {
+   "company_id": "affirm",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 190,
+   "norm_name": "affirm",
+   "origin": "matched",
+   "pair_id": "P007",
+   "similarity": null
+  },
+  {
+   "company_id": "scale-ai",
+   "confidence": null,
+   "method": null,
+   "n_cases": 33,
+   "norm_name": "upscale ai",
+   "origin": "suggested",
+   "pair_id": "P008",
+   "similarity": 0.889
+  },
+  {
+   "company_id": "pinterest",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 703,
+   "norm_name": "pinterest",
+   "origin": "matched",
+   "pair_id": "P009",
+   "similarity": null
+  },
+  {
+   "company_id": "wealthfront",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 20,
+   "norm_name": "wealthfront",
+   "origin": "matched",
+   "pair_id": "P010",
+   "similarity": null
+  },
+  {
+   "company_id": "mercury",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 3,
+   "norm_name": "mercury",
+   "origin": "matched",
+   "pair_id": "P011",
+   "similarity": null
+  },
+  {
+   "company_id": "instacart",
+   "confidence": null,
+   "method": null,
+   "n_cases": 1,
+   "norm_name": "distacart",
+   "origin": "suggested",
+   "pair_id": "P012",
+   "similarity": 0.889
+  },
+  {
+   "company_id": "doordash",
+   "confidence": null,
+   "method": null,
+   "n_cases": 4,
+   "norm_name": "doordash essentials",
+   "origin": "suggested",
+   "pair_id": "P013",
+   "similarity": 0.85
+  },
+  {
+   "company_id": "robinhood",
+   "confidence": 1.0,
+   "method": "alias",
+   "n_cases": 383,
+   "norm_name": "robinhood markets",
+   "origin": "matched",
+   "pair_id": "P014",
+   "similarity": null
+  },
+  {
+   "company_id": "datadog",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 200,
+   "norm_name": "datadog",
+   "origin": "matched",
+   "pair_id": "P015",
+   "similarity": null
+  },
+  {
+   "company_id": "airbnb",
+   "confidence": null,
+   "method": null,
+   "n_cases": 4,
+   "norm_name": "airbnb payments",
+   "origin": "suggested",
+   "pair_id": "P016",
+   "similarity": 0.85
+  },
+  {
+   "company_id": "asana",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 103,
+   "norm_name": "asana",
+   "origin": "matched",
+   "pair_id": "P017",
+   "similarity": null
+  },
+  {
+   "company_id": "mongodb",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 277,
+   "norm_name": "mongodb",
+   "origin": "matched",
+   "pair_id": "P018",
+   "similarity": null
+  },
+  {
+   "company_id": "sofi",
+   "confidence": 1.0,
+   "method": "alias",
+   "n_cases": 420,
+   "norm_name": "social finance",
+   "origin": "matched",
+   "pair_id": "P019",
+   "similarity": null
+  },
+  {
+   "company_id": "brex",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 59,
+   "norm_name": "brex",
+   "origin": "matched",
+   "pair_id": "P020",
+   "similarity": null
+  },
+  {
+   "company_id": "databricks",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 1031,
+   "norm_name": "databricks",
+   "origin": "matched",
+   "pair_id": "P021",
+   "similarity": null
+  },
+  {
+   "company_id": "databricks",
+   "confidence": null,
+   "method": null,
+   "n_cases": 7,
+   "norm_name": "data bricks",
+   "origin": "suggested",
+   "pair_id": "P022",
+   "similarity": 0.952
+  },
+  {
+   "company_id": "robinhood",
+   "confidence": null,
+   "method": null,
+   "n_cases": 2,
+   "norm_name": "robinhood group",
+   "origin": "suggested",
+   "pair_id": "P023",
+   "similarity": 0.85
+  },
+  {
+   "company_id": "palantir",
+   "confidence": null,
+   "method": null,
+   "n_cases": 2,
+   "norm_name": "palantirnet",
+   "origin": "suggested",
+   "pair_id": "P024",
+   "similarity": 0.842
+  },
+  {
+   "company_id": "asana",
+   "confidence": null,
+   "method": null,
+   "n_cases": 5,
+   "norm_name": "asana partners payroll services",
+   "origin": "suggested",
+   "pair_id": "P025",
+   "similarity": 0.85
+  },
+  {
+   "company_id": "carta",
+   "confidence": null,
+   "method": null,
+   "n_cases": 1,
+   "norm_name": "carma",
+   "origin": "suggested",
+   "pair_id": "P026",
+   "similarity": 0.8
+  },
+  {
+   "company_id": "toast",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 63,
+   "norm_name": "toast",
+   "origin": "matched",
+   "pair_id": "P027",
+   "similarity": null
+  },
+  {
+   "company_id": "plaid",
+   "confidence": 1.0,
+   "method": "exact",
+   "n_cases": 82,
+   "norm_name": "plaid",
+   "origin": "matched",
+   "pair_id": "P028",
+   "similarity": null
+  },
+  {
+   "company_id": "datadog",
+   "confidence": null,
+   "method": null,
+   "n_cases": 110,
+   "norm_name": "dataedge",
+   "origin": "suggested",
+   "pair_id": "P029",
+   "similarity": 0.8
+  },
+  {
+   "company_id": "sofi",
+   "confidence": null,
+   "method": null,
+   "n_cases": 15,
+   "norm_name": "sofi bank na",
+   "origin": "suggested",
+   "pair_id": "P030",
+   "similarity": 0.85
+  },
+  {
+   "company_id": "snowflake",
+   "confidence": null,
+   "method": null,
+   "n_cases": 2,
+   "norm_name": "snowflake public sector",
+   "origin": "suggested",
+   "pair_id": "P031",
+   "similarity": 0.85
+  },
+  {
+   "company_id": "reddit",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 190,
+   "norm_name": "reddit",
+   "origin": "matched",
+   "pair_id": "P032",
+   "similarity": null
+  },
+  {
+   "company_id": "squarespace",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 48,
+   "norm_name": "squarespace",
+   "origin": "matched",
+   "pair_id": "P033",
+   "similarity": null
+  },
+  {
+   "company_id": "okta",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 239,
+   "norm_name": "okta",
+   "origin": "matched",
+   "pair_id": "P034",
+   "similarity": null
+  },
+  {
+   "company_id": "notion",
+   "confidence": 1.0,
+   "method": "alias",
+   "n_cases": 59,
+   "norm_name": "notion labs",
+   "origin": "matched",
+   "pair_id": "P035",
+   "similarity": null
+  },
+  {
+   "company_id": "whoop",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 67,
+   "norm_name": "whoop",
+   "origin": "matched",
+   "pair_id": "P036",
+   "similarity": null
+  },
+  {
+   "company_id": "mercury",
+   "confidence": null,
+   "method": null,
+   "n_cases": 44,
+   "norm_name": "mercury insurance services",
+   "origin": "suggested",
+   "pair_id": "P037",
+   "similarity": 0.85
+  },
+  {
+   "company_id": "peloton",
+   "confidence": null,
+   "method": null,
+   "n_cases": 16,
+   "norm_name": "peloton group",
+   "origin": "suggested",
+   "pair_id": "P038",
+   "similarity": 0.85
+  },
+  {
+   "company_id": "formlabs",
+   "confidence": null,
+   "method": null,
+   "n_cases": 1,
+   "norm_name": "formlabs ohio",
+   "origin": "suggested",
+   "pair_id": "P039",
+   "similarity": 0.85
+  },
+  {
+   "company_id": "affirm",
+   "confidence": null,
+   "method": null,
+   "n_cases": 2,
+   "norm_name": "affirma",
+   "origin": "suggested",
+   "pair_id": "P040",
+   "similarity": 0.923
+  },
+  {
+   "company_id": "scale-ai",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 191,
+   "norm_name": "scale ai",
+   "origin": "matched",
+   "pair_id": "P041",
+   "similarity": null
+  },
+  {
+   "company_id": "pinterest",
+   "confidence": null,
+   "method": null,
+   "n_cases": 3,
+   "norm_name": "intervet",
+   "origin": "suggested",
+   "pair_id": "P042",
+   "similarity": 0.824
+  },
+  {
+   "company_id": "cargurus",
+   "confidence": null,
+   "method": null,
+   "n_cases": 2,
+   "norm_name": "camurus",
+   "origin": "suggested",
+   "pair_id": "P043",
+   "similarity": 0.8
+  },
+  {
+   "company_id": "duolingo",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 149,
+   "norm_name": "duolingo",
+   "origin": "matched",
+   "pair_id": "P044",
+   "similarity": null
+  },
+  {
+   "company_id": "instacart",
+   "confidence": 1.0,
+   "method": "alias",
+   "n_cases": 302,
+   "norm_name": "maplebear",
+   "origin": "matched",
+   "pair_id": "P045",
+   "similarity": null
+  },
+  {
+   "company_id": "dropbox",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 193,
+   "norm_name": "dropbox",
+   "origin": "matched",
+   "pair_id": "P046",
+   "similarity": null
+  },
+  {
+   "company_id": "hubspot",
+   "confidence": null,
+   "method": null,
+   "n_cases": 11,
+   "norm_name": "hubot",
+   "origin": "suggested",
+   "pair_id": "P047",
+   "similarity": 0.833
+  },
+  {
+   "company_id": "cargurus",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 73,
+   "norm_name": "cargurus",
+   "origin": "matched",
+   "pair_id": "P048",
+   "similarity": null
+  },
+  {
+   "company_id": "simplisafe",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 19,
+   "norm_name": "simplisafe",
+   "origin": "matched",
+   "pair_id": "P049",
+   "similarity": null
+  },
+  {
+   "company_id": "klaviyo",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 101,
+   "norm_name": "klaviyo",
+   "origin": "matched",
+   "pair_id": "P050",
+   "similarity": null
+  },
+  {
+   "company_id": "notion",
+   "confidence": null,
+   "method": null,
+   "n_cases": 23,
+   "norm_name": "gotion",
+   "origin": "suggested",
+   "pair_id": "P051",
+   "similarity": 0.833
+  },
+  {
+   "company_id": "coinbase",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 317,
+   "norm_name": "coinbase",
+   "origin": "matched",
+   "pair_id": "P052",
+   "similarity": null
+  },
+  {
+   "company_id": "betterment",
+   "confidence": null,
+   "method": null,
+   "n_cases": 1,
+   "norm_name": "better meat",
+   "origin": "suggested",
+   "pair_id": "P053",
+   "similarity": 0.857
+  },
+  {
+   "company_id": "formlabs",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 39,
+   "norm_name": "formlabs",
+   "origin": "matched",
+   "pair_id": "P054",
+   "similarity": null
+  },
+  {
+   "company_id": "chime",
+   "confidence": 1.0,
+   "method": "alias",
+   "n_cases": 241,
+   "norm_name": "chime financial",
+   "origin": "matched",
+   "pair_id": "P055",
+   "similarity": null
+  },
+  {
+   "company_id": "figma",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 122,
+   "norm_name": "figma",
+   "origin": "matched",
+   "pair_id": "P056",
+   "similarity": null
+  },
+  {
+   "company_id": "figma",
+   "confidence": null,
+   "method": null,
+   "n_cases": 3,
+   "norm_name": "sigma",
+   "origin": "suggested",
+   "pair_id": "P057",
+   "similarity": 0.8
+  },
+  {
+   "company_id": "hubspot",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 307,
+   "norm_name": "hubspot",
+   "origin": "matched",
+   "pair_id": "P058",
+   "similarity": null
+  },
+  {
+   "company_id": "spotify",
+   "confidence": 1.0,
+   "method": "alias",
+   "n_cases": 224,
+   "norm_name": "spotify usa",
+   "origin": "matched",
+   "pair_id": "P059",
+   "similarity": null
+  },
+  {
+   "company_id": "twilio",
+   "confidence": 0.9,
+   "method": "normalized",
+   "n_cases": 324,
+   "norm_name": "twilio",
+   "origin": "matched",
+   "pair_id": "P060",
+   "similarity": null
+  }
+ ],
+ "seed": 20261120
+}
