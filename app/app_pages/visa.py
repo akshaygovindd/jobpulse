@@ -20,7 +20,8 @@ st.caption(
 
 companies = load(
     "SELECT company_id, name, visa_evidence_class, n_lca_certified, n_lca_not_certified, "
-    "lca_match_confidence, lca_employer_names, lca_match_methods, n_active "
+    "lca_match_confidence, lca_employer_names, lca_match_methods, lca_subsidiaries, "
+    "n_active "
     "FROM gold.dim_company ORDER BY n_lca_certified DESC"
 )
 if companies.empty:
@@ -109,6 +110,12 @@ names = row["lca_employer_names"]
 if hasattr(names, "__len__") and len(names):
     matched_by = row["How the filings were matched"]
     st.caption(f"Filed under: {', '.join(names)}. Matched by: {matched_by}.")
+    subs = row["lca_subsidiaries"]
+    if hasattr(subs, "__len__") and len(subs):
+        st.caption(
+            f"Includes filings by subsidiaries (reviewed): {', '.join(subs)}. "
+            "They are counted in the certified filings above."
+        )
 else:
     st.caption("No H-1B filings found in fiscal years 2025 and 2026.")
 

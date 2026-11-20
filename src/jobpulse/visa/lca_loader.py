@@ -34,7 +34,8 @@ _NAMES_DDL = """fiscal_year INTEGER NOT NULL, employer_name VARCHAR NOT NULL,
     employer_name_norm VARCHAR NOT NULL, n_cases INTEGER NOT NULL, n_certified INTEGER NOT NULL"""
 _MATCH_DDL = """company_id VARCHAR NOT NULL, lca_employer_name VARCHAR NOT NULL,
     example_name VARCHAR NOT NULL, match_method VARCHAR NOT NULL, match_confidence DOUBLE NOT NULL,
-    reviewed BOOLEAN NOT NULL, n_cases INTEGER NOT NULL, matched_at TIMESTAMPTZ NOT NULL"""
+    reviewed BOOLEAN NOT NULL, n_cases INTEGER NOT NULL, matched_at TIMESTAMPTZ NOT NULL,
+    relationship VARCHAR DEFAULT 'same employer'"""
 _DISCLOSURE_COLS = (
     "case_number", "fiscal_year", "source_file", "case_status", "received_date", "decision_date",
     "visa_class", "employer_name", "employer_name_norm", "company_id", "job_title", "soc_code",
@@ -102,6 +103,10 @@ def ensure_ref_tables(con: duckdb.DuckDBPyConnection, cfg: WarehouseConfig) -> N
     s = cfg.ref_schema
     con.execute(f'CREATE TABLE IF NOT EXISTS "{s}"."lca_employer_names" ({_NAMES_DDL})')
     con.execute(f'CREATE TABLE IF NOT EXISTS "{s}"."employer_lca_match" ({_MATCH_DDL})')
+    con.execute(  # tables created before the column existed
+        f'ALTER TABLE "{s}"."employer_lca_match" '
+        "ADD COLUMN IF NOT EXISTS relationship VARCHAR DEFAULT 'same employer'"
+    )
     con.execute(f'CREATE TABLE IF NOT EXISTS "{s}"."lca_disclosures" ({_DISCLOSURES_DDL})')
 
 
@@ -172,6 +177,8 @@ def load_lca(
     companies: list[Company],
     aliases: dict[str, list[str]],
     *,
+    subsidiaries: dict[str, list[str]] | None = None,
+    excluded: dict[str, list[str]] | None = None,
     loaded_at: datetime,
     skipped: list[str] | None = None,
 ) -> LcaResult:
@@ -246,7 +253,14 @@ def load_lca(
                         FROM "{s}"."lca_employer_names" GROUP BY ALL"""
                 ).fetchall()
             ]
-            mres = build_matches(all_names, companies, aliases, cfg.match)
+            mres = build_matches(
+                all_names,
+                companies,
+                aliases,
+                cfg.match,
+                subsidiaries=subsidiaries,
+                excluded=excluded,
+            )
             result.ambiguous = mres.ambiguous
             result.match_rows = len(mres.matches)
             result.companies_matched = len({m.company_id for m in mres.matches})
@@ -264,6 +278,7 @@ def load_lca(
                         m.reviewed,
                         m.n_cases,
                         loaded_at,
+                        m.relationship,
                     )
                     for m in mres.matches
                 ],

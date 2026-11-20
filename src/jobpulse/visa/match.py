@@ -42,6 +42,7 @@ class Match:
     confidence: float
     reviewed: bool
     n_cases: int
+    relationship: str = "same employer"  # or "subsidiary"
 
 
 @dataclass(frozen=True)
@@ -76,11 +77,19 @@ def build_matches(
     companies: Sequence[Company],
     aliases: dict[str, list[str]],
     cfg: LcaMatchConfig,
+    *,
+    subsidiaries: dict[str, list[str]] | None = None,
+    excluded: dict[str, list[str]] | None = None,
 ) -> MatchResult:
-    alias_norms = {
-        cid: {normalize_employer(a, cfg.legal_suffixes) for a in lst}
-        for cid, lst in aliases.items()
-    }
+    def norms(rules: dict[str, list[str]] | None) -> dict[str, set[str]]:
+        return {
+            cid: {normalize_employer(a, cfg.legal_suffixes) for a in lst}
+            for cid, lst in (rules or {}).items()
+        }
+
+    alias_norms = norms(aliases)
+    sub_norms = norms(subsidiaries)
+    excluded_norms = norms(excluded)
     by_norm: dict[str, dict[str, str]] = {}  # norm -> company_id -> best method
     cases: dict[str, int] = {}
     example: dict[str, tuple[int, str]] = {}
@@ -89,7 +98,11 @@ def build_matches(
         if row.norm not in example or row.n_cases > example[row.norm][0]:
             example[row.norm] = (row.n_cases, row.raw)
         for c in companies:
-            if row.norm in alias_norms.get(c.company_id, ()):
+            if row.norm in excluded_norms.get(c.company_id, ()):
+                continue  # owner-reviewed: this name is not this company
+            if row.norm in alias_norms.get(c.company_id, ()) or row.norm in sub_norms.get(
+                c.company_id, ()
+            ):
                 method = "alias"
             elif _collapse(row.raw) == _collapse(c.name):
                 method = "exact"
@@ -116,6 +129,7 @@ def build_matches(
                 confidence=cfg.confidence[method],
                 reviewed=method == "alias",
                 n_cases=cases[norm],
+                relationship="subsidiary" if norm in sub_norms.get(cid, ()) else "same employer",
             )
         )
     return MatchResult(matches=matches, ambiguous=ambiguous)

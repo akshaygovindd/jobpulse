@@ -278,9 +278,13 @@ def cmd_load_lca(args: argparse.Namespace, clock: Clock) -> int:
     pipeline = load_pipeline()
     cfg = pipeline.warehouse
     lca = load_lca()
-    aliases = load_lca_aliases().aliases
+    alias_rules = load_lca_aliases()
+    aliases = alias_rules.aliases
     companies = build_companies((e.company for e in load_employers().employers), lca.match)
-    unknown = sorted(set(aliases) - {c.company_id for c in companies})
+    unknown = sorted(
+        (set(aliases) | set(alias_rules.subsidiaries) | set(alias_rules.excluded))
+        - {c.company_id for c in companies}
+    )
     if unknown:
         print(f"error: config/lca_aliases.yaml names unknown companies: {unknown}", file=sys.stderr)
         return EXIT_USAGE
@@ -300,7 +304,16 @@ def cmd_load_lca(args: argparse.Namespace, clock: Clock) -> int:
     now = clock()
     try:
         result = run_load_lca(
-            con, cfg, lca, files, companies, aliases, loaded_at=now, skipped=skipped
+            con,
+            cfg,
+            lca,
+            files,
+            companies,
+            aliases,
+            subsidiaries=alias_rules.subsidiaries,
+            excluded=alias_rules.excluded,
+            loaded_at=now,
+            skipped=skipped,
         )
     except LcaLoadError as e:
         print(f"error: {e}", file=sys.stderr)

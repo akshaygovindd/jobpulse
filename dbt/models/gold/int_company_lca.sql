@@ -7,7 +7,9 @@ with match as (
         company_id,
         max(match_confidence) as lca_match_confidence,
         list_sort(list(distinct example_name)) as lca_employer_names,
-        list_sort(list(distinct match_method)) as lca_match_methods
+        list_sort(list(distinct match_method)) as lca_match_methods,
+        list_sort(list(distinct example_name) filter (where relationship = 'subsidiary'))
+            as lca_subsidiaries
     from {{ source('ref', 'employer_lca_match') }}
     group by company_id
 ),
@@ -27,6 +29,7 @@ select
     m.lca_match_confidence,
     m.lca_employer_names,
     m.lca_match_methods,
+    m.lca_subsidiaries,
     coalesce(l.n_lca_certified, 0) as n_lca_certified,
     coalesce(l.n_lca_not_certified, 0) as n_lca_not_certified,
     l.lca_fiscal_years,

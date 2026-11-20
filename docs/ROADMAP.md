@@ -121,12 +121,12 @@
 - **MVP pages:** Market Overview, Hiring Trends, Salary, Visa Intelligence, Pipeline Health.
 
 **Done when**
-- [ ] Pages read only from gold and ops tables.
-- [ ] Salary shows coverage %, and advertised wages and LCA wages appear in separate views.
-- [ ] Visa pages show the evidence fields and the "evidence, not a promise" disclaimer.
-- [ ] Employer-match precision on ≥ 50 labeled employers is reported by script.
-- [ ] Streamlit AppTest smoke tests run in CI.
-- [ ] Pipeline Health shows a freshness banner when any source is more than 30h stale.
+- [x] Pages read only from gold tables (the ops and LLM-call data reach the app through gold models). Proven by `tests/unit/test_app.py` (allow-listed `gold.*` SELECT only, read-only connection, static check of the app code).
+- [x] Salary shows coverage %, and advertised wages and LCA wages appear in separate views (separate tabs; `test_salary_page_keeps_the_two_datasets_apart`; reviewed on real data).
+- [x] Visa pages show the evidence fields and the "evidence, not a promise" disclaimer (`test_visa_page_shows_disclaimer_counts_and_quotes`).
+- [ ] Employer-match precision on ≥ 50 labeled employers is reported by script. **Partly met:** 60 pairs labeled (AI-drafted, owner-reviewed); precision of our matches is 100% (35 of 35, Wilson 95% interval 90.1% to 100%), i.e. 35 matched pairs, not 50. `eval/reports/employer_match_report.md`. Left unticked until the owner accepts 35 matched pairs as meeting this line.
+- [x] Streamlit AppTest smoke tests run in CI (`tests/unit/test_app.py`, part of the CI pytest step; CI green).
+- [x] Pipeline Health shows a freshness banner when any source is more than 30h stale (`test_pipeline_health_flags_stale_data`).
 
 ## P6: Resume Match + deploy
 

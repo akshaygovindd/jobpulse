@@ -60,8 +60,9 @@ def load_ref(db: Path, cases: Sequence[tuple[object, ...]], confidence: float = 
                 f"INSERT INTO ref.lca_disclosures VALUES ({','.join('?' * len(c))})", list(c)
             )
         con.execute(
-            "INSERT INTO ref.employer_lca_match VALUES "
-            "('acme','acme','Acme, Inc.','normalized',?,false,?,?)",
+            "INSERT INTO ref.employer_lca_match (company_id, lca_employer_name, example_name, "
+            "match_method, match_confidence, reviewed, n_cases, matched_at) "
+            "VALUES ('acme','acme','Acme, Inc.','normalized',?,false,?,?)",
             [confidence, len(cases), NOW],
         )
     finally:
@@ -74,6 +75,22 @@ def company(db: Path) -> tuple[object, ...]:
         "SELECT visa_evidence_class, n_lca_certified, n_lca_not_certified, lca_match_confidence "
         "FROM gold.dim_company",
     )[0]
+
+
+def test_subsidiary_names_reach_dim_company(storage: LocalStorage, db: Path) -> None:
+    seed(storage, db, [gh_job("1")])
+    load_ref(db, [lca_case(1)])
+    con = duckdb.connect(str(db))
+    try:
+        con.execute(
+            "INSERT INTO ref.employer_lca_match VALUES "
+            "('acme','acme payments','Acme Payments, LLC','alias',1.0,true,2,?,'subsidiary')",
+            [NOW],
+        )
+    finally:
+        con.close()
+    gold(db)
+    assert query(db, "SELECT lca_subsidiaries FROM gold.dim_company") == [(["Acme Payments, LLC"],)]
 
 
 def test_builds_with_empty_ref_tables_and_is_unknown(storage: LocalStorage, db: Path) -> None:

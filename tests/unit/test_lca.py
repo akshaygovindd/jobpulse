@@ -117,6 +117,23 @@ def test_match_methods_and_confidence() -> None:
     assert "acme" not in by  # nothing matches by accident
 
 
+def test_subsidiary_is_marked_and_excluded_name_is_not_matched() -> None:
+    res = build_matches(
+        names(("Toast, Inc.", 7), ("Toast Payments, LLC", 3), ("Stripe, Inc.", 4)),
+        COMPANIES,
+        {},
+        LCA.match,
+        subsidiaries={"toast": ["Toast Payments, LLC"]},
+        excluded={"stripe": ["Stripe, Inc."]},
+    )
+    by = {m.norm_name: m for m in res.matches}
+    assert by["toast payments"].relationship == "subsidiary"
+    assert by["toast payments"].method == "alias"
+    assert by["toast payments"].reviewed is True
+    assert by["toast"].relationship == "same employer"
+    assert "stripe" not in by  # normalized equals the company, but the owner excluded it
+
+
 def test_no_fuzzy_match_only_suggestions() -> None:
     rows = names(("Stripe Payments Company", 40), ("Toasted Bagels LLC", 3), ("Random Co", 9))
     res = build_matches(rows, COMPANIES, {}, LCA.match)
@@ -232,6 +249,23 @@ def test_reload_is_idempotent_and_replaces_only_its_year(
     ]
 
 
+def test_subsidiary_and_exclusion_reach_the_tables(
+    con: duckdb.DuckDBPyConnection, tmp_path: Path
+) -> None:
+    f = write_csv(
+        tmp_path / "LCA_Disclosure_Data_FY2025_Q4.csv",
+        [row("S-1", "TOAST PAYMENTS LLC"), row("S-2", "TOAST, INC."), row("S-3", "STRIPE, INC.")],
+    )
+    run_load(
+        con, WH, LCA, [(f, 2025)], COMPANIES, {}, subsidiaries={"toast": ["Toast Payments LLC"]},
+        excluded={"stripe": ["Stripe, Inc."]}, loaded_at=NOW,
+    )  # fmt: skip
+    assert q(con, "SELECT case_number FROM ref.lca_disclosures ORDER BY 1") == [("S-1",), ("S-2",)]
+    assert q(
+        con, "SELECT lca_employer_name, relationship FROM ref.employer_lca_match ORDER BY 1"
+    ) == [("toast", "same employer"), ("toast payments", "subsidiary")]
+
+
 def test_adding_an_alias_and_reloading_adds_the_filings(
     con: duckdb.DuckDBPyConnection, tmp_path: Path
 ) -> None:
@@ -307,6 +341,9 @@ def test_alias_config_names_real_companies() -> None:
         c.company_id
         for c in build_companies((e.company for e in load_employers().employers), LCA.match)
     }
-    assert set(load_lca_aliases().aliases) <= ids
+    rules = load_lca_aliases()
+    assert set(rules.aliases) <= ids
+    assert set(rules.subsidiaries) <= ids
+    assert set(rules.excluded) <= ids
     assert 0 < LCA.match.threshold <= 1
     assert LCA.match.confidence["normalized"] >= LCA.match.threshold  # normalized matches count

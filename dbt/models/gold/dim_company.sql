@@ -34,6 +34,7 @@ select
     l.lca_match_confidence,
     l.lca_employer_names,
     l.lca_match_methods,
+    l.lca_subsidiaries,
     coalesce(l.n_lca_certified, 0) as n_lca_certified,
     coalesce(l.n_lca_not_certified, 0) as n_lca_not_certified,
     l.lca_fiscal_years,

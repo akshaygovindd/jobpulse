@@ -365,7 +365,9 @@ class LcaConfig(_Strict):
 class LcaAliases(_Strict):
     """Owner-reviewed LCA employer names per company (compared after normalization)."""
 
-    aliases: dict[str, list[str]]
+    aliases: dict[str, list[str]]  # same employer under another legal name
+    subsidiaries: dict[str, list[str]] = {}  # subsidiaries whose filings count for the parent
+    excluded: dict[str, list[str]] = {}  # names that look like the company but are not
 
 
 def load_lca(path: Path | None = None) -> LcaConfig:

@@ -1,0 +1,61 @@
+pair_id,company,lca_employer_name,n_cases_all_years,label
+P001,Airbnb,"AIRBNB, INC.",432,yes
+P002,Carta,"eShares, Inc.",54,yes
+P003,DoorDash,"DoorDash, Inc.",1085,yes
+P004,Duolingo,"Dowling Company, Inc.",1,no
+P005,Peloton,"Peloton Interactive, Inc.",99,yes
+P006,Plaid,Placid Inc.,1,no
+P007,Affirm,"Affirm, Inc.",190,yes
+P008,Scale AI,"Upscale AI, Inc",33,no
+P009,Pinterest,"Pinterest, Inc.",703,yes
+P010,Wealthfront,Wealthfront Corporation,20,yes
+P011,Mercury,"Mercury, Inc.",3,unsure
+P012,Instacart,"Distacart, Inc.",1,no
+P013,DoorDash,"DoorDash Essentials, LLC",4,yes
+P014,Robinhood,"Robinhood Markets, Inc.",383,yes
+P015,Datadog,"Datadog, Inc.",200,yes
+P016,Airbnb,"AIRBNB PAYMENTS, INC.",4,yes
+P017,Asana,"Asana, Inc.",103,yes
+P018,MongoDB,"MONGODB, INC.",277,yes
+P019,SoFi,"Social Finance, LLC",420,yes
+P020,Brex,Brex Inc.,59,yes
+P021,Databricks,"Databricks, Inc.",1031,yes
+P022,Databricks,DATA BRICKS INC,7,unsure
+P023,Robinhood,Robinhood Group,2,unsure
+P024,Palantir,Palantir.net Inc.,2,no
+P025,Asana,"Asana Partners Payroll Services, LLC",5,no
+P026,Carta,"Carma, Inc.",1,no
+P027,Toast,"Toast, Inc.",63,yes
+P028,Plaid,"Plaid, Inc.",82,yes
+P029,Datadog,"DATAEDGE, INC",110,no
+P030,SoFi,SoFi Bank N.A.,15,yes
+P031,Snowflake,"Snowflake Public Sector, Inc.",2,yes
+P032,Reddit,"Reddit, Inc.",190,yes
+P033,Squarespace,"SQUARESPACE, INC.",48,yes
+P034,Okta,"Okta, Inc.",239,yes
+P035,Notion,"Notion Labs, Inc.",59,yes
+P036,Whoop,WHOOP Inc.,67,yes
+P037,Mercury,"Mercury Insurance Services, LLC",44,no
+P038,Peloton,"Peloton Group, LLC",16,unsure
+P039,Formlabs,"Formlabs Ohio, Inc.",1,unsure
+P040,Affirm,"Affirma, LLC",2,no
+P041,Scale AI,"Scale AI, Inc.",191,yes
+P042,Pinterest,"Intervet, Inc.",3,no
+P043,CarGurus,Camurus Inc,2,no
+P044,Duolingo,"Duolingo, Inc.",149,yes
+P045,Instacart,Maplebear Inc.,302,yes
+P046,Dropbox,"Dropbox, Inc.",193,yes
+P047,HubSpot,"Hubot, Inc.",11,no
+P048,CarGurus,"CarGurus, Inc.",73,yes
+P049,SimpliSafe,"SimpliSafe, Inc.",19,yes
+P050,Klaviyo,"Klaviyo, Inc.",101,yes
+P051,Notion,"Gotion, Inc.",23,no
+P052,Coinbase,"Coinbase, Inc.",317,yes
+P053,Betterment,The Better Meat Co.,1,no
+P054,Formlabs,"Formlabs, Inc.",39,yes
+P055,Chime,"Chime Financial, Inc.",241,yes
+P056,Figma,"Figma, Inc.",122,yes
+P057,Figma,SIGMA Corporation,3,no
+P058,HubSpot,"HubSpot, Inc.",307,yes
+P059,Spotify,"SPOTIFY USA, INC.",224,yes
+P060,Twilio,"Twilio, Inc.",324,yes

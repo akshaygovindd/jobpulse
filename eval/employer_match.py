@@ -1,4 +1,6 @@
-"""Employer-match review: build the blind pair sheet and score the owner's yes/no labels.
+"""Employer-match review: build the blind pair sheet and score its yes/no labels.
+
+The labels were drafted with AI assistance and reviewed by the owner.
 
 Pairs are (company, LCA employer name). They come from two places, mixed and shuffled so the
 labeler cannot tell which is which:
@@ -221,7 +223,8 @@ def render(result: dict[str, Any]) -> str:
     lines = [
         "# Employer-match precision",
         "",
-        "Evidence from public filings, not a promise of sponsorship. Labels are the owner's.",
+        "Evidence from public filings, not a promise of sponsorship. Labels were drafted with AI "
+        "assistance and reviewed by the owner.",
         "",
         f"- Labeled pairs: **{result['labeled_pairs']}** of {result['total_pairs']} "
         f"(target: at least {result['target']}: {'met' if result['meets_target'] else 'NOT met'})",
@@ -237,6 +240,11 @@ def render(result: dict[str, Any]) -> str:
         lines.append(
             f"| {method} | {r['yes']} | {r['no']} | {r['unsure']} | {pct(r['precision'])} |"
         )
+    lines += [
+        "",
+        "Scope: the sample is the match set at the time the sheet was drawn. Aliases, subsidiaries "
+        "and exclusions added afterwards (for example the Mercury exclusion) are not in it.",
+    ]
     lines += ["", "## Wrong matches (fix the rule or remove the alias)"]
     wrong = result["matched_wrong"]
     lines += [

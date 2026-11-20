@@ -724,3 +724,21 @@ Read-only queries against MotherDuck (token from `.env` inside Python; the scrip
 - **Labels:** acronyms are kept (`AI`, `ML`, `BI`, `LCA`, `USD`); the data-quality descriptions no longer lower-case "AI" (the old `str.capitalize()` did). Table text columns have explicit widths so cells are not clipped.
 - **Not verified:** I cannot render Vega-Lite here, so the look of the charts is unchecked beyond schema validity and the pages running without errors on real data; the theme colour is checked by a test of the config only. Please look at the salary chart first.
 - **Checks:** `make check` green, pytest 383 passed.
+
+---
+
+## 2026-11-20 (final): employer-match scored; Mercury, subsidiaries, live reload; P5 boxes
+
+**Labels and score.** 60 of 60 pairs labeled; the labels were drafted with AI assistance and reviewed by the owner (the report now says so instead of "Labels are the owner's"). Precision of our matches: **100% (35 yes, 0 no; Wilson 95% interval 90.1% to 100%)**, 1 unsure (P011 "Mercury, Inc."). By method: alias 8/8, exact 2/2, normalized 25/25 (+1 unsure). Report: `eval/reports/employer_match_report.md` (the report also states that matches added after the sheet was drawn are not in the sample). Four suggested pairs labeled yes were the missed subsidiaries below.
+
+**Mercury (verified against the filings).** "Mercury, Inc." (3 certified filings, all FY2026) is **removed**: its titles are "Forward Deployed AI Engineer", "Forward Deployed Product Manager" and "Forward Deployed AI Architect" at worksites in Santa Monica CA, New York NY and San Francisco CA, a different kind of company from the fintech. I cannot prove that from the filings alone; it is excluded because the name is ambiguous (any "Mercury") and the evidence points away. `config/lca_aliases.yaml` now has `excluded: mercury: ["Mercury, Inc."]` and the alias **"Mercury Technologies, Inc." (24 filings)**, the fintech's legal name. Its titles fit the fintech (Senior Data Scientist, Senior Software Engineer, Senior Risk Strategist, Product Designer at New York and San Francisco); two outliers I noticed are a "Senior Model Risk Manager" in Norwalk CT and a "Software Engineer II" in Santa Monica, so treat the 24 as likely, not certain. Mercury went from 3 to 24 certified filings (still the thinnest evidence after Betterment).
+
+**Subsidiaries.** Reviewed and marked `relationship = 'subsidiary'` in `ref.employer_lca_match`, counted for the parent and shown in the app and in `dim_company.lca_subsidiaries`: DoorDash Essentials, LLC (4), Airbnb Payments, Inc. (4), SoFi Bank N.A. (15), Snowflake Public Sector, Inc. (2). New config keys `subsidiaries` and `excluded` (`LcaAliases`), new column `ref.employer_lca_match.relationship` (added to existing tables on the next load).
+
+**Live run on MotherDuck.** `load-lca`: 42 of 43 companies matched, 46 LCA names, **10,651 filings** (was 10,605). `build-gold`: 87 tests, 0 failures. Certified filings now 9,874 (was 9,829). Evidence classes: HISTORICAL_EVIDENCE 42, UNKNOWN 1 (Betterment).
+
+**P5 boxes.** Ticked: pages read gold only, salary coverage and separate views, visa disclaimer and evidence fields, AppTest in CI, freshness banner. **Not ticked:** "employer-match precision on at least 50 labeled employers": 60 pairs are labeled but only 35 are our matches (the rest are near-misses), so the precision rests on 35. Your call whether that meets the line.
+
+**App polish from the last message** was already done and pushed (grouped salary chart with $K labels, blue theme, viewer toolbar, "Nov 11" dates, no truncated labels, AI capitalization).
+
+**Checks:** `make check` green, pytest 386 passed.

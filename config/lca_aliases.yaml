@@ -5,7 +5,7 @@
 # Names are compared after normalization. Every entry here is treated as reviewed (confidence from
 # config/lca.yaml). Add entries only after checking them: a wrong alias is a wrong claim.
 # After editing, re-run `jobpulse load-lca` so the disclosures are re-matched.
-# Reviewed by the owner on 2026-11-20 (FY2025-FY2026 files). "SoFi Bank N.A." is deliberately excluded.
+# Reviewed by the owner on 2026-11-20 (FY2025-FY2026 files). "SoFi Bank N.A." was excluded as an alias and is now a reviewed subsidiary (below).
 aliases:
   chime: ["Chime Financial, Inc."]
   notion: ["Notion Labs, Inc."]
@@ -17,4 +17,20 @@ aliases:
   instacart: ["Maplebear Inc."]
   carta: ["eShares, Inc."]
   sofi: ["Social Finance, LLC"]
+  mercury: ["Mercury Technologies, Inc."]   # the fintech's legal name (verified in NOTES)
+
+# Subsidiaries (owner-reviewed 2026-11-20): filings by these entities count for the parent company
+# and are marked "subsidiary" in the match table and the app.
+subsidiaries:
+  doordash: ["DoorDash Essentials, LLC"]
+  airbnb: ["Airbnb Payments, Inc."]
+  sofi: ["SoFi Bank N.A."]
+  snowflake: ["Snowflake Public Sector, Inc."]
+
+# Names that look like the company but are not (owner-reviewed 2026-11-20). They are not matched
+# even though the normalized name equals the company name.
+excluded:
+  mercury: ["Mercury, Inc."]   # 3 filings: Forward Deployed AI roles in Santa Monica, SF and NYC;
+                               # not Mercury Technologies, Inc. (the fintech). See docs/NOTES.md.
+
 # betterment: no H-1B filings found in FY2025-FY2026 (not an error).

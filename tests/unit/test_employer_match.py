@@ -53,7 +53,9 @@ def con() -> duckdb.DuckDBPyConnection:
         ("hubspot", "hubspot", "HUBSPOT, INC.", "normalized", 0.9),
     ]:
         c.execute(
-            "INSERT INTO ref.employer_lca_match VALUES (?,?,?,?,?,?,?,?)",
+            "INSERT INTO ref.employer_lca_match (company_id, lca_employer_name, example_name, "
+            "match_method, match_confidence, reviewed, n_cases, matched_at) "
+            "VALUES (?,?,?,?,?,?,?,?)",
             [cid, norm, ex, m, conf, False, 10, NOW],
         )
     return c

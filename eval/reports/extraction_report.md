@@ -21,3 +21,4 @@
 | skills (normalized, competencies/soft skills excluded) | 74.6% | 48.8% | 512 | 174 | 538 |
 
 Sponsorship is reported separately in `sponsorship_report.md`.
+w
