@@ -9,7 +9,6 @@ share one normalization; they are rebuilt from scratch each run, so reruns are i
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -27,20 +26,7 @@ from jobpulse.extract.store import ensure_extract_tables
 from jobpulse.location import CityParser, Place
 from jobpulse.silver import SilverResult, run_dbt
 from jobpulse.skills import norm_skill
-from jobpulse.warehouse import connect
-
-_INSERT_CHUNK = 500  # rows per INSERT: one round trip each, instead of one per row on MotherDuck
-
-
-def bulk_insert(
-    con: duckdb.DuckDBPyConnection, table: str, rows: Sequence[tuple[object, ...]]
-) -> None:
-    """Insert rows with few statements. `executemany` sends one round trip per row, which is slow
-    against MotherDuck (minutes for a few thousand rows) and spends compute-unit hours."""
-    for i in range(0, len(rows), _INSERT_CHUNK):
-        chunk = rows[i : i + _INSERT_CHUNK]
-        marks = ",".join("(" + ",".join("?" * len(chunk[0])) + ")" for _ in chunk)
-        con.execute(f"INSERT INTO {table} VALUES {marks}", [v for row in chunk for v in row])
+from jobpulse.warehouse import bulk_insert, connect
 
 
 @dataclass

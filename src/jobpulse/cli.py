@@ -17,6 +17,8 @@ from jobpulse.config import (
     CONFIG_DIR,
     load_employers,
     load_extraction,
+    load_lca,
+    load_lca_aliases,
     load_pipeline,
     load_sources,
 )
@@ -61,6 +63,9 @@ from jobpulse.ops.s3_ops import write_ops
 from jobpulse.secrets import load_env_keys, redact
 from jobpulse.silver import build_silver
 from jobpulse.validate import dump_employers_yaml, refreshed, validate_employers
+from jobpulse.visa.lca_loader import LcaLoadError, select_files
+from jobpulse.visa.lca_loader import load_lca as run_load_lca
+from jobpulse.visa.match import build_companies
 from jobpulse.warehouse import WarehouseError
 from jobpulse.warehouse import connect as connect_warehouse
 
@@ -267,6 +272,85 @@ def cmd_build_silver(args: argparse.Namespace, clock: Clock) -> int:
     print(summary)
     _append_step_summary(summary)
     return EXIT_OK if result.success else EXIT_ALERT
+
+
+def cmd_load_lca(args: argparse.Namespace, clock: Clock) -> int:
+    pipeline = load_pipeline()
+    cfg = pipeline.warehouse
+    lca = load_lca()
+    aliases = load_lca_aliases().aliases
+    companies = build_companies((e.company for e in load_employers().employers), lca.match)
+    unknown = sorted(set(aliases) - {c.company_id for c in companies})
+    if unknown:
+        print(f"error: config/lca_aliases.yaml names unknown companies: {unknown}", file=sys.stderr)
+        return EXIT_USAGE
+    directory = Path(args.dir)
+    if not directory.is_dir():
+        print(
+            f"error: {directory} does not exist (see config/lca.yaml for the files)",
+            file=sys.stderr,
+        )
+        return EXIT_USAGE
+    files, skipped = select_files(directory, lca)
+    try:
+        con = _warehouse(args)
+    except WarehouseError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return EXIT_USAGE
+    now = clock()
+    try:
+        result = run_load_lca(
+            con, cfg, lca, files, companies, aliases, loaded_at=now, skipped=skipped
+        )
+    except LcaLoadError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return EXIT_USAGE
+    finally:
+        con.close()
+    con = _warehouse(args)
+    finished = clock()
+    record_pipeline_run(
+        con,
+        cfg,
+        {
+            "attempt_id": make_attempt_id(now),
+            "snapshot_date": now.date().isoformat(),
+            "task": "lca",
+            "source_id": "oflc",
+            "started_at": now.isoformat(),
+            "finished_at": finished.isoformat(),
+            "duration_s": round((finished - now).total_seconds(), 3),
+            "status": "success",
+            "rows_in": result.rows_read,
+            "rows_kept": result.disclosures_loaded,
+            "rows_dropped_json": {},
+            "llm_cost_usd": 0.0,
+            "env": detect_env(),
+        },
+    )
+    con.close()
+    amb = "".join(f"  - `{n}` -> {', '.join(c)}\n" for n, c in sorted(result.ambiguous.items()))
+    summary = (
+        "## LCA load (DOL OFLC H-1B disclosures)\n\n"
+        f"- Files read: {', '.join(result.files)}\n"
+        f"- Fiscal years: {', '.join(map(str, result.years))}\n"
+        f"- Rows read: **{result.rows_read}**; H-1B rows kept: **{result.rows_kept_visa_class}**; "
+        f"distinct cases after de-duplication: **{result.cases}**\n"
+        f"- Distinct employer names: **{result.distinct_names}**\n"
+        f"- Matched: **{result.companies_matched}** of {len(companies)} companies "
+        f"({result.match_rows} LCA names)\n"
+        f"- Filings stored for matched employers: **{result.disclosures_loaded}**\n"
+        + (f"- Ambiguous names (matched to several companies, not used):\n{amb}" if amb else "")
+        + (
+            f"- Skipped files (not a configured fiscal year): {', '.join(skipped)}\n"
+            if skipped
+            else ""
+        )
+        + "\nEvidence from public filings, not a promise of sponsorship.\n"
+    )
+    print(summary)
+    _append_step_summary(summary)
+    return EXIT_OK
 
 
 def cmd_build_gold(args: argparse.Namespace, clock: Clock) -> int:
@@ -564,6 +648,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--batch", choices=["submit", "collect"], help="use the Batch API (first pass only)"
     )
 
+    ll = sub.add_parser("load-lca", help="load DOL OFLC H-1B LCA files and match employers")
+    ll.add_argument("--dir", default="data/oflc", help="folder with the downloaded files")
+    ll.add_argument("--db", help="local DuckDB file instead of MotherDuck")
+
     fr = sub.add_parser("check-freshness", help="fail if any source is stale")
     fr.add_argument("--local-dir", help="read from a local directory instead of S3")
 
@@ -586,6 +674,7 @@ def main(argv: Sequence[str] | None = None, clock: Clock | None = None) -> int:
         "load-ops": cmd_load_ops,
         "load-bronze": cmd_load_bronze,
         "build-silver": cmd_build_silver,
+        "load-lca": cmd_load_lca,
         "build-gold": cmd_build_gold,
         "extract": cmd_extract,
         "check-freshness": cmd_check_freshness,

@@ -249,3 +249,6 @@ eval/*.tmp
 airflow/demo-data/*
 !airflow/demo-data/.gitkeep
 airflow/openai.env
+
+# US DOL OFLC LCA disclosure files (manual downloads, large; never committed)
+data/oflc/

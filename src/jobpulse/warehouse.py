@@ -7,6 +7,7 @@ connection string, logged, or echoed; error text is scrubbed before it can surfa
 from __future__ import annotations
 
 import os
+from collections.abc import Sequence
 from pathlib import Path
 
 import duckdb
@@ -43,3 +44,21 @@ def connect(cfg: WarehouseConfig, *, db_path: Path | None = None) -> duckdb.Duck
     for schema in (cfg.ops_schema, cfg.bronze_schema, cfg.silver_schema):
         con.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
     return con
+
+
+_INSERT_CHUNK = 500  # rows per INSERT: one round trip each, instead of one per row on MotherDuck
+
+
+def bulk_insert(
+    con: duckdb.DuckDBPyConnection,
+    table: str,
+    rows: Sequence[tuple[object, ...]],
+    *,
+    chunk: int = _INSERT_CHUNK,
+) -> None:
+    """Insert rows with few statements. `executemany` sends one round trip per row, which is slow
+    against MotherDuck (minutes for a few thousand rows) and spends compute-unit hours."""
+    for i in range(0, len(rows), chunk):
+        part = rows[i : i + chunk]
+        marks = ",".join("(" + ",".join("?" * len(part[0])) + ")" for _ in part)
+        con.execute(f"INSERT INTO {table} VALUES {marks}", [v for row in part for v in row])

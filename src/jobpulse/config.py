@@ -104,6 +104,7 @@ class WarehouseConfig(_Strict):
     bronze_schema: str
     silver_schema: str
     gold_schema: str
+    ref_schema: str  # reference data loaded from public filings (LCA disclosures)
     # A posting closes after this many absences on calendar-adjacent, authoritative dates.
     closure_consecutive_absences: int = Field(ge=1)
 
@@ -307,3 +308,51 @@ def load_locations(path: Path | None = None) -> LocationsConfig:
 
 def load_extraction(path: Path | None = None) -> ExtractionConfig:
     return ExtractionConfig.model_validate(_load_yaml(path or CONFIG_DIR / "extraction.yaml"))
+
+
+class LcaMatchConfig(_Strict):
+    threshold: float = Field(ge=0, le=1)  # confidence at or above which a match counts as evidence
+    confidence: dict[str, float]  # method -> confidence; fuzzy suggestions are never in here
+    fuzzy_suggestion_min_similarity: float = Field(gt=0, le=1)
+    legal_suffixes: list[str]  # trailing words dropped by normalization (inc, llc, ...)
+
+    @model_validator(mode="after")
+    def _methods(self) -> LcaMatchConfig:
+        if set(self.confidence) != {"exact", "alias", "normalized"}:
+            raise ValueError("confidence must define exactly: exact, alias, normalized")
+        if any(not 0 < v <= 1 for v in self.confidence.values()):
+            raise ValueError("match confidences must be in (0, 1]")
+        return self
+
+
+class LcaConfig(_Strict):
+    """Which DOL OFLC LCA disclosure files to load and how to read and match them."""
+
+    fiscal_years: list[int]
+    visa_classes: list[str]  # VISA_CLASS values kept (exact, case-insensitive): H-1B only
+    # canonical column -> accepted DOL header names (DOL renames columns between years)
+    columns: dict[str, list[str]]
+    certified_statuses: list[str]  # CASE_STATUS values counted as certified (upper-case)
+    required: list[str]  # canonical columns that must be present, else the load fails loudly
+    match: LcaMatchConfig
+
+    @model_validator(mode="after")
+    def _required_known(self) -> LcaConfig:
+        unknown = [c for c in self.required if c not in self.columns]
+        if unknown:
+            raise ValueError(f"required columns without a mapping: {unknown}")
+        return self
+
+
+class LcaAliases(_Strict):
+    """Owner-reviewed LCA employer names per company (compared after normalization)."""
+
+    aliases: dict[str, list[str]]
+
+
+def load_lca(path: Path | None = None) -> LcaConfig:
+    return LcaConfig.model_validate(_load_yaml(path or CONFIG_DIR / "lca.yaml"))
+
+
+def load_lca_aliases(path: Path | None = None) -> LcaAliases:
+    return LcaAliases.model_validate(_load_yaml(path or CONFIG_DIR / "lca_aliases.yaml"))

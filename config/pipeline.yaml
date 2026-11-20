@@ -32,6 +32,7 @@ warehouse:
   bronze_schema: bronze
   silver_schema: silver
   gold_schema: gold
+  ref_schema: ref                  # LCA disclosures and employer matches (public filings)
   closure_consecutive_absences: 2  # absences on calendar-adjacent authoritative dates before closing
 
 gold:

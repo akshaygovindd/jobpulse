@@ -1,0 +1,8 @@
+# Owner-reviewed LCA employer names, per company_id (see config/employers.yaml; the id is the
+# company name lower-cased with non-alphanumerics replaced by "-"). Use it for legal entities or
+# subsidiaries that file LCAs under a different name, e.g.
+#   stripe: ["STRIPE PAYMENTS COMPANY"]
+# Names are compared after normalization. Every entry here is treated as reviewed (confidence from
+# config/lca.yaml). Add entries only after checking them: a wrong alias is a wrong claim.
+# After editing, re-run `jobpulse load-lca` so the disclosures are re-matched.
+aliases: {}

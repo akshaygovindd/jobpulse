@@ -174,11 +174,18 @@ Flow per posting: cache lookup (content hash) → first-pass model with Structur
 
 **Provider.** OpenAI (`gpt-6-luna` first pass, `gpt-6.1-terra` escalation), Responses API with `json_schema` strict output, called through the shared HTTP client; no provider SDK. Prices in `config/extraction.yaml` come from the OpenAI pricing page (checked 2026-11-09). The key is never printed, logged, or committed; error text is scrubbed.
 
-### ref (visa)
+### ref (visa; schema `ref`, loaded by `jobpulse load-lca`)
+Source: US Department of Labor OFLC LCA disclosure data (H-1B), downloaded by hand into `data/oflc/` (dol.gov refuses automated requests; the folder is gitignored). Files, fiscal years, accepted column names and match settings are in `config/lca.yaml`; reviewed aliases in `config/lca_aliases.yaml`. **Evidence from public filings, not a promise of sponsorship.**
+
 | Table | Key columns |
 |---|---|
-| `lca_disclosures` | case_number, fiscal_year, case_status, employer_name, soc_code, soc_title, job_title, worksite_city, worksite_state, wage_rate_from, wage_rate_to, wage_unit, prevailing_wage, pw_wage_level, wage_basis |
-| `employer_lca_match` | company_id, lca_employer_name, match_method (exact/normalized/fuzzy), match_confidence, reviewed |
+| `lca_disclosures` | One row per certified-or-otherwise-decided H-1B case of a **matched** employer, de-duplicated on `case_number` (the latest decision wins). case_number, fiscal_year, source_file, case_status, received_date, decision_date, visa_class, employer_name, employer_name_norm, company_id, job_title, soc_code, soc_title, full_time_position, total_worker_positions, worksite_city, worksite_state, wage_rate_from, wage_rate_to, wage_unit, prevailing_wage, pw_unit, pw_wage_level, loaded_at. Only these columns are read; attorney, agent, contact and FEIN columns never are. |
+| `lca_employer_names` | Every distinct H-1B employer name per fiscal year with n_cases and n_certified (unmatched employers included, so near-misses can be reviewed). |
+| `employer_lca_match` | company_id, lca_employer_name (normalized), example_name, match_method (`alias`, `exact`, `normalized`), match_confidence, reviewed (true for aliases), n_cases. Rebuilt from all loaded years on every load. |
+
+**Matching is deterministic.** `exact`: the LCA name equals the company name (case-insensitive). `normalized`: equal after normalization (ASCII, lower case, punctuation removed, trailing legal suffixes such as Inc/LLC dropped). `alias`: listed in `config/lca_aliases.yaml` by the owner. Confidences are configured (exact 1.0, alias 1.0, normalized 0.9, evidence threshold 0.9). A normalized name that matches more than one company is **ambiguous and not matched**. Fuzzy similarity is used only to *suggest* candidates in a review sheet and never counts as a match. Because only matched employers' filings are stored, editing the aliases requires re-running `load-lca` on the files.
+
+Loading is idempotent: loading a fiscal year replaces that year's rows; other years stay.
 
 ### gold (dbt, schema `gold`; built by `jobpulse build-gold`)
 Built from silver and `extract.extractions`; it reads both and writes neither. Advertised salary only: LCA wages are never joined in.

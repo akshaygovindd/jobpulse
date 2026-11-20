@@ -1,0 +1,46 @@
+# US Department of Labor OFLC LCA disclosure data (H-1B). Validated by jobpulse.config.LcaConfig.
+# The files are downloaded by hand into data/oflc/ (dol.gov refuses automated requests) and loaded
+# with `jobpulse load-lca`. This is evidence from public filings, not a promise of sponsorship.
+
+fiscal_years: [2024, 2025, 2026]   # files whose name contains FY<year> and a listed year are read
+visa_classes: ["H-1B"]             # VISA_CLASS values kept (exact match; H-1B1 and E-3 are separate)
+
+# canonical name -> DOL header names accepted for it, first present wins (case-insensitive).
+# Only these columns are read into our tables. Attorney, agent, contact and FEIN columns are never
+# read. Headers differ between fiscal years; an unknown layout fails the load with the file's
+# column list instead of guessing.
+columns:
+  case_number: [CASE_NUMBER]
+  case_status: [CASE_STATUS]
+  received_date: [RECEIVED_DATE]
+  decision_date: [DECISION_DATE]
+  visa_class: [VISA_CLASS]
+  employer_name: [EMPLOYER_NAME]
+  job_title: [JOB_TITLE]
+  soc_code: [SOC_CODE]
+  soc_title: [SOC_TITLE]
+  full_time_position: [FULL_TIME_POSITION]
+  total_worker_positions: [TOTAL_WORKER_POSITIONS, TOTAL_WORKERS]
+  worksite_city: [WORKSITE_CITY, WORKSITE_CITY_1]
+  worksite_state: [WORKSITE_STATE, WORKSITE_STATE_1]
+  wage_rate_from: [WAGE_RATE_OF_PAY_FROM, WAGE_RATE_OF_PAY_FROM_1]
+  wage_rate_to: [WAGE_RATE_OF_PAY_TO, WAGE_RATE_OF_PAY_TO_1]
+  wage_unit: [WAGE_UNIT_OF_PAY, WAGE_UNIT_OF_PAY_1]
+  prevailing_wage: [PREVAILING_WAGE, PREVAILING_WAGE_1]
+  pw_unit: [PW_UNIT_OF_PAY, PW_UNIT_OF_PAY_1]
+  pw_wage_level: [PW_WAGE_LEVEL, PW_WAGE_LEVEL_1]
+
+certified_statuses: [CERTIFIED]   # "CERTIFIED - WITHDRAWN", WITHDRAWN and DENIED are kept but not counted
+
+required: [case_number, case_status, decision_date, visa_class, employer_name, job_title,
+           soc_code, worksite_state, wage_rate_from, wage_unit]
+
+match:
+  threshold: 0.9   # a match counts as evidence only at or above this confidence
+  # exact: the LCA name equals the company name (case-insensitive). normalized: equal after
+  # normalization (punctuation, legal suffixes). alias: listed in config/lca_aliases.yaml (reviewed).
+  # Fuzzy similarity is only ever used to suggest candidates for review, never as a match.
+  confidence: {exact: 1.0, alias: 1.0, normalized: 0.9}
+  fuzzy_suggestion_min_similarity: 0.8
+  legal_suffixes: [inc, incorporated, llc, llp, lp, corp, corporation, ltd, limited, co, company,
+                   plc, pbc, pc]
