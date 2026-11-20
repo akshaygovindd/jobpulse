@@ -1,3 +1,10 @@
 # Local labeling app settings. No telemetry.
 [browser]
 gatherUsageStats = false
+
+# JobPulse app (app/streamlit_app.py)
+[client]
+toolbarMode = "viewer"      # no developer toolbar or Deploy button for viewers
+
+[theme]
+primaryColor = "#2F6DB5"    # blue: filters, tabs and progress bars must not read as errors

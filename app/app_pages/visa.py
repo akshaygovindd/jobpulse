@@ -85,7 +85,9 @@ st.dataframe(
     ],
     hide_index=True,
     column_config={
-        "name": "Company",
+        "name": st.column_config.TextColumn("Company", width="medium"),
+        "Evidence": st.column_config.TextColumn(width="medium"),
+        "How the filings were matched": st.column_config.TextColumn(width="large"),
         "n_lca_certified": st.column_config.NumberColumn("Certified filings", format="%d"),
         "n_lca_not_certified": st.column_config.NumberColumn(
             "Withdrawn or denied", format="%d", help="Not counted as evidence."

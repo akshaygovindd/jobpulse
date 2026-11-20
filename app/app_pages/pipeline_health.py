@@ -2,7 +2,15 @@ from datetime import UTC, datetime
 
 import streamlit as st
 
-from jobpulse.app_ui import NEUTRAL, SOURCE_LABELS, STATUS_LABELS, TASK_LABELS, human, load
+from jobpulse.app_ui import (
+    SOURCE_LABELS,
+    STATUS_LABELS,
+    TASK_LABELS,
+    date_chart,
+    human,
+    load,
+    sentence,
+)
 
 fresh = load(
     "SELECT source_id, count(*) AS boards, max(newest_completed_at) AS newest, "
@@ -38,6 +46,7 @@ else:
         fresh[["Source", "boards", "newest", "age_h", "oldest_age_h"]],
         hide_index=True,
         column_config={
+            "Source": st.column_config.TextColumn(width="medium"),
             "boards": st.column_config.NumberColumn("Companies", format="%d"),
             "newest": st.column_config.DatetimeColumn(
                 "Newest snapshot (UTC)", format="YYYY-MM-DD HH:mm"
@@ -57,12 +66,12 @@ if not quality.empty:
     quality["share"] = quality.apply(
         lambda r: 100 * r["numerator"] / r["denominator"] if r["denominator"] else None, axis=1
     )
-    quality["description"] = quality["description"].str.capitalize()
+    quality["description"] = quality["description"].map(sentence)
     st.dataframe(
         quality[["description", "numerator", "denominator", "share"]],
         hide_index=True,
         column_config={
-            "description": "Field",
+            "description": st.column_config.TextColumn("Field", width="large"),
             "numerator": st.column_config.NumberColumn("Have it", format="%d"),
             "denominator": st.column_config.NumberColumn("Out of", format="%d"),
             "share": st.column_config.ProgressColumn(
@@ -102,6 +111,9 @@ else:
         ],
         hide_index=True,
         column_config={
+            "Step": st.column_config.TextColumn(width="medium"),
+            "Source": st.column_config.TextColumn(width="small"),
+            "Result": st.column_config.TextColumn(width="small"),
             "snapshot_date": st.column_config.DateColumn("Data date"),
             "duration_s": st.column_config.NumberColumn("Seconds", format="%.0f"),
             "companies_complete": st.column_config.NumberColumn("Companies complete", format="%d"),
@@ -118,13 +130,7 @@ ingest = load(
 )
 if not ingest.empty:
     ingest["status"] = ingest["status"].map(lambda v: human(v, STATUS_LABELS))
-    wide = ingest.pivot_table(index="day", columns="status", values="boards", fill_value=0)
-    st.bar_chart(
-        wide,
-        color=NEUTRAL[: len(wide.columns)],
-        x_label="Snapshot date",
-        y_label="Company job boards",
-    )
+    date_chart(ingest, x="day", y="boards", series="status", y_title="Company job boards")
 
 st.subheader("AI extraction cost")
 cost = load(
@@ -137,10 +143,7 @@ else:
     with st.container(horizontal=True):
         st.metric("Total spend", f"${cost['cost_usd'].sum():,.2f}", border=True)
         st.metric("AI calls", f"{int(cost['calls'].sum()):,}", border=True)
-    wide = cost.pivot_table(index="day", columns="model", values="cost_usd", fill_value=0)
-    st.bar_chart(
-        wide, color=NEUTRAL[: len(wide.columns)], x_label="Date", y_label="Spend (US dollars)"
-    )
+    date_chart(cost, x="day", y="cost_usd", series="model", y_title="Spend (US dollars)")
     st.caption(
         "Cost is computed from token counts and the prices in config at call time. Shown to the "
         "cent because the amounts are small."

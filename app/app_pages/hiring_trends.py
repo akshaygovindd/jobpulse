@@ -1,6 +1,6 @@
 import streamlit as st
 
-from jobpulse.app_ui import ROLE_LABELS, bar, load, role_label
+from jobpulse.app_ui import ROLE_LABELS, bar, date_chart, load, role_label
 
 bounds = load(
     "SELECT min(first_seen_date) AS first_day, max(first_seen_date) AS last_day "
@@ -21,7 +21,7 @@ with left:
         "AND first_seen_date > (SELECT min(first_seen_date) FROM gold.fct_postings) "
         "GROUP BY 1 ORDER BY 1"
     )
-    bar(new, x="day", y="postings")
+    date_chart(new, x="day", y="postings", y_title="New postings")
 with right:
     st.markdown("**Closed postings**")
     closed = load(
@@ -29,7 +29,7 @@ with right:
         "FROM gold.fct_postings WHERE NOT is_probable_duplicate AND closed_date IS NOT NULL "
         "GROUP BY 1 ORDER BY 1"
     )
-    bar(closed, x="day", y="postings")
+    date_chart(closed, x="day", y="postings", y_title="Closed postings")
 st.caption(
     f"The first day of data ({first_day:%d %b %Y}) is left out of the chart: every open posting "
     "looked new that day, so it is a baseline, not a hiring spike. A posting counts as closed "
@@ -77,9 +77,14 @@ chosen = st.multiselect(
     default=top["skill"].head(3).tolist(),
 )
 if chosen:
-    over_time = skills[skills["skill"].isin(chosen)].pivot_table(
-        index="week", columns="skill", values="share"
+    picked = skills[skills["skill"].isin(chosen)].copy()
+    picked["Share of postings (%)"] = 100 * picked["share"]
+    date_chart(
+        picked,
+        x="week",
+        y="Share of postings (%)",
+        kind="line",
+        series="skill",
     )
-    st.line_chart(over_time * 100, y_label="Share of postings (%)", x_label="Week starting")
-    if len(over_time) < 3:
+    if picked["week"].nunique() < 3:
         st.caption("Fewer than three weeks of history: trends are not meaningful yet.")

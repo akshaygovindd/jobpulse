@@ -714,3 +714,13 @@ Read-only queries against MotherDuck (token from `.env` inside Python; the scrip
 - **Visa:** offered/not-offered columns removed from the company table; the company drill-down says "Not stated" when nothing was analyzed, otherwise "N analyzed: x offer, y not available, z do not say". Match shown in words (Reviewed alias / Exact name match / Name match). Top-sponsors bar chart with a role-family filter (default: all data roles; lower bounds). Matched filing names now show real casing ("DoorDash, Inc.") instead of the normalized form. Timestamps on Pipeline Health are converted to UTC to match their label.
 - **Verified on real MotherDuck data** (build-gold 107/107 models+tests passed, 87 tests, 0 failures; all five pages rendered through AppTest with no exceptions and the figures above). Not verified in a browser or on a phone.
 - **Checks:** `make check` green, pytest 381 passed.
+
+---
+
+## 2026-11-20 (late night): second review polish
+
+- **Charts:** replaced Streamlit's built-in bar/line charts with small Vega-Lite specs (`app_ui.bar`, `date_chart`, `salary_chart`; no new dependency): category labels are never truncated (label limit 600 px), bars carry value labels, dates read "Nov 11" (horizontal), one tick per day. The salary chart is grouped horizontal bars, role family on the axis, seniority as colour (light to dark blue as seniority rises), `$NNNK` on every bar. Specs were validated against the Vega-Lite schema (Streamlit ships Vega-Lite 6, which supports the grouped-bar offset).
+- **Theme:** `.streamlit/config.toml` now sets `primaryColor = "#2F6DB5"` and `client.toolbarMode = "viewer"` (no developer toolbar or Deploy button). The file is at the repo root, so it applies when the app is started from the repo root, as in the run command. Tabs, filters and progress bars follow the primary colour.
+- **Labels:** acronyms are kept (`AI`, `ML`, `BI`, `LCA`, `USD`); the data-quality descriptions no longer lower-case "AI" (the old `str.capitalize()` did). Table text columns have explicit widths so cells are not clipped.
+- **Not verified:** I cannot render Vega-Lite here, so the look of the charts is unchecked beyond schema validity and the pages running without errors on real data; the theme colour is checked by a test of the config only. Please look at the salary chart first.
+- **Checks:** `make check` green, pytest 383 passed.

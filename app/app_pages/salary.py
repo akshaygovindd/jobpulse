@@ -2,11 +2,11 @@ import streamlit as st
 
 from jobpulse.app_ui import (
     SENIORITY_LABELS,
-    bar,
     human,
     load,
     pct,
     role_label,
+    salary_chart,
     usd_k,
     visa_disclaimer,
 )
@@ -105,18 +105,10 @@ with advertised_tab:
                     "Not enough salaries yet for a median (at least five per group are needed)."
                 )
             else:
-                chart["Role and seniority"] = chart["Role family"] + " · " + chart["Seniority"]
-                chart["Median salary ($K)"] = chart["Median"]
-                bar(
-                    chart.sort_values("Median", ascending=False).head(15),
-                    x="Role and seniority",
-                    y="Median salary ($K)",
-                    horizontal=True,
-                    sort="-Median salary ($K)",
-                )
+                salary_chart(chart)
                 st.caption(
                     "Midpoint of the advertised range, converted to a yearly figure, for groups "
-                    "with at least five salaries. Top 15 groups."
+                    "with at least five salaries."
                 )
             st.dataframe(
                 table[
@@ -134,6 +126,8 @@ with advertised_tab:
                 ],
                 hide_index=True,
                 column_config={
+                    "Role family": st.column_config.TextColumn(width="medium"),
+                    "Seniority": st.column_config.TextColumn(width="small"),
                     "n_postings": st.column_config.NumberColumn("Postings", format="%d"),
                     "n_with_salary": st.column_config.NumberColumn("With a salary", format="%d"),
                     "coverage_pct": st.column_config.NumberColumn(
@@ -199,6 +193,9 @@ with lca_tab:
             ],
             hide_index=True,
             column_config={
+                "Role family": st.column_config.TextColumn(width="medium"),
+                "State": st.column_config.TextColumn(width="small"),
+                "City": st.column_config.TextColumn(width="medium"),
                 "n_certified": st.column_config.NumberColumn("Certified filings", format="%d"),
                 "n_with_wage": st.column_config.NumberColumn("With a usable wage", format="%d"),
                 "n_wage_excluded": st.column_config.NumberColumn(

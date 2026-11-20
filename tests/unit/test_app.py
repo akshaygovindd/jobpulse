@@ -284,3 +284,27 @@ def test_visa_page_does_not_show_zero_as_no_sponsorship(
     at.switch_page("app_pages/visa.py").run()
     assert not at.exception
     assert any("Not stated" in str(i.value) for i in at.info)  # nothing analyzed: say so
+
+
+def test_label_helpers_keep_acronyms_and_never_truncate() -> None:
+    from jobpulse.app_ui import ROLE_LABELS, human, sentence
+
+    assert (
+        human("ml_ai_engineer") == "ML/AI Engineer" or human("ml_ai_engineer") == "ML AI engineer"
+    )
+    assert human("llm_calls") == "LLM calls"
+    assert human("share_of_ai_postings") == "Share of AI postings"
+    assert sentence("open target data/AI role postings") == "Open target data/AI role postings"
+    assert ROLE_LABELS["ml_ai_engineer"] == "ML/AI Engineer"
+    assert human(None) == "Not stated"
+
+
+def test_streamlit_config_has_blue_primary_and_viewer_toolbar() -> None:
+    import tomllib
+
+    cfg = tomllib.loads((ROOT / ".streamlit" / "config.toml").read_text())
+    assert cfg["client"]["toolbarMode"] == "viewer"
+    primary = cfg["theme"]["primaryColor"].lstrip("#")
+    r, g, b = (int(primary[i : i + 2], 16) for i in (0, 2, 4))
+    assert b > r  # blue, not red
+    assert b > g
