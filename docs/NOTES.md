@@ -671,3 +671,11 @@ Read-only queries against MotherDuck (token from `.env` inside Python; the scrip
 **Open questions for the owner**
 1. Apply the wage plausibility range (and what range)?
 2. Make the company-level class LCA-only, with posting statements shown per posting?
+
+---
+
+## 2026-11-20 (later still): owner decisions applied (wage range, company class)
+
+- `config/lca.yaml` `wage.plausible_annual_min/max` = 15,000 / 1,000,000 USD/year. An annualized offered wage outside it is NULL (`int_lca_certified.wage_excluded`), never repaired; `agg_lca_wage_by_soc_city` has `n_wage_excluded` and coverage = n_with_wage / n_certified. The filings still count as evidence.
+- `dim_company.visa_evidence_class` is filing history only (HISTORICAL_EVIDENCE / UNKNOWN); posting statements stay per posting with `n_active_offered` / `n_active_not_offered` on the company row. The app must show `n_lca_certified` next to the class and label by-role LCA counts as lower bounds. ARCHITECTURE.md updated.
+- Checks: `make check` green, pytest 351 passed. Not yet rebuilt on MotherDuck: run `uv run jobpulse build-gold` to apply (no reload of LCA needed).

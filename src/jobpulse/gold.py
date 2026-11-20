@@ -138,6 +138,8 @@ def build_gold(
         "extraction_families": [f.model_dump() for f in ecfg.title_filter.families],
         "lca_certified_statuses": [x.upper() for x in lca.certified_statuses],
         "lca_evidence_threshold": lca.match.threshold,
+        "lca_wage_min": lca.wage.plausible_annual_min,
+        "lca_wage_max": lca.wage.plausible_annual_max,
         "annualization": pipeline.gold.annualization,
         "min_salaries_for_percentiles": pipeline.gold.min_salaries_for_percentiles,
     }

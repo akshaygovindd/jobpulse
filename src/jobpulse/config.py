@@ -330,6 +330,17 @@ class LcaReviewConfig(_Strict):
     seed: int
 
 
+class LcaWageConfig(_Strict):
+    plausible_annual_min: float = Field(gt=0)
+    plausible_annual_max: float = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _ordered(self) -> LcaWageConfig:
+        if self.plausible_annual_min >= self.plausible_annual_max:
+            raise ValueError("wage.plausible_annual_min must be below plausible_annual_max")
+        return self
+
+
 class LcaConfig(_Strict):
     """Which DOL OFLC LCA disclosure files to load and how to read and match them."""
 
@@ -340,6 +351,7 @@ class LcaConfig(_Strict):
     certified_statuses: list[str]  # CASE_STATUS values counted as certified (upper-case)
     required: list[str]  # canonical columns that must be present, else the load fails loudly
     match: LcaMatchConfig
+    wage: LcaWageConfig
     review: LcaReviewConfig
 
     @model_validator(mode="after")

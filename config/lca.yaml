@@ -45,6 +45,13 @@ match:
   legal_suffixes: [inc, incorporated, llc, llp, lp, corp, corporation, ltd, limited, co, company,
                    plc, pbc, pc]
 
+# Plausibility range for an ANNUALIZED offered wage (USD/year). Filers sometimes pick the wrong
+# unit (an annual amount labelled HOUR/WEEK/MONTH). Outside the range the wage is NULL: excluded
+# from percentiles and counted as excluded, never repaired by guessing.
+wage:
+  plausible_annual_min: 15000
+  plausible_annual_max: 1000000
+
 review:            # the blind sheet of (LCA name, company) pairs the owner labels yes/no
   sample_size: 60
   seed: 20261120

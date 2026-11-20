@@ -139,10 +139,16 @@ def test_posting_statement_takes_precedence_over_lca_history(
     assert one["sponsorship_quote"] == "We do not sponsor visas."
     assert fct(db, "2")["sponsorship_class"] == "HISTORICAL_EVIDENCE"
     assert fct(db, "2")["sponsorship_quote"] is None
-    assert company(db)[0] == "EXPLICITLY_UNAVAILABLE"
+    # a posting statement never changes the company class; its counts sit beside it
+    assert company(db)[0] == "HISTORICAL_EVIDENCE"
+    assert query(db, "SELECT n_active_offered, n_active_not_offered FROM gold.dim_company") == [
+        (0, 1)
+    ]
 
 
-def test_offered_beats_everything_at_company_level(storage: LocalStorage, db: Path) -> None:
+def test_company_class_ignores_posting_statements_but_shows_counts(
+    storage: LocalStorage, db: Path
+) -> None:
     seed(storage, db, [gh_job("1"), gh_job("2", content="other")])
     add_extraction(
         db, "1", sponsorship_statement="offered",
@@ -152,7 +158,7 @@ def test_offered_beats_everything_at_company_level(storage: LocalStorage, db: Pa
         db, "2", sponsorship_statement="not_offered", sponsorship_original_text="No sponsorship"
     )  # fmt: skip
     gold(db)
-    assert company(db)[0] == "CONFIRMED_OFFERED"
+    assert company(db)[0] == "UNKNOWN"  # no filings: statements do not make a company class
     assert query(db, "SELECT n_active_offered, n_active_not_offered FROM gold.dim_company") == [
         (1, 1)
     ]  # mixed evidence stays visible
@@ -190,3 +196,35 @@ def test_role_family_wage_level_and_annualized_wage(storage: LocalStorage, db: P
         "SELECT sum(n_certified), sum(n_with_wage), count(p50_annual) "
         "FROM gold.agg_lca_wage_by_soc_city",
     ) == [(5, 5, 0)]
+
+
+def test_implausible_wages_are_excluded_not_repaired(storage: LocalStorage, db: Path) -> None:
+    seed(storage, db, [gh_job("1")])
+    load_ref(
+        db,
+        [
+            lca_case(1, wage=150000.0),
+            lca_case(2, wage=142200.0, unit="HOUR"),  # annual amount labelled hourly: 295M
+            lca_case(3, wage=10000.0),  # below the 15k floor
+            lca_case(4, wage=50.0, unit="HOUR"),  # 104,000 annual: fine
+        ],
+    )
+    gold(db)
+    assert query(
+        db,
+        "SELECT case_number, wage_from_annual, wage_excluded FROM gold_stage.int_lca_certified "
+        "ORDER BY 1",
+    ) == [
+        ("I-200-00001", 150000.0, False),
+        ("I-200-00002", None, True),
+        ("I-200-00003", None, True),
+        ("I-200-00004", 104000.0, False),
+    ]
+    assert query(
+        db,
+        "SELECT sum(n_certified), sum(n_with_wage), sum(n_wage_excluded) "
+        "FROM gold.agg_lca_wage_by_soc_city",
+    ) == [(4, 2, 2)]
+    assert query(db, "SELECT count(*) FROM gold.agg_lca_company_year WHERE n_certified = 4") == [
+        (1,)
+    ]  # the filings still count as evidence; only the wage is excluded

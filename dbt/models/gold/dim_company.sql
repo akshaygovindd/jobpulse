@@ -1,9 +1,10 @@
 -- One row per company, with visa evidence. Evidence from public filings, not a promise of
--- sponsorship. visa_evidence_class: what a company's postings say takes precedence over LCA
--- history (CONFIRMED_OFFERED if any active posting offers sponsorship; else EXPLICITLY_UNAVAILABLE
--- if any says it is not offered; else HISTORICAL_EVIDENCE if the employer has certified LCAs under
--- a name matched at or above the evidence threshold; else UNKNOWN). The counts behind the class are
--- kept so mixed or thin evidence is visible. Sponsorship is a filter, never part of a match score.
+-- sponsorship. visa_evidence_class reflects FILING HISTORY only: HISTORICAL_EVIDENCE when the
+-- employer has certified LCAs under a name matched at or above the evidence threshold, else
+-- UNKNOWN. What a posting says is about that posting: it stays in fct_postings (sponsorship_class,
+-- sponsorship_quote) and the company row only carries the counts of active postings that say
+-- offered / not offered. Always show n_lca_certified next to the class. Sponsorship is a filter,
+-- never part of a match score.
 with postings as (
     select
         p.company_id,
@@ -37,8 +38,6 @@ select
     coalesce(l.n_lca_not_certified, 0) as n_lca_not_certified,
     l.lca_fiscal_years,
     case
-        when p.n_active_offered > 0 then 'CONFIRMED_OFFERED'
-        when p.n_active_not_offered > 0 then 'EXPLICITLY_UNAVAILABLE'
         when coalesce(l.has_lca_evidence, false) then 'HISTORICAL_EVIDENCE'
         else 'UNKNOWN'
     end as visa_evidence_class

@@ -115,11 +115,11 @@ models:
       - {name: name, tests: [not_null]}
       - {name: n_postings, tests: [not_null]}
       - name: visa_evidence_class
-        description: Evidence from public filings, not a promise of sponsorship. Posting statements take precedence over LCA history.
+        description: Evidence from public filings, not a promise of sponsorship. Filing history only; posting statements are per posting (fct_postings.sponsorship_class). Show n_lca_certified beside it.
         tests:
           - not_null
           - accepted_values:
-              arguments: {values: [CONFIRMED_OFFERED, EXPLICITLY_UNAVAILABLE, HISTORICAL_EVIDENCE, UNKNOWN]}
+              arguments: {values: [HISTORICAL_EVIDENCE, UNKNOWN]}
   - name: dim_skill
     description: One row per canonical skill name (jobpulse.skills.norm_skill).
     columns:
