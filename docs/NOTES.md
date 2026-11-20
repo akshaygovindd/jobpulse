@@ -643,3 +643,31 @@ Active data alone is 134.3 MiB (1.3% of the limit). **Which components count aga
 **Owner steps**
 1. Label `eval/employer_match_labels_template.csv`: copy it to `eval/employer_match_labels.csv`, fill `label` with yes / no / unsure per row, then run `uv run python eval/employer_match_score.py` (writes `eval/reports/employer_match_report.md`).
 2. Load the LCA data into MotherDuck: `uv run jobpulse load-lca` (about 70 s, about 10.6k filing rows plus 91k employer names; small against the 10 GB limit), then `uv run jobpulse build-gold`. Tell me, and I will check the gold counts and the evidence classes.
+
+---
+
+## 2026-11-20 (later): P5 visa gold checked on real MotherDuck data
+
+Read-only queries against MotherDuck (token from `.env` inside Python; the scripts are throwaway, not in the repo). `ref` holds 10,605 filings, 134,481 employer-name rows and 42 matches. Gold built 88/88 tests. MotherDuck storage after the load: active 71.5 MiB, historical 412.7 MiB, failsafe 384.5 MiB (868.7 MiB all components; was 788.4 MiB).
+
+**Counts**
+- Certified (plain CERTIFIED) LCAs: FY2025 4,727 (41 companies), FY2026 5,102 (42). Certified-withdrawn 302 / 375, withdrawn 52 / 45, denied 0 / 2. Total certified 9,829.
+- `dim_company.visa_evidence_class` (43 companies): HISTORICAL_EVIDENCE 39, EXPLICITLY_UNAVAILABLE 2 (Scale AI, EverQuote), CONFIRMED_OFFERED 1 (Affirm), UNKNOWN 1 (Betterment, no filings).
+- Wage level of certified LCAs: I 1,130; II 2,741; III 2,375; IV 3,262; unknown 321.
+- `fct_postings.sponsorship_class`: HISTORICAL_EVIDENCE 9,475 (8,430 active), EXPLICITLY_UNAVAILABLE 11 (8 active), CONFIRMED_OFFERED 2 (1 active), UNKNOWN 28 (25 active). Only 481 postings have been extracted, so only 13 postings carry an explicit statement; the other 9,475+ are classed from the company's LCA history. A posting that was never extracted has not been read, so `HISTORICAL_EVIDENCE` there means "the employer has filings", not "the posting is silent". The app must say so.
+
+**Role-family mapping spot check** (job titles of certified LCAs, same rules as extraction): other 8,175; data_scientist 568; ml_ai_engineer 558; data_analyst 233; data_engineer 187; analytics_engineer 53; bi 32; business_analyst 23.
+- Top titles per family are right (Data Scientist, Machine Learning Engineer, Data Engineer, Analytics Engineer, BI Analyst, ...). Manager titles that contain the keyword map to the family ("Manager, Analytics" is data_analyst; "Engineering Manager, Machine Learning" is ml_ai_engineer): the family is a title keyword match, not a seniority split.
+- `other` is 83% and is mostly Software Engineer (2,249 plain) / Product Manager / Designer, which are outside the target families. Genuine misses: "Software Engineer, Data" (10), "Research Scientist" (about 22), "AI Engineer" (about 20, excluded on purpose by the ML/AI narrowing), generic "Analyst" titles. So by-role counts are **lower bounds**; I did not change the rules (they are the owner's extraction rules).
+- Palantir shows 292 of 297 in `other` (Software Engineer, Forward Deployed Engineer): its data-role count is small because its titles are generic, not because the match is wrong.
+
+**Problems found (not fixed, need an owner decision)**
+1. **Wage unit errors in the filings.** 22 certified LCAs annualize to more than $1M (max $439M). Of 9,829 certified filings, 28 have a unit other than YEAR (13 HOUR, 7 WEEK, 8 MONTH) and their median amount is 142k-187k, so the filer labelled an annual figure with the wrong unit. Medians stay sane (122 groups have percentiles, p50 from 81.6k to 262.5k) but p75 and any mean can be hit. Proposed fix: a configured plausible annual range (for example 15k to 2M); outside it the wage is NULL and counted in coverage, never repaired by guessing. No change made.
+2. **Company-level class can mislead.** Scale AI is EXPLICITLY_UNAVAILABLE because 3 postings say "We do not sponsor visas for Fellows" (a fellowship), while it has 143 certified LCAs. Affirm is CONFIRMED_OFFERED from one Spain-based posting ("able to offer visa sponsorship ... based in Spain") while it has 188 US certified LCAs and two postings that say not available. EverQuote is EXPLICITLY_UNAVAILABLE on 3 postings. A posting statement is about that posting. Proposed change: `dim_company.visa_evidence_class` reflects LCA history only (HISTORICAL_EVIDENCE / UNKNOWN) and the posting statements stay at posting level (`fct_postings.sponsorship_class` and quote) with the counts shown next to it. No change made; this changes the rule in ARCHITECTURE.
+3. Mercury is HISTORICAL_EVIDENCE on 3 certified filings (confidence 0.9). It passes the threshold; the app should always show the count beside the class.
+
+**Checks:** read-only queries only; no code changed, so `make check` was not re-run for this entry.
+
+**Open questions for the owner**
+1. Apply the wage plausibility range (and what range)?
+2. Make the company-level class LCA-only, with posting statements shown per posting?
