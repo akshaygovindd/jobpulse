@@ -19,6 +19,7 @@ from jobpulse.config import (
     LocationsConfig,
     PipelineConfig,
     load_extraction,
+    load_lca,
     load_locations,
     load_pipeline,
 )
@@ -26,6 +27,7 @@ from jobpulse.extract.store import ensure_extract_tables
 from jobpulse.location import CityParser, Place
 from jobpulse.silver import SilverResult, run_dbt
 from jobpulse.skills import norm_skill
+from jobpulse.visa.lca_loader import ensure_ref_tables
 from jobpulse.warehouse import bulk_insert, connect
 
 
@@ -76,6 +78,7 @@ def stage_maps(
     con.execute(f'CREATE SCHEMA IF NOT EXISTS "{wh.gold_schema}"')
     con.execute(f'CREATE SCHEMA IF NOT EXISTS "{stage}"')
     ensure_extract_tables(con, ecfg)
+    ensure_ref_tables(con, wh)  # visa tables exist (empty) even if load-lca never ran
 
     raw_skills = [
         str(r[0])
@@ -118,6 +121,7 @@ def build_gold(
     pipeline = pipeline or load_pipeline()
     ecfg = extraction or load_extraction()
     wh = pipeline.warehouse
+    lca = load_lca()
     con = connect(wh, db_path=db_path)
     try:
         maps = stage_maps(con, pipeline, ecfg, locations or load_locations())
@@ -129,6 +133,11 @@ def build_gold(
         "gold_schema": wh.gold_schema,
         "gold_stage_schema": wh.gold_stage_schema,
         "extract_schema": ecfg.extract_schema,
+        "ref_schema": wh.ref_schema,
+        "extraction_exclude": ecfg.title_filter.exclude,
+        "extraction_families": [f.model_dump() for f in ecfg.title_filter.families],
+        "lca_certified_statuses": [x.upper() for x in lca.certified_statuses],
+        "lca_evidence_threshold": lca.match.threshold,
         "annualization": pipeline.gold.annualization,
         "min_salaries_for_percentiles": pipeline.gold.min_salaries_for_percentiles,
     }

@@ -43,16 +43,83 @@ models:
         tests:
           - accepted_values:
               arguments: {values: [hour, day, week, month, year]}
+      - name: sponsorship_class
+        tests:
+          - not_null
+          - accepted_values:
+              arguments: {values: [CONFIRMED_OFFERED, EXPLICITLY_UNAVAILABLE, HISTORICAL_EVIDENCE, UNKNOWN]}
       - name: is_active
         tests:
           - accepted_values:
               arguments: {values: [true, false], quote: false}
+  - name: int_lca_certified
+    description: Certified LCA cases of matched employers with role family and annualized wage (stage schema, not read by the app).
+    columns:
+      - {name: case_number, tests: [unique, not_null]}
+  - name: int_company_lca
+    description: Per-company LCA match and certified counts (stage schema, not read by the app).
+    columns:
+      - {name: company_id, tests: [unique, not_null]}
+  - name: agg_lca_company_year
+    description: >
+      Public-filing evidence, not a promise of sponsorship. Cases per company and fiscal year by
+      outcome; only plain CERTIFIED counts as evidence.
+    tests:
+      - unique_combination:
+          arguments:
+            combination_of_columns: [company_id, fiscal_year]
+    columns:
+      - {name: company_id, tests: [not_null]}
+      - {name: fiscal_year, tests: [not_null]}
+      - {name: n_certified, tests: [not_null]}
+  - name: agg_lca_company_role
+    description: Certified LCAs per company, fiscal year and role family (from the LCA job title).
+    tests:
+      - unique_combination:
+          arguments:
+            combination_of_columns: [company_id, fiscal_year, role_family]
+    columns:
+      - name: role_family
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [data_analyst, data_engineer, analytics_engineer, bi, business_analyst, data_scientist, ml_ai_engineer, other]
+  - name: agg_lca_wage_level
+    description: Certified LCAs per company, fiscal year and DOL prevailing-wage level.
+    tests:
+      - unique_combination:
+          arguments:
+            combination_of_columns: [company_id, fiscal_year, wage_level]
+    columns:
+      - name: wage_level
+        tests:
+          - not_null
+          - accepted_values:
+              arguments: {values: [I, II, III, IV, unknown]}
+  - name: agg_lca_wage_by_soc_city
+    description: >
+      OFFERED wages on certified LCAs (not advertised salary; never blended with it), from matched
+      employers only. Percentiles are NULL below the minimum count.
+    tests:
+      - unique_combination:
+          arguments:
+            combination_of_columns: [role_family, worksite_state, worksite_city]
+    columns:
+      - {name: n_certified, tests: [not_null]}
+      - {name: coverage_pct, tests: [not_null]}
   - name: dim_company
     description: One row per company.
     columns:
       - {name: company_id, tests: [unique, not_null]}
       - {name: name, tests: [not_null]}
       - {name: n_postings, tests: [not_null]}
+      - name: visa_evidence_class
+        description: Evidence from public filings, not a promise of sponsorship. Posting statements take precedence over LCA history.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments: {values: [CONFIRMED_OFFERED, EXPLICITLY_UNAVAILABLE, HISTORICAL_EVIDENCE, UNKNOWN]}
   - name: dim_skill
     description: One row per canonical skill name (jobpulse.skills.norm_skill).
     columns:

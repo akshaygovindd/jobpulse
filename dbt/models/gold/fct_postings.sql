@@ -23,6 +23,7 @@ base as (
         e.seniority,
         e.remote_policy,
         e.sponsorship_statement,
+        e.sponsorship_original_text,
         e.salary_min,
         e.salary_max,
         e.salary_currency,
@@ -51,6 +52,13 @@ select
     lm.city_state,
     lm.city_country,
     b.sponsorship_statement,
+    b.sponsorship_original_text as sponsorship_quote,
+    case
+        when b.sponsorship_statement = 'offered' then 'CONFIRMED_OFFERED'
+        when b.sponsorship_statement = 'not_offered' then 'EXPLICITLY_UNAVAILABLE'
+        when coalesce(c.has_lca_evidence, false) then 'HISTORICAL_EVIDENCE'
+        else 'UNKNOWN'
+    end as sponsorship_class,
     b.salary_min,
     b.salary_max,
     b.salary_currency,
@@ -65,3 +73,4 @@ select
     b.probable_duplicate_of is not null as is_probable_duplicate
 from base as b
 left join {{ source('gold_stage', 'location_map') }} as lm on b.location_raw = lm.location_raw
+left join {{ ref('int_company_lca') }} as c on b.company_id = c.company_id

@@ -16,6 +16,7 @@ select
     coalesce(salary_period_inferred, false) as salary_period_inferred,
     remote_policy,
     sponsorship_statement,
+    sponsorship_original_text,
     confidence,
     extracted_at
 from {{ source('extract', 'extractions') }}

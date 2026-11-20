@@ -5,18 +5,16 @@
 # Names are compared after normalization. Every entry here is treated as reviewed (confidence from
 # config/lca.yaml). Add entries only after checking them: a wrong alias is a wrong claim.
 # After editing, re-run `jobpulse load-lca` so the disclosures are re-matched.
-aliases: {}
-
-# PROPOSED by Claude from the FY2025-FY2026 files, NOT ACTIVE until the owner un-comments the ones
-# they accept (case counts are all filings of that name, any status):
-#   chime:     ["Chime Financial, Inc."]            # 241
-#   notion:    ["Notion Labs, Inc."]                # 58
-#   palantir:  ["Palantir Technologies Inc."]       # 305
-#   peloton:   ["Peloton Interactive, Inc."]        # 99
-#   ramp:      ["Ramp Business Corporation"]        # 88
-#   robinhood: ["Robinhood Markets, Inc."]          # 381
-#   spotify:   ["Spotify USA, Inc."]                # 223
-#   instacart: ["Maplebear Inc."]                   # 302 (Instacart's legal name)
-#   carta:     ["eShares, Inc."]                    # 54 (Carta's former/legal name)
-#   sofi:      ["Social Finance, LLC"]              # 418 (SoFi's legal name; "SoFi Bank N.A." has 15, a bank subsidiary: left out)
-# betterment: no filing found under any plausible name.
+# Reviewed by the owner on 2026-11-20 (FY2025-FY2026 files). "SoFi Bank N.A." is deliberately excluded.
+aliases:
+  chime: ["Chime Financial, Inc."]
+  notion: ["Notion Labs, Inc."]
+  palantir: ["Palantir Technologies Inc."]
+  peloton: ["Peloton Interactive, Inc."]
+  ramp: ["Ramp Business Corporation"]
+  robinhood: ["Robinhood Markets, Inc."]
+  spotify: ["Spotify USA, Inc."]
+  instacart: ["Maplebear Inc."]
+  carta: ["eShares, Inc."]
+  sofi: ["Social Finance, LLC"]
+# betterment: no H-1B filings found in FY2025-FY2026 (not an error).

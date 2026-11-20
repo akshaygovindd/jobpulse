@@ -51,3 +51,9 @@ sources:
     tables:
       - name: skill_map
       - name: location_map
+  - name: ref
+    schema: "{{ var('ref_schema') }}"
+    description: US DOL OFLC H-1B LCA disclosures matched to our companies (jobpulse load-lca). Evidence from public filings, not a promise of sponsorship.
+    tables:
+      - name: lca_disclosures
+      - name: employer_lca_match

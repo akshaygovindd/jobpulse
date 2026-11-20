@@ -614,3 +614,32 @@ Active data alone is 134.3 MiB (1.3% of the limit). **Which components count aga
 **Owner steps (now)**
 1. Download the DOL files into `data/oflc/` (list in the session reply) and tell me.
 2. Then I will run `load-lca` locally against the files to confirm the layout, show you the match results, draft alias candidates for you to review, and continue with the gold visa tables.
+
+---
+
+## 2026-11-20: P5 on real DOL files: load, aliases, blind sheet, gold visa tables
+
+**Scope change (owner):** FY2025 and FY2026 only (8 quarterly files, ~730 MB). FY2024 is an optional later add (put the files in `data/oflc/` and add 2024 to `config/lca.yaml`).
+
+**Real-data results** (scratch local DuckDB, not MotherDuck; produced by `jobpulse load-lca`)
+- The files are per-quarter, not cumulative; `CASE_NUMBER` is unique within each. Rows per file: FY2025 Q1-Q4 107,414 / 132,133 / 238,425 / 118,580; FY2026 Q1-Q4 82,477 / 121,912 / 230,263 / 119,207. Total 1,150,411; H-1B 1,121,941; distinct cases after de-duplication 1,109,292; 91,472 distinct employer names.
+- The DOL headers matched `config/lca.yaml` with no changes; dates and wages parsed in every stored row. Load: about 70 s, 1.4 GB peak memory.
+- Matching before aliases: 32 of 43 companies. After the owner accepted 10 aliases (Chime Financial, Notion Labs, Palantir Technologies, Peloton Interactive, Ramp Business Corporation, Robinhood Markets, Spotify USA, Maplebear = Instacart, eShares = Carta, Social Finance LLC = SoFi; "SoFi Bank N.A." excluded): **42 of 43**, 10,605 filings stored. Betterment has no H-1B filings in FY2025-FY2026 (shown as such, not as an error).
+- Only plain `CERTIFIED` counts as evidence (owner decision). `CERTIFIED - WITHDRAWN`, `WITHDRAWN` and `DENIED` are counted in separate columns.
+
+**What changed**
+- `config/lca_aliases.yaml`: 10 reviewed aliases (confidence 1.0).
+- Blind sheet `eval/employer_match_labels_template.csv`: 60 pairs, **36 are our matches**, 24 near-misses. So the matched-pair precision rests on at most 36 labels, below the 50-label target in the ROADMAP; the report prints both numbers. The ROADMAP box stays unticked until the owner labels and the script reports.
+- Gold (dbt): `agg_lca_company_year`, `agg_lca_company_role`, `agg_lca_wage_level`, `agg_lca_wage_by_soc_city` (offered wage, never blended with advertised salary), working tables `int_lca_certified` / `int_company_lca` in `gold_stage`; `dim_company` gains match confidence, LCA counts and `visa_evidence_class`; `fct_postings` gains `sponsorship_quote` and `sponsorship_class`. `ref` is a dbt source. `build-gold` creates empty `ref` tables when `load-lca` never ran, so gold still builds without visa data.
+- Role family for LCA titles reuses the extraction title rules; unmatched titles are `other` (so by-role counts are lower bounds for the target families).
+- `tests/unit/test_gold_visa.py` (7): empty ref, statuses, evidence threshold, posting-over-LCA precedence, mixed company evidence, role family, wage level, hourly annualization.
+
+**Not proven yet**
+- Gold visa tables are tested on synthetic data only; they have not been built on MotherDuck. That needs `load-lca` against MotherDuck first (owner step 2).
+- Match precision (needs the owner's labels). Role-family mapping of LCA titles has not been reviewed on real titles.
+
+**Checks run (`make check`):** ruff, format, mypy strict, pytest **350 passed** (3 live deselected), terraform fmt + validate both roots valid, gitleaks no leaks.
+
+**Owner steps**
+1. Label `eval/employer_match_labels_template.csv`: copy it to `eval/employer_match_labels.csv`, fill `label` with yes / no / unsure per row, then run `uv run python eval/employer_match_score.py` (writes `eval/reports/employer_match_report.md`).
+2. Load the LCA data into MotherDuck: `uv run jobpulse load-lca` (about 70 s, about 10.6k filing rows plus 91k employer names; small against the 10 GB limit), then `uv run jobpulse build-gold`. Tell me, and I will check the gold counts and the evidence classes.

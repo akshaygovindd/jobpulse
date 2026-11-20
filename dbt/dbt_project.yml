@@ -21,6 +21,9 @@ vars:
   gold_schema: gold
   gold_stage_schema: gold_stage
   extract_schema: extract
+  ref_schema: ref
+  lca_certified_statuses: ['CERTIFIED']
+  lca_evidence_threshold: 0.9
   annualization: {year: 1, month: 12, week: 52, hour: 2080}
   min_salaries_for_percentiles: 5
   closure_consecutive_absences: 2
@@ -41,6 +44,10 @@ models:
       # int_ models and the Python-built mapping tables live in a separate stage schema so the
       # gold schema holds only what the app reads.
       int_latest_extraction:
+        +schema: "{{ var('gold_stage_schema') }}"
+      int_lca_certified:
+        +schema: "{{ var('gold_stage_schema') }}"
+      int_company_lca:
         +schema: "{{ var('gold_stage_schema') }}"
 snapshots:
   jobpulse:

@@ -188,12 +188,17 @@ Source: US Department of Labor OFLC LCA disclosure data (H-1B), downloaded by ha
 Loading is idempotent: loading a fiscal year replaces that year's rows; other years stay.
 
 ### gold (dbt, schema `gold`; built by `jobpulse build-gold`)
-Built from silver and `extract.extractions`; it reads both and writes neither. Advertised salary only: LCA wages are never joined in.
+Built from silver and `extract.extractions`; it reads both and writes neither. Advertised salary only: LCA wages are never joined into advertised-salary models. The `*_lca_*` models below are a separate dataset built from `ref` and are labelled **evidence from public filings, not a promise of sponsorship**.
 
 | Model | Grain / key columns |
 |---|---|
-| `fct_postings` | posting_key: company_id, source_id, title, `has_extraction`, role_family, seniority, remote_policy, city (place label), city_name, city_state, city_country, `sponsorship_statement`, salary_min/max (as stated), salary_currency, salary_period, **`salary_period_inferred`**, salary_min_annual, salary_max_annual, `has_advertised_salary`, first_seen_date, closed_date, is_active, is_probable_duplicate. Every posting, active or closed; extracted fields are NULL and `has_extraction` is false until the posting's current content has been extracted. |
-| `dim_company` | company_id: name, sources[], n_postings, n_active, n_extracted |
+| `fct_postings` | posting_key: company_id, source_id, title, `has_extraction`, role_family, seniority, remote_policy, city (place label), city_name, city_state, city_country, `sponsorship_statement`, `sponsorship_quote` (the grounded quote from the posting), `sponsorship_class`, salary_min/max (as stated), salary_currency, salary_period, **`salary_period_inferred`**, salary_min_annual, salary_max_annual, `has_advertised_salary`, first_seen_date, closed_date, is_active, is_probable_duplicate. Every posting, active or closed; extracted fields are NULL and `has_extraction` is false until the posting's current content has been extracted. |
+| `dim_company` | company_id: name, sources[], n_postings, n_active, n_extracted, n_active_offered, n_active_not_offered, `lca_match_confidence`, `lca_employer_names`, `lca_match_methods`, `n_lca_certified`, `n_lca_not_certified`, `lca_fiscal_years`, `visa_evidence_class` (see below). Companies with no LCA match have NULL match fields and 0 counts. |
+| `agg_lca_company_year` | (company_id, fiscal_year): n_certified (plain CERTIFIED only; this is the evidence), n_certified_positions, n_certified_withdrawn, n_withdrawn, n_denied, n_cases. Withdrawn and denied cases are shown separately and are not evidence. |
+| `agg_lca_company_role` | (company_id, fiscal_year, role_family): certified LCAs by role family, mapped from the LCA job title with the same title rules as extraction (`config/extraction.yaml` `title_filter`); titles that match no family are `other`. |
+| `agg_lca_wage_level` | (company_id, fiscal_year, wage_level I-IV or `unknown`): certified LCAs by DOL prevailing-wage level. |
+| `agg_lca_wage_by_soc_city` | (role_family, worksite_state, worksite_city): OFFERED wage on certified LCAs (lower bound of the filed range, annualized with `gold.annualization`), n_certified, n_with_wage, coverage_pct, p25/p50/p75 (NULL below `gold.min_salaries_for_percentiles`). **Never blended with advertised salary**; matched employers only, so not a market survey. (Grain is role family, not SOC code: SOC codes are in `int_lca_certified`.) |
+| `int_lca_certified`, `int_company_lca` (schema `gold_stage`) | Working tables for the models above; not read by the app. |
 | `dim_skill` | skill_id (sha256 of canonical_name): canonical_name, n_spellings. Names come from `jobpulse.skills.norm_skill`, the same function `eval/score.py` uses. |
 | `bridge_posting_skill` | (posting_key, skill_id), deduplicated after normalization |
 | `agg_skill_demand_weekly` | (week_start, skill_id, role_family): active_postings, new_postings, share_of_postings. Extracted, non-duplicate postings only; the share's denominator is the extracted postings active that week in the role family. In the first week of data every posting is "new" (history starts there), so that week is a baseline, not a spike. |
@@ -207,7 +212,7 @@ Built from silver and `extract.extractions`; it reads both and writes neither. A
 
 **Mapping tables.** `build-gold` first rebuilds `gold_stage.skill_map` (raw spelling to canonical name) and `gold_stage.location_map` (location_raw to place: label, city, state, country, key) in Python, then runs dbt. They are recomputed from scratch each run, so reruns are idempotent.
 
-**Not built in P4 (needs the P5 LCA loader and employer match):** `sponsorship_class`, `country`, and `dim_company.lca_match_confidence` / `visa_evidence_class`. `dim_skill.category` is omitted: nothing in the data defines categories. `agg_lca_wage_by_soc_city` arrives with P5.
+`dim_skill.category` is omitted: nothing in the data defines categories. `country` is `city_country`. `build-gold` creates empty `ref` tables if `load-lca` never ran, so gold builds with no visa data (every class is then `UNKNOWN`).
 
 ### Visa evidence classes
 | Class | Meaning |
@@ -217,7 +222,7 @@ Built from silver and `extract.extractions`; it reads both and writes neither. A
 | `HISTORICAL_EVIDENCE` | The posting says nothing about sponsorship, but the employer has certified LCAs with name-match confidence at or above the configured threshold. |
 | `UNKNOWN` | None of the above. |
 
-What the posting says takes precedence over LCA history. The UI always shows the evidence behind a class, never a promise. Sponsorship is a filter and is never part of the match score.
+What the posting says takes precedence over LCA history. `fct_postings.sponsorship_class` applies this per posting (an extracted posting that says nothing, and any posting not yet extracted, falls back to the company's LCA evidence). `dim_company.visa_evidence_class` applies it per company: CONFIRMED_OFFERED if any active posting offers sponsorship, else EXPLICITLY_UNAVAILABLE if any says it is not offered, else HISTORICAL_EVIDENCE, else UNKNOWN; the offered / not-offered counts are kept so mixed evidence stays visible. Only plain `CERTIFIED` cases count as LCA evidence. The UI always shows the evidence behind a class, never a promise. Sponsorship is a filter and is never part of the match score.
 
 ## GitHub OIDC → AWS
 
