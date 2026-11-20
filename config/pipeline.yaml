@@ -22,6 +22,8 @@ freshness:
 
 storage:
   bucket_env_var: JOBPULSE_BUCKET
+  dev_prefix: dev/                 # all S3 keys of a dev run live under this prefix (never a prod root)
+  prod_prefixes: [raw/, snapshots/, ops/]
 
 warehouse:
   database: jobpulse               # MotherDuck database (created on first load if missing)

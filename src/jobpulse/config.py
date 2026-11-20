@@ -91,6 +91,10 @@ class FreshnessConfig(_Strict):
 
 class StorageConfig(_Strict):
     bucket_env_var: str
+    # Dev environment (the local Airflow demo and any other dev run): every S3 key is written under
+    # this prefix, which must not overlap the production key roots. See jobpulse/env.py.
+    dev_prefix: str
+    prod_prefixes: list[str]  # the production key roots: raw/, snapshots/, ops/
 
 
 class WarehouseConfig(_Strict):

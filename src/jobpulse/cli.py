@@ -21,6 +21,14 @@ from jobpulse.config import (
     load_sources,
 )
 from jobpulse.connectors import build_connectors
+from jobpulse.env import (
+    ENV_VAR,
+    ENVIRONMENTS,
+    EnvError,
+    PrefixedStorage,
+    resolve_env,
+    validate_dev_db,
+)
 from jobpulse.extract.cost import projected_cost
 from jobpulse.extract.llm import OpenAIClient
 from jobpulse.extract.runner import (
@@ -61,13 +69,22 @@ EXIT_ALERT = 1  # run finished, but results need attention (low success ratio, s
 EXIT_USAGE = 2  # rejected before doing any work (bad args, bad snapshot_date, no bucket)
 
 
+def _env(args: argparse.Namespace) -> str:
+    return str(getattr(args, "env", "prod"))
+
+
 def _storage(args: argparse.Namespace) -> Storage:
     if args.local_dir:
         return LocalStorage(Path(args.local_dir))
-    var = load_pipeline().storage.bucket_env_var
-    bucket = os.environ.get(var)
+    cfg = load_pipeline().storage
+    bucket = os.environ.get(cfg.bucket_env_var)
     if not bucket:
-        raise SystemExit(f"error: set {var} or pass --local-dir")
+        raise SystemExit(f"error: set {cfg.bucket_env_var} or pass --local-dir")
+    if _env(args) == "dev":
+        try:
+            return PrefixedStorage(S3Storage(bucket), cfg.dev_prefix, cfg.prod_prefixes)
+        except EnvError as e:
+            raise SystemExit(f"error: {e}") from None
     return S3Storage(bucket)
 
 
@@ -120,8 +137,14 @@ def cmd_ingest(args: argparse.Namespace, clock: Clock) -> int:
 
 
 def _warehouse(args: argparse.Namespace) -> duckdb.DuckDBPyConnection:
-    path = Path(args.db) if args.db else None
     cfg = load_pipeline().warehouse
+    if _env(args) == "dev":
+        try:
+            path: Path | None = validate_dev_db(args.db)
+        except EnvError as e:
+            raise WarehouseError(str(e)) from None
+    else:
+        path = Path(args.db) if args.db else None
     if path is None:
         load_env_keys([cfg.token_env_var])  # from .env inside Python; never sourced in a shell
     return connect_warehouse(cfg, db_path=path)
@@ -497,6 +520,13 @@ def cmd_validate_employers(args: argparse.Namespace, clock: Clock) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="jobpulse")
+    p.add_argument(
+        "--env",
+        choices=ENVIRONMENTS,
+        default=None,
+        help="prod (default) or dev: dev needs a local --db, never reads MotherDuck, and puts "
+        f"S3 keys under the dev prefix. Also settable with {ENV_VAR}.",
+    )
     sub = p.add_subparsers(dest="command", required=True)
 
     ing = sub.add_parser("ingest", help="fetch all enabled employer boards for today (UTC)")
@@ -544,6 +574,11 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None, clock: Clock | None = None) -> int:
     configure_logging()
     args = build_parser().parse_args(argv)
+    try:
+        args.env = resolve_env(args.env)
+    except EnvError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return EXIT_USAGE
     clock = clock or utc_now
     handlers = {
         "ingest": cmd_ingest,
