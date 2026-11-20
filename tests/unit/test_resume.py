@@ -33,7 +33,7 @@ APP = ROOT / "app" / "streamlit_app.py"
 PAGE = "app_pages/resume_match.py"
 CFG = load_resume()
 VOCAB = {
-    "python", "sql", "spark", "airflow", "dbt", "kafka", "tensorflow", "pytorch", "kubernete",
+    "python", "sql", "spark", "airflow", "dbt", "kafka", "tensorflow", "pytorch", "kubernetes",
     "machine learning", "natural language processing", "r", "go", "ray", "search", "testing",
     "ci/cd", "scikit learn", "tableau",
 }  # fmt: skip
@@ -75,7 +75,7 @@ def test_skills_are_found_by_normalized_ngram_lookup() -> None:
     )
     p = extract_profile(text, VOCAB, CFG)
     assert p.skills == {
-        "python", "sql", "spark", "kubernete", "scikit learn", "ci/cd",
+        "python", "sql", "spark", "kubernetes", "scikit learn", "ci/cd",
         "natural language processing", "machine learning",
     }  # fmt: skip
     assert p.years == 7
@@ -199,8 +199,14 @@ def resume_db(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return out
 
 
-def _open(db: Path, monkeypatch: pytest.MonkeyPatch) -> AppTest:
+def _open(db: Path, monkeypatch: pytest.MonkeyPatch, min_frequency: int = 1) -> AppTest:
+    """The tiny fixture has 3 postings, so the real "at least 3 postings" rule is relaxed here
+    (test_a_skill_in_too_few_postings_is_not_recognized covers the rule itself)."""
     monkeypatch.setenv(LOCAL_DB_ENV, str(db))
+    relaxed = CFG.model_copy(
+        update={"parse": CFG.parse.model_copy(update={"min_posting_frequency": min_frequency})}
+    )
+    monkeypatch.setattr("jobpulse.config.load_resume", lambda *a, **k: relaxed)
     at = AppTest.from_file(str(APP), default_timeout=30).run()
     at.switch_page(PAGE).run()
     assert not at.exception, at.exception
@@ -248,6 +254,16 @@ def test_page_shows_privacy_notice_and_ranks_postings(
     assert frame["Advertised salary"].iloc[0] == "$100K to $140K"
     assert len(frame) == 2  # posting 3 has too few skills
     assert "Evidence from public filings, not a promise" in _everything(at)
+
+
+def test_a_skill_in_too_few_postings_is_not_recognized(
+    resume_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    at = _analyze(_open(resume_db, monkeypatch, min_frequency=1), RESUME)
+    assert int(at.metric[0].value) > 0
+    # no skill appears in 100 postings: nothing is offered as a skill, and the page says so
+    at = _analyze(_open(resume_db, monkeypatch, min_frequency=100), RESUME)
+    assert at.metric[0].value == "0"
 
 
 def test_sponsorship_is_a_filter_and_never_changes_the_score(

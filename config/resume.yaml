@@ -48,6 +48,34 @@ parse:
     - guardrail
     - observability
     - personalization
+    # Reviewed with the QA audit (docs/QA_REPORT.md P1-4): words that came from ordinary resume prose
+    # ("CTEs", "ran a demo", "Languages: English", "STAR method", "joins") or are too generic to be a
+    # skill claim. Edit this list when a new false positive shows up.
+    - cte
+    - demo
+    - english
+    - join
+    - language
+    - star
+    - user story
+    - problem solving
+    - visualization
+    - analytic
+    - analytics
+    - business analytic
+    - agent
+    - dag
+    - delta
+    - ci
+    - risk
+    - research
+    - training
+    - inference
+    - vision
+    - modeling
+  # A skill must appear in at least this many open, analyzed postings to be recognized in a resume,
+  # so one-off phrases (1,530 of 2,517 skills appear in a single posting) are not offered as skills.
+  min_posting_frequency: 3
   title_keywords: [analyst, engineer, scientist, developer, researcher, architect, manager, intern]
   max_title_chars: 60         # a "title" is a short line containing one of the keywords
   max_titles: 5

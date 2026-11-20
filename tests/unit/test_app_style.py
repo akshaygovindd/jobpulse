@@ -327,7 +327,7 @@ def test_skill_names_show_proper_casing_but_data_stays_canonical() -> None:
     assert [skill_label(s) for s in ("sql", "python", "dbt", "aws", "snowflake", "airflow")] == [
         "SQL", "Python", "dbt", "AWS", "Snowflake", "Airflow",
     ]  # fmt: skip
-    assert [skill_label(s) for s in ("looker", "kubernete", "databrick", "panda", "mlop")] == [
+    assert [skill_label(s) for s in ("looker", "kubernetes", "databricks", "pandas", "mlops")] == [
         "Looker", "Kubernetes", "Databricks", "pandas", "MLOps",
     ]  # fmt: skip
     assert skill_label("stream processing") == "Stream processing"  # unlisted: capitalized only

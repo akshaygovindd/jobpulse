@@ -390,6 +390,7 @@ class ResumeParseConfig(_Strict):
     max_ngram: int = Field(ge=1, le=8)
     case_sensitive_skills: dict[str, str]
     ignore_skills: list[str]
+    min_posting_frequency: int = Field(ge=1)
     title_keywords: list[str] = Field(min_length=1)
     max_title_chars: int = Field(ge=1)
     max_titles: int = Field(ge=0)

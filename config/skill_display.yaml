@@ -22,12 +22,12 @@ tensorflow: TensorFlow
 jax: JAX
 xgboost: XGBoost
 scikit learn: scikit-learn
-panda: pandas
+pandas: pandas
 numpy: NumPy
 airflow: Airflow
 dbt: dbt
 snowflake: Snowflake
-databrick: Databricks
+databricks: Databricks
 bigquery: BigQuery
 redshift: Redshift
 kafka: Kafka
@@ -40,7 +40,7 @@ kinesis: Kinesis
 mlflow: MLflow
 terraform: Terraform
 docker: Docker
-kubernete: Kubernetes
+kubernetes: Kubernetes
 git: Git
 github: GitHub
 linux: Linux
@@ -96,13 +96,12 @@ ai tool: AI tools
 large language model: Large language models
 retrieval augmented generation: Retrieval-augmented generation
 llm evaluation: LLM evaluation
-mlop: MLOps
+mlops: MLOps
 etl: ETL
 elt: ELT
 cdc: CDC
 bi: BI
 api: API
-apis: APIs
 sdk: SDK
 gpu: GPU
 cpu: CPU
@@ -117,12 +116,13 @@ jvm: JVM
 ci/cd: CI/CD
 a/b testing: A/B testing
 kpi: KPI
-kpis: KPIs
-statistic: Statistics
-econometric: Econometrics
-analytic: Analytics
+statistics: Statistics
+econometrics: Econometrics
+analytics: Analytics
 embedding: Embeddings
 transformer: Transformers
 neural network: Neural networks
 guardrail: Guardrails
 infrastructure as code: Infrastructure as code
+github action: GitHub Actions
+etl/elt: ETL/ELT

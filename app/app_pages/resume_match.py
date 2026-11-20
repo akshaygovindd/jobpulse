@@ -33,7 +33,19 @@ CLASS_LABELS = {
 }
 
 cfg = load_resume()
-vocabulary = set(load("SELECT canonical_name FROM gold.dim_skill")["canonical_name"])
+# Only skills that open, analyzed postings actually ask for (at least `min_posting_frequency` of
+# them) can be recognized: this keeps one-off phrases out of "Skills recognized".
+vocabulary = set(
+    load(
+        "SELECT s.canonical_name FROM gold.dim_skill s "
+        "JOIN gold.bridge_posting_skill b ON b.skill_id = s.skill_id "
+        "JOIN gold.fct_postings p ON p.posting_key = b.posting_key "
+        "WHERE p.is_active AND p.is_target_role AND p.has_extraction "
+        "AND NOT p.is_probable_duplicate "
+        "GROUP BY s.canonical_name HAVING count(DISTINCT p.posting_key) >= ?",
+        [cfg.parse.min_posting_frequency],
+    )["canonical_name"]
+)
 
 
 def _upload_key() -> str:
