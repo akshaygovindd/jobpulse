@@ -44,6 +44,7 @@ select
     b.source_id,
     b.title,
     b.has_extraction,
+    tr.posting_key is not null as is_target_role,
     b.role_family,
     b.seniority,
     b.remote_policy,
@@ -74,3 +75,4 @@ select
 from base as b
 left join {{ source('gold_stage', 'location_map') }} as lm on b.location_raw = lm.location_raw
 left join {{ ref('int_company_lca') }} as c on b.company_id = c.company_id
+left join {{ ref('int_extraction_candidates') }} as tr on b.posting_key = tr.posting_key

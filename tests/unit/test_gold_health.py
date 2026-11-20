@@ -91,5 +91,7 @@ def test_health_tables_summarise_ops_and_llm_calls(storage: LocalStorage, db: Pa
         for r in query(db, "SELECT metric, numerator, denominator FROM gold.agg_data_quality")
     }
     assert quality["extracted_share"] == (1, 2)
+    # target-role coverage: both postings are titled "Data Engineer" (a target role), one analyzed
+    assert quality["target_roles_analyzed"] == (1, 2)
     assert quality["advertised_salary"] == (1, 1)
     assert quality["sponsorship_stated"] == (1, 1)

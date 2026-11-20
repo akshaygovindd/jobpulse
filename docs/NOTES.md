@@ -702,3 +702,15 @@ Read-only queries against MotherDuck (token from `.env` inside Python; the scrip
 1. `uv run jobpulse build-gold` against MotherDuck (applies the wage range, company class and health models).
 2. In MotherDuck create a read-scaling token, then run `MOTHERDUCK_READ_TOKEN=<token> uv run streamlit run app/streamlit_app.py` in your own terminal (the app reads the environment only, not `.env`; do not commit the token) and look at all five pages (phone width too: browser dev tools). Tell me what looks wrong.
 3. Label the employer-match sheet (see the earlier entry).
+
+---
+
+## 2026-11-20 (night): app review fixes after the owner's look at the real pages
+
+- **Labels and money:** human labels everywhere (role, seniority, remote policy, run step, result, source), column headers renamed, salary shown as `$276K` (whole thousands, no decimals); AI spend stays at the cent (`$0.49`) because it is small. Pipeline Health charts use neutral blue/grey (no red).
+- **Market overview:** pitch line, GitHub link, "Data & AI roles analyzed: 441" with the explanation that the AI reads only data/AI roles chosen by title. Coverage of those roles is **441 of 511 open target-role postings (86%)**; the other 7,953 open postings are counted but not read. New `fct_postings.is_target_role` and metric `target_roles_analyzed` (agg_data_quality).
+- **Hiring trends:** new and closed postings per day (ISO date labels, no hourly axis); the first day of data is left out and captioned. **The first day in the data is 10 Nov 2026, not 9 Nov** (first snapshot date; 9 Nov was the day the extractor was first run). Skills use week-start dates.
+- **Salary city "unspecified" (cause found):** not every row, but the biggest bucket (207 of 323 salary-bearing postings). Their locations are remote ("Remote - United States"), multi-location ("San Francisco, CA; New York, NY") or a country only, so by the city rule they have no single city. Not a bug. Fix: new gold model `agg_salary_by_role` (no city) for "All cities"; a City filter (with "No single city (remote or multi-location)") uses the city table; chart of median advertised salary by role family and seniority (groups with at least five salaries).
+- **Visa:** offered/not-offered columns removed from the company table; the company drill-down says "Not stated" when nothing was analyzed, otherwise "N analyzed: x offer, y not available, z do not say". Match shown in words (Reviewed alias / Exact name match / Name match). Top-sponsors bar chart with a role-family filter (default: all data roles; lower bounds). Matched filing names now show real casing ("DoorDash, Inc.") instead of the normalized form. Timestamps on Pipeline Health are converted to UTC to match their label.
+- **Verified on real MotherDuck data** (build-gold 107/107 models+tests passed, 87 tests, 0 failures; all five pages rendered through AppTest with no exceptions and the figures above). Not verified in a browser or on a phone.
+- **Checks:** `make check` green, pytest 381 passed.

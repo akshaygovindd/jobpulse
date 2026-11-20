@@ -28,6 +28,7 @@ GOLD_TABLES = frozenset(
         "dim_skill",
         "bridge_posting_skill",
         "agg_skill_demand_weekly",
+        "agg_salary_by_role",
         "agg_salary_by_role_city",
         "agg_lca_company_year",
         "agg_lca_company_role",

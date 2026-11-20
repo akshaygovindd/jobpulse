@@ -436,3 +436,23 @@ def test_storage_projection_on_a_local_file_and_md_view_absent(
     assert "used:" in out
     assert "posting_content rows: 1" in out
     assert module.main(["--marginal", "1"]) == 2  # --marginal needs a local file
+
+
+def test_salary_by_role_has_no_city_dimension_and_matches_city_totals(
+    storage: LocalStorage, db: Path
+) -> None:
+    seed(storage, db, [gh_job(str(i), loc="NYC") for i in range(1, 7)])
+    for i in range(1, 7):
+        add_extraction(
+            db, str(i), salary_min=100000.0 + i, salary_max=120000.0, salary_currency="USD",
+            salary_period="year",
+        )  # fmt: skip
+    gold(db)
+    by_role = query(
+        db,
+        "SELECT role_family, seniority, salary_currency, n_postings, n_annualized, "
+        "p50_annual IS NOT NULL FROM gold.agg_salary_by_role",
+    )
+    assert by_role == [("data_engineer", "senior", "USD", 6, 6, True)]
+    by_city = query(db, "SELECT sum(n_annualized) FROM gold.agg_salary_by_role_city")
+    assert by_city == [(6,)]

@@ -254,3 +254,33 @@ def test_app_code_reads_gold_tables_only() -> None:
     assert seen  # the pages do query gold
     for forbidden in ("INSERT ", "UPDATE ", "DELETE ", "DROP ", "CREATE ", "ATTACH "):
         assert not any(forbidden in f.read_text() for f in files if f.name != "app_data.py")
+
+
+def test_pages_show_human_labels_not_codes(full_db: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    codes = ("ml_ai_engineer", "data_scientist", "HISTORICAL_EVIDENCE", "not_offered", "n_active")
+    for at in _run_pages(full_db, monkeypatch):
+        visible = _text(at) + " ".join(str(m.label) + str(m.value) for m in at.metric)
+        visible += " ".join(str(s.label) for s in at.selectbox)
+        for code in codes:
+            assert code not in visible, code
+
+
+def test_market_overview_explains_what_the_ai_reads(
+    full_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(LOCAL_DB_ENV, str(full_db))
+    at = AppTest.from_file(str(APP), default_timeout=20).run()
+    assert not at.exception
+    assert "43 tech employers" in _text(at)
+    assert "Data & AI roles analyzed" in {m.label for m in at.metric}
+    assert "only data and AI roles" in _text(at)
+
+
+def test_visa_page_does_not_show_zero_as_no_sponsorship(
+    bare_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(LOCAL_DB_ENV, str(bare_db))
+    at = AppTest.from_file(str(APP), default_timeout=20).run()
+    at.switch_page("app_pages/visa.py").run()
+    assert not at.exception
+    assert any("Not stated" in str(i.value) for i in at.info)  # nothing analyzed: say so

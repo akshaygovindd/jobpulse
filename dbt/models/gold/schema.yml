@@ -192,6 +192,17 @@ models:
       - {name: active_postings, tests: [not_null]}
       - {name: new_postings, tests: [not_null]}
       - {name: share_of_postings, tests: [not_null]}
+  - name: agg_salary_by_role
+    description: >
+      Advertised salary only (never LCA wages), all cities. One row per currency within a
+      (role_family, seniority) group; coverage_pct is the group's share with any salary.
+    tests:
+      - unique_combination:
+          arguments:
+            combination_of_columns: [role_family, seniority, salary_currency]
+    columns:
+      - {name: n_postings, tests: [not_null]}
+      - {name: coverage_pct, tests: [not_null]}
   - name: agg_salary_by_role_city
     description: >
       Advertised salary only (never LCA wages). One row per currency within a

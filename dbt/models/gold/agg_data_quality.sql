@@ -5,6 +5,11 @@ with p as (
     select * from {{ ref('fct_postings') }} where is_active and not is_probable_duplicate
 )
 
+select 'target_roles_analyzed' as metric,
+    'open target data/AI role postings analyzed by the AI' as description,
+    count(*) filter (where has_extraction) as numerator, count(*) as denominator
+from p where is_target_role
+union all
 select 'extracted_share' as metric, 'active postings with an extraction' as description,
     count(*) filter (where has_extraction) as numerator, count(*) as denominator
 from p

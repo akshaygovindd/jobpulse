@@ -6,7 +6,7 @@ with match as (
     select
         company_id,
         max(match_confidence) as lca_match_confidence,
-        list_sort(list(distinct lca_employer_name)) as lca_employer_names,
+        list_sort(list(distinct example_name)) as lca_employer_names,
         list_sort(list(distinct match_method)) as lca_match_methods
     from {{ source('ref', 'employer_lca_match') }}
     group by company_id

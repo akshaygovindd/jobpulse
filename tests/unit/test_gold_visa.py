@@ -104,6 +104,7 @@ def test_only_plain_certified_counts_as_evidence(storage: LocalStorage, db: Path
         "n_withdrawn, n_denied, n_cases FROM gold.agg_lca_company_year ORDER BY 1",
     ) == [(2025, 2, 4, 1, 1, 1, 5), (2026, 1, 1, 0, 0, 0, 1)]
     assert company(db) == ("HISTORICAL_EVIDENCE", 3, 3, 0.9)
+    assert query(db, "SELECT lca_employer_names FROM gold.dim_company") == [(["Acme, Inc."],)]
     assert fct(db, "1")["sponsorship_class"] == "HISTORICAL_EVIDENCE"
 
 
