@@ -1,0 +1,128 @@
+# Display names for skills (acronyms and brands). Keys are the canonical names in gold.dim_skill
+# (jobpulse.skills.norm_skill output, so some look stemmed: "kubernete", "databrick", "panda");
+# data is never changed, only how a name is shown. A skill not listed here is shown as its
+# canonical name with the first letter capitalized. A test checks that every key is canonical.
+python: Python
+sql: SQL
+r: R
+c: C
+go: Go
+golang: Golang
+java: Java
+scala: Scala
+kotlin: Kotlin
+rust: Rust
+c++: C++
+javascript: JavaScript
+typescript: TypeScript
+bash: Bash
+spark: Spark
+pytorch: PyTorch
+tensorflow: TensorFlow
+jax: JAX
+xgboost: XGBoost
+scikit learn: scikit-learn
+panda: pandas
+numpy: NumPy
+airflow: Airflow
+dbt: dbt
+snowflake: Snowflake
+databrick: Databricks
+bigquery: BigQuery
+redshift: Redshift
+kafka: Kafka
+flink: Flink
+hadoop: Hadoop
+hive: Hive
+presto: Presto
+iceberg: Iceberg
+kinesis: Kinesis
+mlflow: MLflow
+terraform: Terraform
+docker: Docker
+kubernete: Kubernetes
+git: Git
+github: GitHub
+linux: Linux
+tableau: Tableau
+looker: Looker
+sigma: Sigma
+hex: Hex
+power bi: Power BI
+excel: Excel
+salesforce: Salesforce
+postgresql: PostgreSQL
+mysql: MySQL
+mongodb: MongoDB
+redis: Redis
+aws: AWS
+gcp: GCP
+azure: Azure
+s3: S3
+ec2: EC2
+emr: EMR
+eks: EKS
+iam: IAM
+unity catalog: Unity Catalog
+langgraph: LangGraph
+langchain: LangChain
+openai: OpenAI
+claude: Claude
+claude code: Claude Code
+codex: Codex
+cursor: Cursor
+copilot: Copilot
+ray: Ray
+ai: AI
+ml: ML
+llm: LLM
+nlp: NLP
+rag: RAG
+rlhf: RLHF
+sft: SFT
+dpo: DPO
+ppo: PPO
+cnn: CNN
+rnn: RNN
+gnn: GNN
+vlm: VLM
+mcp: MCP
+genai: GenAI
+generative ai: Generative AI
+agentic ai: Agentic AI
+artificial intelligence: Artificial intelligence
+ai agent: AI agents
+ai tool: AI tools
+large language model: Large language models
+retrieval augmented generation: Retrieval-augmented generation
+llm evaluation: LLM evaluation
+mlop: MLOps
+etl: ETL
+elt: ELT
+cdc: CDC
+bi: BI
+api: API
+apis: APIs
+sdk: SDK
+gpu: GPU
+cpu: CPU
+qa: QA
+crm: CRM
+erp: ERP
+sap: SAP
+sas: SAS
+gis: GIS
+css: CSS
+jvm: JVM
+ci/cd: CI/CD
+a/b testing: A/B testing
+kpi: KPI
+kpis: KPIs
+statistic: Statistics
+econometric: Econometrics
+analytic: Analytics
+embedding: Embeddings
+transformer: Transformers
+neural network: Neural networks
+guardrail: Guardrails
+infrastructure as code: Infrastructure as code

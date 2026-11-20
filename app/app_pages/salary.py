@@ -122,7 +122,7 @@ with advertised_tab:
                 salary_chart(chart)
                 st.caption(
                     "Midpoint of the advertised range, converted to a yearly figure, for groups "
-                    "with at least five salaries."
+                    "with at least five salaries; a blank cell means fewer than five."
                 )
             st.dataframe(
                 table[

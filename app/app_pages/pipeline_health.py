@@ -6,6 +6,7 @@ from jobpulse.app_ui import (
     SOURCE_LABELS,
     STATUS_LABELS,
     TASK_LABELS,
+    dash,
     date_chart,
     human,
     load,
@@ -64,19 +65,22 @@ st.subheader("Data quality")
 quality = load("SELECT metric, description, numerator, denominator FROM gold.agg_data_quality")
 if not quality.empty:
     quality["share"] = quality.apply(
-        lambda r: 100 * r["numerator"] / r["denominator"] if r["denominator"] else None, axis=1
+        lambda r: (
+            dash(100 * r["numerator"] / r["denominator"], "{:.0f}%") if r["denominator"] else "—"
+        ),
+        axis=1,
     )
+    quality["numerator"] = quality["numerator"].map(dash)
+    quality["denominator"] = quality["denominator"].map(dash)
     quality["description"] = quality["description"].map(sentence)
     st.dataframe(
         quality[["description", "numerator", "denominator", "share"]],
         hide_index=True,
         column_config={
             "description": st.column_config.TextColumn("Field", width="large"),
-            "numerator": st.column_config.NumberColumn("Have it", format="%d"),
-            "denominator": st.column_config.NumberColumn("Out of", format="%d"),
-            "share": st.column_config.ProgressColumn(
-                "Share", min_value=0, max_value=100, format="%.0f%%"
-            ),
+            "numerator": st.column_config.TextColumn("Have it", width="small"),
+            "denominator": st.column_config.TextColumn("Out of", width="small"),
+            "share": st.column_config.TextColumn("Share", width="small"),
         },
         alt="Coverage of key fields",
     )
@@ -96,6 +100,8 @@ else:
     runs["Step"] = runs["task"].map(lambda v: human(v, TASK_LABELS))
     runs["Source"] = runs["source_id"].map(lambda v: human(v, SOURCE_LABELS))
     runs["Result"] = runs["status"].map(lambda v: human(v, STATUS_LABELS))
+    for col in ("duration_s", "companies_complete", "companies_failed", "rows_kept"):
+        runs[col] = runs[col].map(dash)  # a missing figure shows as an em dash, never "None"
     st.dataframe(
         runs[
             [
@@ -115,10 +121,10 @@ else:
             "Source": st.column_config.TextColumn(width="small"),
             "Result": st.column_config.TextColumn(width="small"),
             "snapshot_date": st.column_config.DateColumn("Data date"),
-            "duration_s": st.column_config.NumberColumn("Seconds", format="%.0f"),
-            "companies_complete": st.column_config.NumberColumn("Companies complete", format="%d"),
-            "companies_failed": st.column_config.NumberColumn("Companies failed", format="%d"),
-            "rows_kept": st.column_config.NumberColumn("Rows kept", format="%d"),
+            "duration_s": st.column_config.TextColumn("Seconds", width="small"),
+            "companies_complete": st.column_config.TextColumn("Companies complete", width="small"),
+            "companies_failed": st.column_config.TextColumn("Companies failed", width="small"),
+            "rows_kept": st.column_config.TextColumn("Rows kept", width="small"),
         },
         alt="Most recent pipeline runs",
     )

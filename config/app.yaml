@@ -16,3 +16,6 @@ map:
 
 home:
   top_skills: 3                 # skills named in the Home skill card
+
+trends:
+  min_full_weeks: 3             # "Skills over time" is hidden until this many full Mon-Sun weeks exist

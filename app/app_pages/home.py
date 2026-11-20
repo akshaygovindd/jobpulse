@@ -7,6 +7,7 @@ from jobpulse.app_ui import (
     kpi_label,
     load,
     pct,
+    skill_label,
     visa_disclaimer,
 )
 
@@ -90,10 +91,10 @@ with c1, st.container(border=True):
 with c2, st.container(border=True):
     if len(skills):
         top = skills.iloc[0]
-        st.metric("Most requested skill", str(top["skill"]))
+        st.metric("Most requested skill", skill_label(str(top["skill"])))
         st.caption(
             f"In {pct(top['n'], analyzed)} of {analyzed:,} analyzed postings. Next: "
-            + ", ".join(skills["skill"].iloc[1:].tolist())
+            + ", ".join(skill_label(v) for v in skills["skill"].iloc[1:])
             + "."
         )
     else:

@@ -1,7 +1,16 @@
 import streamlit as st
 
 from jobpulse import insights
-from jobpulse.app_ui import ROLE_LABELS, bar, date_chart, key_insight, load, role_label
+from jobpulse.app_ui import (
+    ROLE_LABELS,
+    app_config,
+    bar,
+    date_chart,
+    key_insight,
+    load,
+    role_label,
+    skill_label,
+)
 
 bounds = load(
     "SELECT min(first_seen_date) AS first_day, max(first_seen_date) AS last_day "
@@ -69,6 +78,7 @@ skills = load(
 if skills.empty:
     st.info("No skills for this role family yet.")
     st.stop()
+skills["skill"] = skills["skill"].map(skill_label)  # display names; data keeps canonical ones
 latest = skills["week"].max()
 top = skills[skills["week"] == latest].sort_values("share", ascending=False).head(15).copy()
 top["Share of postings (%)"] = 100 * top["share"]
@@ -84,6 +94,18 @@ key_insight(
 )
 bar(top, x="skill", y="Share of postings (%)", horizontal=True, sort="-Share of postings (%)")
 
+last_day = load("SELECT max(newest_snapshot_date) AS d FROM gold.fct_snapshot_freshness")["d"].iloc[
+    0
+]
+needed = app_config().trends.min_full_weeks
+weeks = insights.full_weeks(first_day.date(), last_day.date()) if last_day == last_day else 0
+if weeks < needed:
+    st.caption(
+        f"Skills over time appears once there are at least {needed} full weeks of history "
+        f"(Monday to Sunday); there {'is' if weeks == 1 else 'are'} {weeks} so far. Fewer weeks "
+        "would show noise, not trends."
+    )
+    st.stop()
 chosen = st.multiselect(
     "Skills over time (weeks start on Mondays)",
     sorted(skills["skill"].unique()),
@@ -99,5 +121,3 @@ if chosen:
         kind="line",
         series="skill",
     )
-    if picked["week"].nunique() < 3:
-        st.caption("Fewer than three weeks of history: trends are not meaningful yet.")

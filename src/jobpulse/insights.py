@@ -9,6 +9,7 @@ passed in; nothing is hard-coded.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import date, timedelta
 
 
 def share(part: float, whole: float) -> str:
@@ -151,3 +152,13 @@ def company_card_insight(
     if level:
         parts.append(f"The most common stated wage level is {level[0]} ({level[1]:,.0f}).")
     return " ".join(parts)
+
+
+def full_weeks(first: date, last: date) -> int:
+    """Complete Monday-to-Sunday weeks inside [first, last] (both days included)."""
+    monday = first + timedelta(days=(7 - first.weekday()) % 7)
+    count = 0
+    while monday + timedelta(days=6) <= last:
+        count += 1
+        monday += timedelta(days=7)
+    return count

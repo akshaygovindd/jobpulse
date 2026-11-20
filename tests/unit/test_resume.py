@@ -242,8 +242,8 @@ def test_page_shows_privacy_notice_and_ranks_postings(
     frame = at.dataframe[0].value
     assert frame["Title"].iloc[0] == "Data Engineer"
     assert frame["Match"].iloc[0] == 100  # posting 1: every skill it asks for is in the resume
-    assert "Python" not in frame["Matched skills"].iloc[0]  # canonical lower-case names
-    assert "python" in frame["Matched skills"].iloc[0]
+    assert "Python" in frame["Matched skills"].iloc[0]  # shown as "Python", stored as "python"
+    assert "SQL" in frame["Matched skills"].iloc[0]
     assert "Posting says sponsorship is offered" in frame["Visa evidence"].iloc[0]
     assert frame["Advertised salary"].iloc[0] == "$100K to $140K"
     assert len(frame) == 2  # posting 3 has too few skills

@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import re
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from streamlit.testing.v1 import AppTest
 
@@ -128,7 +130,7 @@ def test_home_shows_data_computed_cards_links_and_the_disclaimer(
     at = _page(history_db, monkeypatch, None)  # Home is the default page
     metrics = {m.label: m.value for m in at.metric}
     assert metrics["Open postings"] == "5"
-    assert metrics["Most requested skill"] == "python"
+    assert metrics["Most requested skill"] == "Python"
     assert metrics["Median advertised pay"] == "$120K"
     assert metrics["Companies with H-1B filings"] == "1 of 1"
     text = _text(at)
@@ -238,3 +240,140 @@ def test_visa_company_lookup_card(history_db: Path, monkeypatch: pytest.MonkeyPa
     labels = {m.label for m in at.metric}
     assert {"Certified filings", "Withdrawn or denied", "Open postings"} <= labels
     assert any(label.endswith("certified") and label.startswith("FY") for label in labels)
+
+
+# ---- review fixes: labels, wide bars, heatmap, skill names, gated trends, dashes -------------
+
+
+def _spec_of(script: Callable[[], None]) -> dict[str, Any]:
+    at = AppTest.from_function(script, default_timeout=20).run()
+    assert not at.exception, at.exception
+    return dict(json.loads(at.get("vega_lite_chart")[0].proto.spec))
+
+
+def test_horizontal_bars_ask_for_every_category_label() -> None:
+    def script() -> None:
+        import pandas as pd
+
+        from jobpulse.app_ui import bar
+
+        frame = pd.DataFrame(
+            {"policy": ["Not stated", "On-site", "Hybrid", "Remote"], "postings": [9, 5, 3, 2]}
+        )
+        bar(frame, x="policy", y="postings", horizontal=True, sort="-postings")
+
+    spec = _spec_of(script)
+    axis = spec["encoding"]["y"]["axis"]
+    assert axis["values"] == ["Not stated", "On-site", "Hybrid", "Remote"]
+    assert axis["labelOverlap"] is False
+    assert spec["height"] >= 30 * 4  # room for every row
+
+
+def test_daily_bars_are_wide_bands_and_lines_stay_temporal() -> None:
+    def bars() -> None:
+        import pandas as pd
+
+        from jobpulse.app_ui import date_chart
+
+        date_chart(pd.DataFrame({"day": ["2026-11-11", "2026-11-12"], "n": [2, 3]}), x="day", y="n")
+
+    def lines() -> None:
+        import pandas as pd
+
+        from jobpulse.app_ui import date_chart
+
+        frame = pd.DataFrame({"week": ["2026-11-09", "2026-11-16"], "s": [1, 2]})
+        date_chart(frame, x="week", y="s", kind="line")
+
+    b = _spec_of(bars)
+    assert b["encoding"]["x"]["type"] == "ordinal"
+    assert b["encoding"]["x"]["timeUnit"] == "yearmonthdate"
+    assert b["mark"]["width"] == {"band": 0.7}
+    assert _spec_of(lines)["encoding"]["x"]["type"] == "temporal"
+
+
+def test_salary_chart_is_a_labelled_heatmap() -> None:
+    def script() -> None:
+        import pandas as pd
+
+        from jobpulse.app_ui import salary_chart
+
+        salary_chart(
+            pd.DataFrame(
+                {
+                    "Role family": ["Data Scientist", "Data Scientist", "ML/AI Engineer"],
+                    "Seniority": ["Mid-level", "Senior", "Senior"],
+                    "Median": [150.0, 190.0, 240.0],
+                    "n_annualized": [6, 9, 12],
+                }
+            )
+        )
+
+    spec = _spec_of(script)
+    marks = [layer["mark"]["type"] for layer in spec["layer"]]
+    assert marks == ["rect", "text"]
+    assert spec["encoding"]["x"]["sort"] == ["Mid-level", "Senior"]
+    assert "'$' + format(datum.Median, '.0f') + 'K'" in spec["transform"][0]["calculate"]
+    assert {"field": "n_annualized", "type": "quantitative", "title": "Salaries"} in spec["layer"][
+        0
+    ]["encoding"]["tooltip"]
+
+
+def test_skill_names_show_proper_casing_but_data_stays_canonical() -> None:
+    from jobpulse.app_ui import skill_label
+    from jobpulse.config import load_skill_display
+    from jobpulse.skills import norm_skill
+
+    assert [skill_label(s) for s in ("sql", "python", "dbt", "aws", "snowflake", "airflow")] == [
+        "SQL", "Python", "dbt", "AWS", "Snowflake", "Airflow",
+    ]  # fmt: skip
+    assert [skill_label(s) for s in ("looker", "kubernete", "databrick", "panda", "mlop")] == [
+        "Looker", "Kubernetes", "Databricks", "pandas", "MLOps",
+    ]  # fmt: skip
+    assert skill_label("stream processing") == "Stream processing"  # unlisted: capitalized only
+    # every key is a canonical name, so display names can never drift from the data
+    for canonical, shown in load_skill_display().items():
+        assert norm_skill(canonical) == canonical, canonical
+        assert norm_skill(shown) == canonical, (canonical, shown)
+
+
+def test_full_weeks_counts_complete_monday_to_sunday_weeks() -> None:
+    from jobpulse.insights import full_weeks
+
+    assert full_weeks(date(2026, 11, 10), date(2026, 11, 20)) == 0  # data starts on a Tuesday
+    assert full_weeks(date(2026, 11, 10), date(2026, 11, 22)) == 1  # Nov 16-22 is complete
+    assert full_weeks(date(2026, 11, 9), date(2026, 11, 22)) == 2
+    assert full_weeks(date(2026, 11, 10), date(2026, 12, 6)) == 3
+    assert full_weeks(date(2026, 11, 10), date(2026, 12, 5)) == 2
+
+
+def test_skills_over_time_is_hidden_until_enough_full_weeks(
+    history_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    at = _page(history_db, monkeypatch, "app_pages/hiring_trends.py")
+    assert "Skills over time (weeks start on Mondays)" not in [m.label for m in at.multiselect]
+    text = _text(at)
+    assert "Skills over time appears once there are at least 3 full weeks" in text
+    assert "there are 0 so far" in text
+    from jobpulse import insights as ins
+
+    monkeypatch.setattr(ins, "full_weeks", lambda first, last: 3)
+    shown = _page(history_db, monkeypatch, "app_pages/hiring_trends.py")
+    assert "Skills over time (weeks start on Mondays)" in [m.label for m in shown.multiselect]
+
+
+def test_pipeline_health_tables_show_dashes_not_none(
+    history_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jobpulse.app_ui import dash
+
+    assert dash(None) == "—"
+    assert dash(float("nan")) == "—"
+    import pandas as pd
+
+    assert dash(pd.NA) == "—"
+    assert dash(1234.4) == "1,234"
+    assert dash(73.2, "{:.0f}%") == "73%"
+    at = _page(history_db, monkeypatch, "app_pages/pipeline_health.py")
+    for frame in (d.value for d in at.dataframe):
+        assert not frame.isin([None, "None", "nan", "NaN"]).any().any()

@@ -469,10 +469,15 @@ class HomeConfig(_Strict):
     top_skills: int = Field(ge=1)
 
 
+class TrendsConfig(_Strict):
+    min_full_weeks: int = Field(ge=1)  # "Skills over time" appears once this many full weeks exist
+
+
 class AppConfig(_Strict):
     kpi: KpiConfig
     map: MapConfig
     home: HomeConfig
+    trends: TrendsConfig
 
 
 def load_app(path: Path | None = None) -> AppConfig:
@@ -490,3 +495,9 @@ def load_city_coords(cfg: AppConfig | None = None) -> dict[str, tuple[float, flo
             raise ValueError(f"coordinates out of range for {label!r}")
         out[str(label)] = (lat, lon)
     return out
+
+
+def load_skill_display(path: Path | None = None) -> dict[str, str]:
+    """Canonical skill name -> display name (acronyms and brands). Data keeps canonical names."""
+    raw = cast("dict[str, str]", _load_yaml(path or CONFIG_DIR / "skill_display.yaml"))
+    return {str(k): str(v) for k, v in raw.items()}

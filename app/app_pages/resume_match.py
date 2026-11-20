@@ -6,6 +6,7 @@ from jobpulse.app_ui import (
     load,
     role_label,
     salary_range,
+    skill_label,
     visa_disclaimer,
 )
 from jobpulse.config import load_resume
@@ -107,7 +108,10 @@ with st.container(horizontal=True, vertical_alignment="center"):
 left, right = st.columns(2)
 with left:
     st.metric("Skills recognized", len(profile.skills), border=True)
-    st.write(", ".join(sorted(profile.skills)) or "None. Try listing tools and methods by name.")
+    st.write(
+        ", ".join(sorted(skill_label(v) for v in profile.skills))
+        or "None. Try listing tools and methods by name."
+    )
 with right:
     st.metric(
         "Years of experience mentioned",
@@ -210,8 +214,8 @@ rows = [
         "Title": m.posting.info["title"],
         "City": m.posting.info["city"] or "No single city",
         "Remote": human(m.posting.info["remote"], REMOTE_LABELS),
-        "Matched skills": ", ".join(m.matched),
-        "Missing skills": ", ".join(m.missing),
+        "Matched skills": ", ".join(skill_label(v) for v in m.matched),
+        "Missing skills": ", ".join(skill_label(v) for v in m.missing),
         "Visa evidence": m.posting.info["visa"],
         "Advertised salary": m.posting.info["salary"],
     }

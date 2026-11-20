@@ -15,7 +15,7 @@ import duckdb
 import streamlit as st
 
 from jobpulse.app_data import GOLD_URL_ENV, LOCAL_DB_ENV, AppDataError, connect, read_gold
-from jobpulse.config import AppConfig, load_app, load_city_coords
+from jobpulse.config import AppConfig, load_app, load_city_coords, load_skill_display
 
 VISA_DISCLAIMER = (
     "Evidence from public filings, not a promise of sponsorship. LCAs are employer filings with "
@@ -110,15 +110,15 @@ ACRONYMS = {"ai": "AI", "ml": "ML", "bi": "BI", "llm": "LLM", "usd": "USD", "lca
 # means editing this block (and `.streamlit/config.toml` for the Streamlit theme).
 PRIMARY = "#2F6DB5"  # same blue as the Streamlit theme's primaryColor
 NEUTRAL = ["#4C78A8", "#9AA5B1", "#7A8CA3", "#B7C4D6"]
-SENIORITY_RAMP = [
-    "#C6DBEF", "#9ECAE1", "#6BAED6", "#4292C6", "#2171B5",
-    "#08519C", "#08306B", "#7A8CA3", "#9AA5B1", "#B7C4D6",
-]  # fmt: skip
+HEATMAP_RAMP = ["#DCE9F7", "#9ECAE1", "#4292C6", "#2171B5", "#08306B"]  # light to dark blue
+TEXT_ON_LIGHT = "#1B2A3A"
+TEXT_ON_DARK = "#FFFFFF"
 LABEL_COLOR = "#7F8FA6"  # mid slate: readable on both the light and the dark Streamlit theme
 CHART_CONFIG: dict[str, Any] = {
     "font": "sans-serif",
     "view": {"stroke": None},
     "axis": {
+        "labelOverlap": False,  # never hide a category label
         "labelFontSize": 12,
         "titleFontSize": 12,
         "titleFontWeight": "normal",
@@ -203,7 +203,13 @@ def bar(
     category: dict[str, Any] = {
         "field": cat,
         "type": "nominal",
-        "axis": {"labelLimit": 600, "labelAngle": 0, "title": None},
+        "axis": {
+            "labelLimit": 600,
+            "labelAngle": 0,
+            "title": None,
+            "labelOverlap": False,
+            "values": [str(v) for v in data[cat]],  # one tick, hence one label, per category
+        },
     }
     if sort:
         category["sort"] = {
@@ -239,29 +245,34 @@ def bar(
             ],
         },
     }
-    _chart(data, spec, max(120, 26 * len(data) + 30) if horizontal else 280)
+    _chart(data, spec, max(120, 30 * len(data) + 40) if horizontal else 280)
 
 
 def date_chart(
     data: Any, *, x: str, y: str, kind: str = "bar", series: str | None = None, y_title: str = ""
 ) -> None:
     """Daily/weekly chart with dates labelled 'Nov 11' (horizontal, never rotated). `data[x]` holds
-    ISO date strings. With `series`, one coloured series per value, in neutral colours."""
+    ISO date strings. Bars use one band per day (so they are wide, never thin lines); lines use a
+    time axis. With `series`, one coloured series per value, in neutral colours."""
     if data is None or len(data) == 0:
         st.caption("Nothing to show yet.")
         return
-    enc: dict[str, Any] = {
-        "x": {
+    axis = {"format": "%b %d", "labelAngle": 0, "title": None, "labelOverlap": True}
+    if kind == "bar":
+        x_enc: dict[str, Any] = {
+            "field": x,
+            "type": "ordinal",
+            "timeUnit": "yearmonthdate",
+            "axis": axis,
+        }
+    else:
+        x_enc = {
             "field": x,
             "type": "temporal",
-            "axis": {
-                "format": "%b %d",
-                "labelAngle": 0,
-                "title": None,
-                "tickCount": {"interval": "day", "step": 1},
-                "labelOverlap": True,
-            },
-        },
+            "axis": {**axis, "tickCount": {"interval": "day", "step": 1}},
+        }
+    enc: dict[str, Any] = {
+        "x": x_enc,
         "y": {"field": y, "type": "quantitative", "title": y_title or human(y)},
         "tooltip": [
             {"field": x, "type": "temporal", "format": "%b %d"},
@@ -269,7 +280,9 @@ def date_chart(
         ],
     }
     mark: dict[str, Any] = {"type": "bar" if kind == "bar" else "line"}
-    if kind == "line":
+    if kind == "bar":
+        mark["width"] = {"band": 0.7}
+    else:
         mark["point"] = True
     if series:
         enc["color"] = {
@@ -285,57 +298,65 @@ def date_chart(
 
 
 def salary_chart(data: Any) -> None:
-    """Grouped horizontal bars: role family on the axis, seniority as colour, '$NNNK' on each bar.
-    `data` has columns Role family, Seniority and Median (thousands of dollars)."""
+    """Heatmap of median advertised pay: role family by seniority, '$NNNK' in every cell, darker
+    for higher pay. `data` has columns Role family, Seniority and Median (thousands of dollars),
+    and optionally n_annualized (shown in the tooltip). Cells with no group stay empty."""
     if data is None or len(data) == 0:
         st.caption("Nothing to show yet.")
         return
     present = set(data["Seniority"])
     order = [v for v in SENIORITY_LABELS.values() if v in present]
-    y = {
-        "field": "Role family",
-        "type": "nominal",
-        "axis": {"labelLimit": 600, "title": None},
-        "sort": {"field": "Median", "op": "max", "order": "descending"},
-    }
-    y_off = {"field": "Seniority", "sort": order}
+    lo, hi = float(data["Median"].min()), float(data["Median"].max())
+    switch = lo + 0.55 * (hi - lo)  # darker than this: white text
+    tooltip = [
+        {"field": "Role family", "type": "nominal"},
+        {"field": "Seniority", "type": "nominal"},
+        {"field": "label", "type": "nominal", "title": "Median"},
+    ]
+    if "n_annualized" in data.columns:
+        tooltip.append({"field": "n_annualized", "type": "quantitative", "title": "Salaries"})
     spec = {
         "transform": [{"calculate": "'$' + format(datum.Median, '.0f') + 'K'", "as": "label"}],
         "encoding": {
-            "y": y,
-            "yOffset": y_off,
             "x": {
-                "field": "Median",
-                "type": "quantitative",
-                "title": "Median advertised salary ($K)",
+                "field": "Seniority",
+                "type": "ordinal",
+                "sort": order,
+                "axis": {"title": None, "labelAngle": 0, "orient": "top", "labelOverlap": False},
+            },
+            "y": {
+                "field": "Role family",
+                "type": "ordinal",
+                "sort": {"field": "Median", "op": "max", "order": "descending"},
+                "axis": {"title": None, "labelLimit": 600, "labelOverlap": False},
             },
         },
         "layer": [
             {
-                "mark": "bar",
+                "mark": {"type": "rect", "stroke": TEXT_ON_DARK, "strokeWidth": 1},
                 "encoding": {
                     "color": {
-                        "field": "Seniority",
-                        "type": "nominal",
-                        "scale": {"domain": order, "range": SENIORITY_RAMP[: len(order)]},
-                        "legend": {"title": "Seniority", "orient": "bottom"},
+                        "field": "Median",
+                        "type": "quantitative",
+                        "scale": {"range": HEATMAP_RAMP},
+                        "legend": {"title": "Median ($K)", "orient": "bottom"},
                     },
-                    "tooltip": [
-                        {"field": "Role family", "type": "nominal"},
-                        {"field": "Seniority", "type": "nominal"},
-                        {"field": "label", "type": "nominal", "title": "Median"},
-                    ],
+                    "tooltip": tooltip,
                 },
             },
             {
-                "mark": {"type": "text", "align": "left", "baseline": "middle", "dx": 4,
-                         "color": LABEL_COLOR, "fontSize": 11},
-                "encoding": {"text": {"field": "label", "type": "nominal"}},
+                "mark": {"type": "text", "fontSize": 12, "fontWeight": "bold"},
+                "encoding": {
+                    "text": {"field": "label", "type": "nominal"},
+                    "color": {
+                        "condition": {"test": f"datum.Median > {switch}", "value": TEXT_ON_DARK},
+                        "value": TEXT_ON_LIGHT,
+                    },
+                },
             },
         ],
-    }  # fmt: skip
-    rows = data["Role family"].nunique() * max(1, data["Seniority"].nunique())
-    _chart(data, spec, max(200, 22 * rows + 70))
+    }
+    _chart(data, spec, max(160, 44 * data["Role family"].nunique() + 90))
 
 
 def salary_range(low: Any, high: Any, currency: Any) -> str:
@@ -358,6 +379,7 @@ def key_insight(text: str | None) -> None:
     """A one-sentence, data-computed takeaway above a chart. Nothing is shown without data."""
     if text:
         st.markdown(f":material/lightbulb: **Key insight.** {text}")
+        st.space("small")  # room above the chart, so its hover toolbar cannot cover the text
 
 
 def kpi_label(days: int) -> str:
@@ -461,3 +483,26 @@ def city_map(rows: Sequence[tuple[str, int]]) -> tuple[int, int]:
     st.pydeck_chart(deck, height=420)
     st.caption(cfg.attribution)
     return sum(p["postings"] for p in data), left_off
+
+
+@functools.lru_cache(maxsize=1)
+def _skill_names() -> dict[str, str]:
+    return load_skill_display()
+
+
+def skill_label(name: str) -> str:
+    """Display name of a canonical skill: SQL, Python, dbt, AWS... Unlisted skills keep their
+    canonical spelling with the first letter capitalized. Data is never changed."""
+    names = _skill_names()
+    if name in names:
+        return names[name]
+    return name[:1].upper() + name[1:]
+
+
+def dash(value: Any, fmt: str = "{:,.0f}") -> str:
+    """A table cell for a value that may be missing: the formatted number, or an em dash."""
+    try:
+        missing = value is None or bool(value != value)  # None, NaN
+    except TypeError:  # pandas' NA has no truth value
+        missing = True
+    return "—" if missing else fmt.format(value)
