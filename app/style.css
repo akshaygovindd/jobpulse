@@ -44,6 +44,11 @@
 .st-key-wide_chart { overflow-x: auto; }
 .st-key-wide_chart [data-testid="stVegaLiteChart"] { min-width: 640px; }
 
+/* Phones: the map is a picture, not a gesture trap. Touches go to the page, so it keeps scrolling. */
+@media (max-width: 639px) {
+  .st-key-map_wrap [data-testid="stDeckGlJsonChart"] { pointer-events: none; }
+}
+
 /* Phones: tighter hero and page padding. Columns and horizontal containers already stack and wrap. */
 @media (max-width: 640px) {
   .st-key-hero { padding: 1.25rem 1.1rem; border-radius: 1rem; }

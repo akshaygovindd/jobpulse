@@ -696,7 +696,8 @@ def city_map(rows: Sequence[tuple[str, int]], height: int = 420) -> tuple[int, i
         map_style=pdk.map_styles.CARTO_DARK,
         tooltip={"text": "{city}: {postings} open postings"},
     )
-    st.pydeck_chart(deck, height=height)
+    with st.container(key="map_wrap"):  # non-interactive on a phone (see app/style.css)
+        st.pydeck_chart(deck, height=height)
     st.caption(cfg.attribution)
     return sum(p["postings"] for p in data), left_off
 

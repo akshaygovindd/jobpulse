@@ -920,3 +920,11 @@ Checks: `make check` green (see the last run); not verified in a browser. **Rebo
 
 **Owner step: reboot the Streamlit app after the push** (the theme, `app/style.css` and the Inter font load on a restart).
 
+## 2026-11-20 (evening, later): owner answers to the design questions
+
+1. **Red and green chips** stay (icons carry the meaning too).
+2. **Map on phones.** Below 640 px the map is non-interactive (`.st-key-map_wrap` ignores pointer input, in `app/style.css`), so a swipe over it scrolls the page. Verified in headless Chrome: `pointer-events` is `none` at 390 and 639 px and `auto` at 640 and 1280 px. A phone user cannot pan, zoom or see the hover tooltip; the numbers are on Market overview. Test added.
+3. **Dark only.** No light variant.
+
+Checks: `make check` (see the last run below). Not verified: a real touch swipe on a phone. **Reboot the Streamlit app after the push** (the stylesheet changed).
+

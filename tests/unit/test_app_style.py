@@ -634,3 +634,17 @@ def test_visa_page_has_company_cards_and_keeps_raw_tables_in_expanders(
     # the data tables are inside expanders, not loose on the page
     assert not [d for d in at.main if getattr(d, "type", "") == "arrow_data_frame"]
     assert any("not a promise of sponsorship" in str(i.value) for i in at.info)
+
+
+def test_the_map_does_not_trap_touch_scrolling_on_a_phone() -> None:
+    css = (ROOT / "app/style.css").read_text()
+    # below 640 px (Streamlit's own stacking breakpoint) the map ignores pointer input, so a swipe
+    # over it scrolls the page; from 640 px up it is fully interactive
+    rule = re.search(
+        r"@media \(max-width: 639px\)\s*\{\s*"
+        r"\.st-key-map_wrap \[data-testid=\"stDeckGlJsonChart\"\]\s*\{\s*pointer-events: none;",
+        css,
+    )
+    assert rule
+    assert 'st.container(key="map_wrap")' in (ROOT / "src/jobpulse/app_ui.py").read_text()
+    assert "pointer-events: none" not in css.split("@media")[0]  # never on desktop
