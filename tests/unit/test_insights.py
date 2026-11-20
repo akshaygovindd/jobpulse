@@ -85,3 +85,18 @@ def test_concentration_insight() -> None:
     )
     assert i.concentration_insight(rows[:2]) is None
     assert i.concentration_insight([]) is None
+
+
+def test_company_card_insight() -> None:
+    text = i.company_card_insight(
+        [(2025, 40.0), (2026, 60.0)], ("Data Scientist", 30.0), ("Level III", 50.0)
+    )
+    assert text == (
+        "Most certified filings came in FY2026: 60 of 100. The most common data role family is "
+        "Data Scientist (30, a lower bound). The most common stated wage level is Level III (50)."
+    )
+    assert i.company_card_insight([(2026, 5.0)], None, None) == (
+        "Most certified filings came in FY2026: 5 of 5."
+    )
+    assert i.company_card_insight([], None, None) is None
+    assert i.company_card_insight([(2026, 0.0)], None, None) is None

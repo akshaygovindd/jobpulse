@@ -130,3 +130,24 @@ def concentration_insight(rows: Sequence[tuple[str, float]], top: int = 3) -> st
         f"The {top} busiest cities ({names}) hold {share(sum(v for _, v in best), total)} of the "
         f"{total:,.0f} mapped postings."
     )
+
+
+def company_card_insight(
+    years: Sequence[tuple[int, float]],
+    role: tuple[str, float] | None,
+    level: tuple[str, float] | None,
+) -> str | None:
+    """One company's filing profile: strongest fiscal year, most common named role family (a lower
+    bound, because the family is a title keyword match) and most common stated wage level."""
+    total = sum(n for _, n in years)
+    if not years or not total:
+        return None
+    year, n = max(years, key=lambda y: y[1])
+    parts = [f"Most certified filings came in FY{year}: {n:,.0f} of {total:,.0f}."]
+    if role:
+        parts.append(
+            f"The most common data role family is {role[0]} ({role[1]:,.0f}, a lower bound)."
+        )
+    if level:
+        parts.append(f"The most common stated wage level is {level[0]} ({level[1]:,.0f}).")
+    return " ".join(parts)

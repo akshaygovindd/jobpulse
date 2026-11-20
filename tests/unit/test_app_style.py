@@ -225,3 +225,16 @@ def test_city_coordinates_and_app_config_are_valid() -> None:
     cfg = load_app()
     assert "CARTO" in cfg.map.attribution
     assert "OpenStreetMap" in cfg.map.attribution
+
+
+def test_visa_company_lookup_card(history_db: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    at = _page(history_db, monkeypatch, "app_pages/visa.py")
+    assert "Company lookup" in [s.value for s in at.subheader]
+    assert at.selectbox(key="visa_company").label == "Search for a company"
+    text = _text(at)
+    assert "-badge[" in text  # evidence class badge
+    assert "Most certified filings came in FY" in text
+    assert "Evidence from public filings, not a promise of sponsorship." in text
+    labels = {m.label for m in at.metric}
+    assert {"Certified filings", "Withdrawn or denied", "Open postings"} <= labels
+    assert any(label.endswith("certified") and label.startswith("FY") for label in labels)

@@ -103,32 +103,83 @@ st.dataframe(
     alt="Visa filing history per company",
 )
 
-st.subheader("One company")
-name = st.selectbox("Company", companies["name"].tolist(), key="visa_company")
+st.subheader("Company lookup")
+name = st.selectbox(
+    "Search for a company",
+    companies["name"].tolist(),
+    key="visa_company",
+    help="Type to search. Ordered by certified filings, most first.",
+)
 row = companies[companies["name"] == name].iloc[0]
 cid = row["company_id"]
-with st.container(horizontal=True):
-    st.metric("Certified filings", f"{int(row['n_lca_certified']):,}", border=True)
-    st.metric("Withdrawn or denied", f"{int(row['n_lca_not_certified']):,}", border=True)
-    st.metric("Evidence", EVIDENCE[row["visa_evidence_class"]], border=True)
-names = row["lca_employer_names"]
-if hasattr(names, "__len__") and len(names):
-    matched_by = row["How the filings were matched"]
-    st.caption(f"Filed under: {', '.join(names)}. Matched by: {matched_by}.")
-    subs = row["lca_subsidiaries"]
-    if hasattr(subs, "__len__") and len(subs):
-        st.caption(
-            f"Includes filings by subsidiaries (reviewed): {', '.join(subs)}. "
-            "They are counted in the certified filings above."
-        )
-else:
-    st.caption("No H-1B filings found in fiscal years 2025 and 2026.")
-
 by_year = load(
     "SELECT fiscal_year, n_certified, n_certified_withdrawn, n_withdrawn, n_denied "
     "FROM gold.agg_lca_company_year WHERE company_id = ? ORDER BY fiscal_year",
     [cid],
 )
+roles = load(
+    "SELECT role_family, sum(n_certified) AS certified FROM gold.agg_lca_company_role "
+    "WHERE company_id = ? GROUP BY 1 ORDER BY 2 DESC",
+    [cid],
+)
+roles["role"] = roles["role_family"].map(role_label)
+levels = load(
+    "SELECT wage_level, sum(n_certified) AS certified FROM gold.agg_lca_wage_level "
+    "WHERE company_id = ? GROUP BY 1 ORDER BY 1",
+    [cid],
+)
+levels["level"] = levels["wage_level"].map(
+    lambda v: "Not stated" if v == "unknown" else f"Level {v}"
+)
+named_roles = roles[roles["role_family"] != "other"]
+named_levels = levels[levels["wage_level"] != "unknown"]
+with st.container(border=True):
+    with st.container(horizontal=True, vertical_alignment="center"):
+        st.markdown(f"### {name}")
+        badge_color = "blue" if row["visa_evidence_class"] == "HISTORICAL_EVIDENCE" else "gray"
+        st.markdown(f":{badge_color}-badge[{EVIDENCE[row['visa_evidence_class']]}]")
+    with st.container(horizontal=True):
+        st.metric("Certified filings", f"{int(row['n_lca_certified']):,}", border=True)
+        st.metric("Withdrawn or denied", f"{int(row['n_lca_not_certified']):,}", border=True)
+        st.metric("Open postings", f"{int(row['n_active']):,}", border=True)
+        for _, y in by_year.iterrows():
+            st.metric(
+                f"FY{int(y['fiscal_year'])} certified", f"{int(y['n_certified']):,}", border=True
+            )
+    key_insight(
+        insights.company_card_insight(
+            [
+                (int(y), float(n))
+                for y, n in zip(by_year["fiscal_year"], by_year["n_certified"], strict=True)
+            ],
+            (str(named_roles["role"].iloc[0]), float(named_roles["certified"].iloc[0]))
+            if len(named_roles)
+            else None,
+            (
+                str(named_levels.sort_values("certified", ascending=False)["level"].iloc[0]),
+                float(named_levels["certified"].max()),
+            )
+            if len(named_levels)
+            else None,
+        )
+    )
+    names = row["lca_employer_names"]
+    if hasattr(names, "__len__") and len(names):
+        matched_by = row["How the filings were matched"]
+        st.caption(f"Filed under: {', '.join(names)}. Matched by: {matched_by}.")
+        subs = row["lca_subsidiaries"]
+        if hasattr(subs, "__len__") and len(subs):
+            st.caption(
+                f"Includes filings by subsidiaries (reviewed): {', '.join(subs)}. "
+                "They are counted in the certified filings above."
+            )
+    else:
+        st.caption("No H-1B filings found in fiscal years 2025 and 2026.")
+    st.caption(
+        "Evidence from public filings, not a promise of sponsorship. Read the number of filings "
+        "with the class: a handful is thin evidence."
+    )
+
 if not by_year.empty:
     st.dataframe(
         by_year,
@@ -147,26 +198,12 @@ if not by_year.empty:
     left, right = st.columns(2)
     with left:
         st.markdown("**Certified filings by role family (lower bounds)**")
-        roles = load(
-            "SELECT role_family, sum(n_certified) AS certified FROM gold.agg_lca_company_role "
-            "WHERE company_id = ? GROUP BY 1 ORDER BY 2 DESC",
-            [cid],
-        )
-        roles["role"] = roles["role_family"].map(role_label)
         bar(roles, x="role", y="certified", horizontal=True, sort="-certified")
         st.caption(
             "Role family is a job-title keyword match; some data roles are under 'Other roles'."
         )
     with right:
         st.markdown("**Prevailing-wage level (I lowest, IV highest)**")
-        levels = load(
-            "SELECT wage_level, sum(n_certified) AS certified FROM gold.agg_lca_wage_level "
-            "WHERE company_id = ? GROUP BY 1 ORDER BY 1",
-            [cid],
-        )
-        levels["level"] = levels["wage_level"].map(
-            lambda v: "Not stated" if v == "unknown" else f"Level {v}"
-        )
         bar(levels, x="level", y="certified")
 
 st.subheader("What this company's postings say")
