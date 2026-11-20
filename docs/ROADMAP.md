@@ -104,10 +104,10 @@
 
 ## P4: dbt gold + snapshots + local Airflow/Docker
 
-**Part A (gold + snapshot + daily job): built 2026-11-11 and running on MotherDuck from CI.** The `gold` job succeeded in the scheduled/dispatched Daily ingest runs #9 to #14 (2026-11-11 to 2026-11-16, read from the GitHub Actions API: job and step conclusions, not logs). The MotherDuck trial ended before run #15, so #15 to #17 failed at `load-ops` (no gold run). **Part B (local Airflow demo, `airflow/`): built and run end to end on 2026-11-19** with local storage and a local DuckDB file.
+**P4 complete (2026-11-19).** Part A (gold + snapshot + daily job) runs on MotherDuck: green in Actions runs #9 to #14 and, after the plan was restored, a live manual `load-bronze` / `build-silver` / `build-gold` (all green; figures in NOTES 2026-11-19, last entry). Part B (local Airflow demo, `airflow/`) ran end to end with local storage and a local DuckDB file. The daily `gold` job has not yet run in Actions since the outage; that is the next scheduled run.
 
 **Done when**
-- [x] All gold models and `snap_postings` build, with grain and `accepted_values` tests. (Local fixtures and real data: 61 dbt nodes, 0 errors. On MotherDuck: `gold` job green in Actions runs #9 to #14. Basis is the job conclusions; I could not re-run it live from the owner's machine, see NOTES 2026-11-19 (later).)
+- [x] All gold models and `snap_postings` build, with grain and `accepted_values` tests. (Local fixtures and real data: 61 dbt nodes, 0 errors. On MotherDuck: live run 2026-11-19, build-gold 61/61, and `gold` green in Actions runs #9 to #14.)
 - [x] `dbt build` runs against fixtures in CI. (CI #18 on `6a77ec0` and #19 on `76b1490`, confirmed green by the owner.)
 - [x] `docker compose up` runs the Airflow DAG end to end against the dev target. (Local directory storage and a local DuckDB file; verified 2026-11-19, all 8 tasks green. See `airflow/README.md`.)
 - [x] Both environments are documented in ARCHITECTURE.md.

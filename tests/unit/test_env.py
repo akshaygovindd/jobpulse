@@ -132,3 +132,29 @@ def test_cli_env_var_selects_dev(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_cli_unknown_env_is_a_usage_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("JOBPULSE_ENV", "staging")
     assert cli.main(["build-silver"]) == cli.EXIT_USAGE
+
+
+def test_cli_reads_the_bucket_from_dotenv_when_not_exported(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("JOBPULSE_BUCKET", raising=False)
+    asked: list[list[str]] = []
+
+    def fake_load(names: Any, *_a: Any, **_k: Any) -> list[str]:
+        asked.append(list(names))
+        monkeypatch.setenv("JOBPULSE_BUCKET", "bucket-from-dotenv")
+        return list(names)
+
+    monkeypatch.setattr(cli, "load_env_keys", fake_load)
+    monkeypatch.setattr(cli, "S3Storage", FakeS3)
+    storage = cli._storage(argparse.Namespace(local_dir=None, env="prod"))
+    assert asked == [["JOBPULSE_BUCKET"]]
+    assert isinstance(storage, FakeS3)
+    assert storage.bucket == "bucket-from-dotenv"
+
+
+def test_cli_without_bucket_anywhere_still_refuses(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("JOBPULSE_BUCKET", raising=False)
+    monkeypatch.setattr(cli, "load_env_keys", lambda *_a, **_k: [])
+    with pytest.raises(SystemExit, match="JOBPULSE_BUCKET"):
+        cli._storage(argparse.Namespace(local_dir=None, env="prod"))

@@ -77,6 +77,7 @@ def _storage(args: argparse.Namespace) -> Storage:
     if args.local_dir:
         return LocalStorage(Path(args.local_dir))
     cfg = load_pipeline().storage
+    load_env_keys([cfg.bucket_env_var])  # from .env inside Python when not already exported
     bucket = os.environ.get(cfg.bucket_env_var)
     if not bucket:
         raise SystemExit(f"error: set {cfg.bucket_env_var} or pass --local-dir")

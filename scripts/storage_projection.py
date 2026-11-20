@@ -11,8 +11,14 @@ day of data costs the whole warehouse (bronze + silver + gold), with the same co
 The projection is mean(delta) x 30, compared with the plan's storage limit. It assumes today's
 posting volume and change rate continue; it is an estimate, not a guarantee.
 
-"Used" is used_blocks x block_size from PRAGMA database_size. The `database_size` column also counts
-free blocks, which a local file keeps after deletes, so it can be much larger than the data.
+On MotherDuck `PRAGMA database_size` reports nothing useful (0 bytes, NULL block size), so the size
+comes from `md_information_schema.storage_info`: active bytes (the live data), historical bytes
+(kept for the database's snapshot retention, 7 days by default) and failsafe bytes. Which of these a
+plan's storage limit counts is the plan's rule, not something this script can tell; all are shown.
+
+For a local file, "used" is used_blocks x block_size from PRAGMA database_size. The `database_size`
+column also counts free blocks, which a local file keeps after deletes, so it can be much larger
+than the data.
 """
 
 from __future__ import annotations
@@ -33,6 +39,23 @@ from jobpulse.silver import build_silver
 from jobpulse.warehouse import WarehouseError
 
 MIB = 1024 * 1024
+
+
+def md_storage(con: duckdb.DuckDBPyConnection, database: str) -> dict[str, int] | None:
+    """Storage components for a MotherDuck database, or None if the view is unavailable."""
+    try:
+        row = con.execute(
+            "SELECT active_bytes, historical_bytes, failsafe_bytes, retained_for_clone_bytes "
+            "FROM md_information_schema.storage_info "
+            "WHERE database_name = ? AND deleted_ts IS NULL",
+            [database],
+        ).fetchone()
+    except duckdb.Error:
+        return None
+    if row is None:
+        return None
+    keys = ("active", "historical", "failsafe", "clone")
+    return {k: int(v or 0) for k, v in zip(keys, row, strict=True)}
 
 
 def used_bytes(con: duckdb.DuckDBPyConnection) -> int:
@@ -122,9 +145,23 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     b = load_pipeline().warehouse.bronze_schema
     row = con.execute("PRAGMA database_size").fetchone()
-    assert row is not None
-    print(f"database_size (as reported): {row[1]}")
-    print(f"used: {int(row[4]) * int(row[2]) / MIB:.1f} MiB ({row[4]} blocks of {row[2]} bytes)")
+    md = None if args.db else md_storage(con, load_pipeline().warehouse.database)
+    if md is not None:
+        total = md["active"] + md["historical"] + md["failsafe"] + md["clone"]
+        for k, v in md.items():
+            print(f"{k + ':':<11}{v / MIB:8.1f} MiB")
+        limit = args.limit_gib * 1024 * MIB
+        print(
+            f"total (all components): {total / MIB:.1f} MiB = {100 * total / limit:.1f}% of limit"
+        )
+        print(f"active only: {100 * md['active'] / limit:.1f}% of the {args.limit_gib:g} GiB limit")
+    elif row is not None and row[2]:
+        print(f"database_size (as reported): {row[1]}")
+        print(
+            f"used: {int(row[4]) * int(row[2]) / MIB:.1f} MiB ({row[4]} blocks of {row[2]} bytes)"
+        )
+    else:
+        print("size: not available (no block size reported and no md_information_schema)")
     days, obs, _, first, last = bronze_counts(con, b)
     print(f"bronze: {obs} observation rows over {days} days ({first} to {last})")
     try:

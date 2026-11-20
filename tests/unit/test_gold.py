@@ -409,3 +409,30 @@ def test_bulk_insert_chunks_and_handles_empty() -> None:
     )
     bulk_insert(con, "t", [("só", 1), (None, 2)])  # unicode and NULL pass through as parameters
     assert con.execute("SELECT count(*) FROM t WHERE a IS NULL OR a = 'só'").fetchone() == (2,)
+
+
+def _storage_script() -> Any:
+    import importlib.util
+
+    path = Path(__file__).resolve().parents[2] / "scripts" / "storage_projection.py"
+    spec = importlib.util.spec_from_file_location("storage_projection", path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_storage_projection_on_a_local_file_and_md_view_absent(
+    storage: LocalStorage, db: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    module = _storage_script()
+    seed(storage, db, [gh_job("1")])
+    con = duckdb.connect(str(db))
+    assert module.md_storage(con, "jobpulse") is None  # no md_information_schema locally
+    con.close()
+    assert module.main(["--db", str(db)]) == 0
+    out = capsys.readouterr().out
+    assert "used:" in out
+    assert "posting_content rows: 1" in out
+    assert module.main(["--marginal", "1"]) == 2  # --marginal needs a local file

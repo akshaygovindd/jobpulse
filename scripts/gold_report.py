@@ -82,8 +82,10 @@ def main(argv: list[str] | None = None) -> int:
                 continue
             print(f"{label}: {row[0] if row else 'n/a'}")
     size = con.execute("PRAGMA database_size").fetchone()
-    if size:
+    if size and size[2]:  # MotherDuck reports 0 bytes and no block size
         print(f"database_size: {size[1]}")
+    else:
+        print("database_size: not reported here (run scripts/storage_projection.py)")
     return 0
 
 

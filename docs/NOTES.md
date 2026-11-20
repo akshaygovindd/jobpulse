@@ -558,3 +558,35 @@ What this does and does not show: it shows the repository, as configured, has no
 1. New MotherDuck token from the restored org -> local `.env` and GitHub `prod` secret `MOTHERDUCK_TOKEN`.
 2. Locally, once: `uv run jobpulse load-bronze` (runs the migration; watch for errors), then `uv run jobpulse build-silver`, `uv run jobpulse build-gold`, and `uv run python scripts/gold_report.py` and `uv run python scripts/storage_projection.py`. Send me the output (or any error line) and I will record the live numbers.
 3. Then dispatch **Daily ingest** once (or wait for the schedule) and check that all four jobs are green.
+
+---
+
+## 2026-11-19 (night): live MotherDuck run recorded; P4 complete
+
+**Live run (owner, from the local machine, new token, `JOBPULSE_BUCKET` exported):**
+- `load-bronze`: **129 pointers loaded, 24,753 postings, 0 failed** (the 2026-11-17 to 11-19 outage catch-up; this was also the first run of the bronze migration to `bronze.posting_content`, which therefore worked on MotherDuck).
+- `build-silver`: **67/67** (models plus tests). `build-gold`: **61/61**.
+- Gold figures (`scripts/gold_report.py`, run by me afterwards, read-only): `fct_postings` **9,516** (8,464 active); **481 with extraction** (the outage-day postings are not extracted yet; the next scheduled `extract` picks them up), 441 active, non-duplicate and extracted; parsed city **62.4%**; extracted with advertised salary 73.2%; 1 row with a salary but no annualizable period; 65 salary periods inferred; `dim_company` 43; `dim_skill` 2,484; `bridge_posting_skill` 8,262; `agg_skill_demand_weekly` 6,182; `agg_salary_by_role_city` 196; `snap_postings` **11,510** (9,516 current versions).
+- Bronze: 82,849 observation rows over 10 days (2026-11-10 to 11-19), 10,568 `posting_content` rows.
+
+**MotherDuck size (`scripts/storage_projection.py`, read from `md_information_schema.storage_info`).** `PRAGMA database_size` is useless on MotherDuck (0 bytes, NULL block size), which is why the script crashed. Now:
+| Component | MiB |
+|---|---|
+| active | 134.3 |
+| historical | 269.6 |
+| failsafe | 384.5 |
+| **total, all components** | **788.4 (7.7% of 10 GiB)** |
+Active data alone is 134.3 MiB (1.3% of the limit). **Which components count against the Lite plan's 10 GB is the plan's rule; I could not determine it, so both ratios are shown.** The historical and failsafe parts are large because the bronze migration and the catch-up rewrote tables, and MotherDuck keeps changed data for the database's snapshot retention (7 days) plus failsafe; I expect them to shrink as that data ages out but have not observed it, so re-check in about two weeks. For scale: the earlier reading on 2026-11-10 (old bronze shape, one day) was 54.7 MiB. The local projection (about 3.5 MiB/day, about 105 MiB per 30 days) is an estimate from local DuckDB, not yet confirmed by day-over-day MotherDuck readings; run `scripts/storage_projection.py` daily or weekly and compare the active figure.
+
+**Fixes**
+1. The CLI now reads `JOBPULSE_BUCKET` from `.env` inside Python (same loader as the tokens), so S3-backed commands no longer need it exported. An exported value still wins; with neither, the command refuses as before. Two tests.
+2. Storage reporting works on MotherDuck (above); locally it uses used blocks. `gold_report.py` no longer prints a misleading `database_size: 0 bytes`; it points to the storage script. One test covers the script on a local file and the missing-view case. The MotherDuck branch itself is only verified by my live run just now, not by a unit test.
+
+**P4 is complete** (all four boxes ticked in ROADMAP). Not yet seen: the daily `gold` job in Actions after the outage (next scheduled run, around 17:00 UTC), and extraction of the 3 outage days.
+
+**Checks run (`make check`, final):** ruff check and format clean; mypy strict 41 files; pytest **313 passed** (3 live deselected); terraform fmt + validate both roots valid; gitleaks no leaks.
+
+**Owner steps**
+1. Check the next scheduled Daily ingest: all four jobs green, and `extract` clears the outage-day postings (`gold_report.py` "with extraction" should rise above 481).
+2. Add `MOTHERDUCK_TOKEN` to the GitHub `prod` secret if you have not (the new token), otherwise the scheduled warehouse job still fails.
+3. In about two weeks run `uv run python scripts/storage_projection.py` and tell me the active and total figures.
