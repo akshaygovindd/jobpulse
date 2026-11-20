@@ -878,3 +878,13 @@ README: added a Highlights section near the top, and changed the architecture di
 4. Names inside a resume title line are still kept for the session (only email, phone and link lines are dropped). Keep, or show only the matched role keyword?
 5. Intern pay: I left interns out of the Home median and labelled the heatmap and Resume match as "yearly equivalent". Prefer removing the intern row from the heatmap?
 6. Deferred: P2-18 (needs a real 390 px look), a Retry button, `pip-audit` (new tool), date-format unification, the asset `.sha256`. Screenshots are still yours.
+
+---
+
+## 2026-11-20 (night, later): owner answers to the QA questions
+
+1. **Apply links on company domains.** `config/employers.yaml` gained optional `domains` for 23 companies (own career sites; shared vendors such as careerpuck are deliberately not listed). `fct_postings.apply_url` is now published for https links on an ATS host or on a company's own domain or subdomain (no credentials, no spaces); tested with look-alike hosts. **Coverage: 483 of 515 analyzed open roles (94%), 8,277 of 8,445 open postings (98%)**, up from 232 (45%). The rest are Lyft (31, a shared vendor host) and Squarespace (1). Gold was rebuilt (107 checks passed), exported and uploaded to the release by hand.
+2. **Interns.** Removed from the Salary heatmap and its table; a new "Internship pay (as posted)" table shows hourly or monthly pay in its original unit and currency with n.
+3. **Stop-list.** "inference" is a skill again; "agent" stays ignored alone, phrases like "AI agents" and "multi-agent systems" are recognized.
+
+Checks: `make check` green (see the last run); not verified in a browser. **Reboot the Streamlit app after the push.**
