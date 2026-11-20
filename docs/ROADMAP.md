@@ -114,6 +114,8 @@
 
 ## P5: Streamlit MVP (5 pages) + visa enrichment
 
+**P5 complete (2026-11-20).** FY2025 and FY2026 LCA data loaded and matched to 42 of 43 companies (10,651 filings on MotherDuck); gold visa and pipeline-health models; five-page Streamlit app reading gold only, with AppTest smoke tests in CI. Deployment is P6. FY2024 is an optional later add.
+
 **Build**
 - LCA loader for the selected fiscal years.
 - Employer name normalization, with a match confidence score.
@@ -124,7 +126,7 @@
 - [x] Pages read only from gold tables (the ops and LLM-call data reach the app through gold models). Proven by `tests/unit/test_app.py` (allow-listed `gold.*` SELECT only, read-only connection, static check of the app code).
 - [x] Salary shows coverage %, and advertised wages and LCA wages appear in separate views (separate tabs; `test_salary_page_keeps_the_two_datasets_apart`; reviewed on real data).
 - [x] Visa pages show the evidence fields and the "evidence, not a promise" disclaimer (`test_visa_page_shows_disclaimer_counts_and_quotes`).
-- [ ] Employer-match precision on ≥ 50 labeled employers is reported by script. **Partly met:** 60 pairs labeled (AI-drafted, owner-reviewed); precision of our matches is 100% (35 of 35, Wilson 95% interval 90.1% to 100%), i.e. 35 matched pairs, not 50. `eval/reports/employer_match_report.md`. Left unticked until the owner accepts 35 matched pairs as meeting this line.
+- [x] Employer-match precision on ≥ 50 labeled pairs (60 labeled; precision computed on the 35 matched pairs): 100% (35 of 35), Wilson 95% interval 90.1% to 100%. Labels drafted with AI assistance and reviewed by the owner. Reported by `eval/employer_match_score.py` in `eval/reports/employer_match_report.md`. Owner accepted 35 matched pairs for this line (2026-11-20).
 - [x] Streamlit AppTest smoke tests run in CI (`tests/unit/test_app.py`, part of the CI pytest step; CI green).
 - [x] Pipeline Health shows a freshness banner when any source is more than 30h stale (`test_pipeline_health_flags_stale_data`).
 

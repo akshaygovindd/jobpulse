@@ -742,3 +742,9 @@ Read-only queries against MotherDuck (token from `.env` inside Python; the scrip
 **App polish from the last message** was already done and pushed (grouped salary chart with $K labels, blue theme, viewer toolbar, "Nov 11" dates, no truncated labels, AI capitalization).
 
 **Checks:** `make check` green, pytest 386 passed.
+
+---
+
+## 2026-11-20 (close): P5 marked complete
+
+Owner accepted 35 matched pairs (of 60 labeled) for the employer-match precision line; the box is amended to "on ≥ 50 labeled pairs (60 labeled; precision computed on the 35 matched pairs)" and ticked. All P5 boxes are ticked and P5 is marked complete in `docs/ROADMAP.md`. Docs-only change; `make check` not re-run (no code or config changed). Next: P6 (Resume Match and deployment); not started.
