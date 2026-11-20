@@ -244,3 +244,8 @@ eval/sponsorship_predictions.csv
 # Labeling app backups/temp files
 eval/*.bak
 eval/*.tmp
+
+# Local Airflow demo
+airflow/demo-data/*
+!airflow/demo-data/.gitkeep
+airflow/openai.env

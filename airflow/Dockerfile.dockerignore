@@ -1,0 +1,14 @@
+# Allow-list: only what the image needs. This keeps .env, .git, tfvars and eval data out of the build.
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!src/**
+!config/**
+!dbt/**
+!scripts/**
+!airflow/entrypoint.sh
+**/__pycache__
+**/*.pyc
+dbt/target
+dbt/logs

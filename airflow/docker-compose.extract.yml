@@ -1,0 +1,8 @@
+# OPT-IN ONLY: lets the demo's `extract` task make real (paid) OpenAI calls. Use together with
+#   docker compose -f docker-compose.yml -f docker-compose.extract.yml up
+# and trigger the DAG with {"real_extract": true}. Without this file the container has no key and
+# extract is a dry run. airflow/openai.env must contain only the line OPENAI_API_KEY=... (gitignored).
+services:
+  airflow:
+    env_file:
+      - openai.env

@@ -1,0 +1,25 @@
+# LOCAL DEMO, NOT PRODUCTION. Runs the jobpulse pipeline under Airflow with local storage only.
+#
+# Isolation by construction: this service gets no AWS credentials, no MotherDuck token and no OpenAI
+# key. It does not read the repo's .env (no env_file, and .env is excluded from the image). Data goes
+# to ./demo-data (local directory storage + a local DuckDB file). The only network access it needs is
+# the public job-board APIs that `ingest` reads.
+name: jobpulse-airflow-demo
+
+services:
+  airflow:
+    build:
+      context: ..
+      dockerfile: airflow/Dockerfile
+    image: jobpulse-airflow-demo:local
+    ports:
+      - "127.0.0.1:8080:8080"   # local only
+    environment:
+      JOBPULSE_ENV: dev
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "false"
+      AWS_EC2_METADATA_DISABLED: "true"
+    volumes:
+      - ./dags:/opt/airflow/dags:ro
+      - ./demo-data:/opt/demo-data
