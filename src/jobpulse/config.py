@@ -143,6 +143,13 @@ class LocationsConfig(_Strict):
     regions: list[str]  # lower-case states, provinces, countries: never a city, may follow one
     also_cities: list[str]  # lower-case region names that are also cities (New York, Washington)
     aliases: dict[str, str]  # lower-case spelling -> canonical city
+    us_states: dict[
+        str, list[str]
+    ]  # canonical state -> lower-case aliases (country: United States)
+    ca_provinces: dict[str, list[str]]  # canonical province -> lower-case aliases (country: Canada)
+    countries: dict[str, list[str]]  # canonical country -> lower-case aliases
+    country_codes: dict[str, str]  # ISO code used in "GB-London" style locations -> country
+    known_places: dict[str, dict[str, str]]  # bare city -> {state: ..} or {country: ..} to fill in
 
 
 def _load_yaml(path: Path) -> object:

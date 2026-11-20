@@ -1,7 +1,8 @@
 # Rules for deriving `city` from location_raw (src/jobpulse/location.py). Validated by
 # jobpulse.config.LocationsConfig. The source data has no structured location, so city is a
 # heuristic: it is NULL for remote-only, multi-location, country/state-only or unrecognized strings.
-# Known limitation: same-named cities in different countries (Dublin, CA vs Dublin, Ireland) merge.
+# Places are keyed by city + state/province + country (us_states ... known_places below), so
+# same-named cities in different places (Dublin, CA vs Dublin, Ireland) never merge.
 
 remote_pattern: '(?i)\b(remote|anywhere|n/a)\b'
 multi_pattern: '(?i)(;|•|\||/|\bor\b|\band\b| - | – )'
@@ -211,6 +212,162 @@ aliases:
   bengaluru: Bengaluru
   bangalore: Bengaluru
   washington d.c.: Washington
+  washington dc: Washington
   sf: San Francisco
   "gurugram": Gurugram
   gurgaon: Gurugram
+
+# --- Place keys (city + state/province + country) ---
+# A place is identified by (city, state/province, country) so Dublin, CA and Dublin, Ireland never merge.
+# canonical name -> lower-case aliases. Every alias must also be listed in `regions` above.
+us_states:
+  Alabama: [alabama, al]
+  Alaska: [alaska, ak]
+  Arizona: [arizona, az]
+  Arkansas: [arkansas, ar]
+  California: [california, ca]
+  Colorado: [colorado, co]
+  Connecticut: [connecticut, ct]
+  Delaware: [delaware, de]
+  Florida: [florida, fl]
+  Georgia: [georgia, ga]
+  Hawaii: [hawaii, hi]
+  Idaho: [idaho, id]
+  Illinois: [illinois, il]
+  Indiana: [indiana, in]
+  Iowa: [iowa, ia]
+  Kansas: [kansas, ks]
+  Kentucky: [kentucky, ky]
+  Louisiana: [louisiana, la]
+  Maine: [maine, me]
+  Maryland: [maryland, md]
+  Massachusetts: [massachusetts, ma]
+  Michigan: [michigan, mi]
+  Minnesota: [minnesota, mn]
+  Mississippi: [mississippi, ms]
+  Missouri: [missouri, mo]
+  Montana: [montana, mt]
+  Nebraska: [nebraska, ne]
+  Nevada: [nevada, nv]
+  New Hampshire: [new hampshire, nh]
+  New Jersey: [new jersey, nj]
+  New Mexico: [new mexico, nm]
+  New York: [new york, ny]
+  North Carolina: [north carolina, nc]
+  North Dakota: [north dakota, nd]
+  Ohio: [ohio, oh]
+  Oklahoma: [oklahoma, ok]
+  Oregon: [oregon, or]
+  Pennsylvania: [pennsylvania, pa]
+  Rhode Island: [rhode island, ri]
+  South Carolina: [south carolina, sc]
+  South Dakota: [south dakota, sd]
+  Tennessee: [tennessee, tn]
+  Texas: [texas, tx]
+  Utah: [utah, ut]
+  Vermont: [vermont, vt]
+  Virginia: [virginia, va]
+  Washington: [washington, wa]
+  West Virginia: [west virginia, wv]
+  Wisconsin: [wisconsin, wi]
+  Wyoming: [wyoming, wy]
+  District of Columbia: [district of columbia, d.c., dc]
+ca_provinces:
+  Ontario: [ontario, 'on']
+  Quebec: [quebec, québec, qc]
+  British Columbia: [british columbia, bc]
+  Alberta: [alberta, ab]
+  Nova Scotia: [nova scotia, ns]
+  Manitoba: [manitoba]
+  Saskatchewan: [saskatchewan]
+  New Brunswick: [new brunswick]
+countries:
+  United States: [united states, united states of america, usa, us, u.s.]
+  Canada: [canada]
+  United Kingdom: [united kingdom, uk, england, scotland]
+  Japan: [japan, jp]
+  South Korea: [south korea, korea]
+  United Arab Emirates: [united arab emirates, uae]
+  Singapore: [singapore]
+  Czech Republic: [czech republic, czechia]
+  Ireland: [ireland]
+  Germany: [germany]
+  France: [france]
+  Spain: [spain]
+  Italy: [italy]
+  Netherlands: [netherlands]
+  Belgium: [belgium]
+  Switzerland: [switzerland]
+  Sweden: [sweden]
+  Norway: [norway]
+  Denmark: [denmark]
+  Finland: [finland]
+  Poland: [poland]
+  Portugal: [portugal]
+  Austria: [austria]
+  Romania: [romania]
+  India: [india]
+  China: [china]
+  Australia: [australia]
+  New Zealand: [new zealand]
+  Brazil: [brazil]
+  Mexico: [mexico]
+  Argentina: [argentina]
+  Chile: [chile]
+  Colombia: [colombia]
+  Philippines: [philippines]
+  Indonesia: [indonesia]
+  Vietnam: [vietnam]
+  Thailand: [thailand]
+  Malaysia: [malaysia]
+  Israel: [israel]
+  Saudi Arabia: [saudi arabia]
+  Turkey: [turkey]
+  South Africa: [south africa]
+  Nigeria: [nigeria]
+  Kenya: [kenya]
+  Egypt: [egypt]
+  Hungary: [hungary]
+  Uruguay: [uruguay]
+  Ukraine: [ukraine]
+  Greece: [greece]
+
+# ISO country codes used in prefixed locations such as GB-London, CA-Ontario-Toronto, US-CA-Dublin.
+country_codes: {US: United States, CA: Canada, GB: United Kingdom, IE: Ireland, DE: Germany, FR: France, ES: Spain, IT: Italy, NL: Netherlands, SE: Sweden, PL: Poland, PT: Portugal, CH: Switzerland, IN: India, JP: Japan, SG: Singapore, AU: Australia, NZ: New Zealand, BR: Brazil, MX: Mexico, IL: Israel, KR: South Korea, CN: China}
+
+# Bare city names that are unambiguous enough to fill in a missing state or country. Applied only when
+# the location gives no state, and its country (if any) matches. Cities NOT listed here (for example
+# Dublin, which exists in Ireland and California) stay unresolved: they never merge with a qualified one.
+known_places:
+  "new york": {state: New York}
+  "san francisco": {state: California}
+  "palo alto": {state: California}
+  "boston": {state: Massachusetts}
+  "seattle": {state: Washington}
+  "chicago": {state: Illinois}
+  "atlanta": {state: Georgia}
+  "toronto": {state: Ontario}
+  "vancouver": {state: British Columbia}
+  "washington": {state: District of Columbia}
+  "london": {country: United Kingdom}
+  "singapore": {country: Singapore}
+  "tokyo": {country: Japan}
+  "paris": {country: France}
+  "berlin": {country: Germany}
+  "amsterdam": {country: Netherlands}
+  "madrid": {country: Spain}
+  "barcelona": {country: Spain}
+  "stockholm": {country: Sweden}
+  "warsaw": {country: Poland}
+  "sydney": {country: Australia}
+  "melbourne": {country: Australia}
+  "mexico city": {country: Mexico}
+  "tel aviv": {country: Israel}
+  "bengaluru": {country: India}
+  "gurugram": {country: India}
+  "chennai": {country: India}
+  "pune": {country: India}
+  "shenzhen": {country: China}
+  "são paulo": {country: Brazil}
+  "seoul": {country: South Korea}
+  "manila": {country: Philippines}

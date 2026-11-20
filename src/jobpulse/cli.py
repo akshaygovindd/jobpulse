@@ -50,7 +50,7 @@ from jobpulse.ingest.storage import LocalStorage, S3Storage, Storage
 from jobpulse.logging import configure_logging, get_logger
 from jobpulse.ops.load_ops import load_ops, record_pipeline_run
 from jobpulse.ops.s3_ops import write_ops
-from jobpulse.secrets import load_env_keys
+from jobpulse.secrets import load_env_keys, redact
 from jobpulse.silver import build_silver
 from jobpulse.validate import dump_employers_yaml, refreshed, validate_employers
 from jobpulse.warehouse import WarehouseError
@@ -259,7 +259,12 @@ def cmd_build_gold(args: argparse.Namespace, clock: Clock) -> int:
     try:
         result, maps = build_gold(pipeline, db_path=Path(args.db) if args.db else None)
     except (WarehouseError, duckdb.Error) as e:
-        print(f"error: gold build failed before dbt ran: {type(e).__name__}", file=sys.stderr)
+        token = os.environ.get(cfg.token_env_var)
+        detail = redact(str(e), token).splitlines()[0][:300] if str(e) else ""
+        print(
+            f"error: gold build failed before dbt ran: {type(e).__name__}: {detail}",
+            file=sys.stderr,
+        )
         return EXIT_ALERT
     finished = clock()
     con = _warehouse(args)

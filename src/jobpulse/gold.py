@@ -9,7 +9,7 @@ share one normalization; they are rebuilt from scratch each run, so reruns are i
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import duckdb
@@ -23,7 +23,7 @@ from jobpulse.config import (
     load_pipeline,
 )
 from jobpulse.extract.store import ensure_extract_tables
-from jobpulse.location import CityParser
+from jobpulse.location import CityParser, Place
 from jobpulse.silver import SilverResult, run_dbt
 from jobpulse.skills import norm_skill
 from jobpulse.warehouse import connect
@@ -33,6 +33,35 @@ from jobpulse.warehouse import connect
 class StagedMaps:
     skills: int
     locations: int
+
+
+def unify_spellings(
+    places: dict[str, Place | None], weights: dict[str, int]
+) -> dict[str, Place | None]:
+    """Give every place key one spelling of the city, so a key never has two display labels.
+
+    "Redwood CIty, CA" and "Redwood City, CA" are one place; the spelling used by more postings
+    wins (ties: alphabetical, so the result is deterministic).
+    """
+    votes: dict[str, dict[str, int]] = {}
+    for raw, place in places.items():
+        if place is not None:
+            by_spelling = votes.setdefault(place.key, {})
+            by_spelling[place.city] = by_spelling.get(place.city, 0) + weights.get(raw, 0)
+    best = {k: min(v, key=lambda c: (-v[c], c)) for k, v in votes.items()}
+    return {
+        raw: None if place is None else replace(place, city=best[place.key])
+        for raw, place in places.items()
+    }
+
+
+def location_row(
+    raw: str, place: Place | None
+) -> tuple[str, str | None, str | None, str | None, str | None, str | None]:
+    """One location_map row: (location_raw, city label, city, state, country, key)."""
+    if place is None:
+        return (raw, None, None, None, None, None)
+    return (raw, place.label, place.city, place.state, place.country, place.key)
 
 
 def stage_maps(
@@ -62,18 +91,22 @@ def stage_maps(
         con.executemany(f'INSERT INTO "{stage}"."skill_map" VALUES (?, ?)', skill_rows)
 
     parser = CityParser(locations)
-    raw_locs = [
-        str(r[0])
+    raw_counts = {
+        str(r[0]): int(r[1])
         for r in con.execute(
-            f'SELECT DISTINCT location_raw FROM "{wh.silver_schema}"."dim_postings" '
-            "WHERE location_raw IS NOT NULL"
+            f'SELECT location_raw, count(*) FROM "{wh.silver_schema}"."dim_postings" '
+            "WHERE location_raw IS NOT NULL GROUP BY 1"
         ).fetchall()
-    ]
-    loc_rows = [(raw, parser.parse(raw)) for raw in sorted(raw_locs)]
+    }
+    places = unify_spellings({raw: parser.parse(raw) for raw in sorted(raw_counts)}, raw_counts)
+    loc_rows = [location_row(raw, place) for raw, place in places.items()]
     con.execute(f'DROP TABLE IF EXISTS "{stage}"."location_map"')
-    con.execute(f'CREATE TABLE "{stage}"."location_map" (location_raw VARCHAR, city VARCHAR)')
+    con.execute(
+        f'CREATE TABLE "{stage}"."location_map" (location_raw VARCHAR, city VARCHAR, '
+        "city_name VARCHAR, city_state VARCHAR, city_country VARCHAR, city_key VARCHAR)"
+    )
     if loc_rows:
-        con.executemany(f'INSERT INTO "{stage}"."location_map" VALUES (?, ?)', loc_rows)
+        con.executemany(f'INSERT INTO "{stage}"."location_map" VALUES (?, ?, ?, ?, ?, ?)', loc_rows)
     return StagedMaps(skills=len(skill_rows), locations=len(loc_rows))
 
 

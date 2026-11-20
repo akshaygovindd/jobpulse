@@ -11,6 +11,8 @@ from __future__ import annotations
 import argparse
 import sys
 
+import duckdb
+
 from jobpulse.cli import _warehouse
 from jobpulse.warehouse import WarehouseError
 
@@ -53,10 +55,10 @@ QUERIES: tuple[tuple[str, str], ...] = (
 )
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", help="local DuckDB file instead of MotherDuck")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     try:
         con = _warehouse(argparse.Namespace(db=args.db))
     except WarehouseError as e:
@@ -64,10 +66,21 @@ def main() -> int:
         return 2
     from jobpulse.config import load_pipeline
 
-    g = f'"{load_pipeline().warehouse.gold_schema}"'
-    for label, sql in QUERIES:
-        row = con.execute(sql.format(g=g)).fetchone()
-        print(f"{label}: {row[0] if row else 'n/a'}")
+    schema = load_pipeline().warehouse.gold_schema
+    g = f'"{schema}"'
+    built = con.execute(
+        "SELECT count(*) FROM information_schema.schemata WHERE schema_name = ?", [schema]
+    ).fetchone()
+    if not built or not built[0]:
+        print(f"gold schema '{schema}' does not exist yet: run `jobpulse build-gold` first")
+    else:
+        for label, sql in QUERIES:
+            try:
+                row = con.execute(sql.format(g=g)).fetchone()
+            except duckdb.CatalogException:
+                print(f"{label}: table not built yet")
+                continue
+            print(f"{label}: {row[0] if row else 'n/a'}")
     size = con.execute("PRAGMA database_size").fetchone()
     if size:
         print(f"database_size: {size[1]}")

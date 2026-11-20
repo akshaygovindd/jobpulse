@@ -174,7 +174,12 @@ def test_annualization_only_where_period_known(storage: LocalStorage, db: Path) 
     assert f5["salary_min_annual"] is None
     assert f5["has_advertised_salary"] is True
     assert f6["has_advertised_salary"] is False
-    assert f1["city"] == "New York"
+    assert f1["city"] == "New York, New York"
+    assert (f1["city_name"], f1["city_state"], f1["city_country"]) == (
+        "New York",
+        "New York",
+        "United States",
+    )
 
 
 def test_salary_aggregate_coverage_and_no_currency_blend(storage: LocalStorage, db: Path) -> None:
@@ -201,7 +206,7 @@ def test_salary_aggregate_coverage_and_no_currency_blend(storage: LocalStorage, 
             db,
             "SELECT salary_currency, n_postings, n_with_salary, round(coverage_pct, 2), "
             "n_currency_salary, n_annualized, p25_annual, p50_annual, p75_annual "
-            "FROM gold.agg_salary_by_role_city WHERE city = 'Boston'",
+            "FROM gold.agg_salary_by_role_city WHERE city = 'Boston, Massachusetts'",
         )
     }
     assert set(rows) == {"USD", "GBP"}  # never blended
@@ -210,6 +215,40 @@ def test_salary_aggregate_coverage_and_no_currency_blend(storage: LocalStorage, 
     assert (usd[5], usd[6], usd[7]) == (120000.0, 130000.0, 140000.0)
     assert gbp[:5] == (9, 6, 66.67, 1, 1)
     assert gbp[5:] == (None, None, None)  # below min_salaries_for_percentiles
+
+
+def test_same_named_cities_in_different_places_stay_separate(
+    storage: LocalStorage, db: Path
+) -> None:
+    locs = [
+        "Dublin, Ireland",
+        "Dublin, CA",
+        "US-CA-Dublin",
+        "Dublin",
+        "Redwood CIty, CA",
+        "Redwood City, CA",
+        "Redwood City, CA",
+    ]
+    seed(storage, db, [gh_job(str(i), loc=loc) for i, loc in enumerate(locs, start=1)])
+    for i in range(1, len(locs) + 1):
+        add_extraction(db, str(i))
+    gold(db)
+    cities = dict(
+        query(db, "SELECT city, count(*) FROM gold.fct_postings GROUP BY 1")  # type: ignore[arg-type]
+    )
+    assert cities == {
+        "Dublin, Ireland": 1,
+        "Dublin, California": 2,
+        "Dublin": 1,
+        "Redwood City, California": 3,
+    }
+    groups = query(db, "SELECT DISTINCT city FROM gold.agg_salary_by_role_city ORDER BY city")
+    assert [g[0] for g in groups] == [
+        "Dublin",
+        "Dublin, California",
+        "Dublin, Ireland",
+        "Redwood City, California",
+    ]
 
 
 def test_skills_are_normalized_and_deduplicated(storage: LocalStorage, db: Path) -> None:
@@ -322,3 +361,35 @@ def test_cli_build_gold_records_a_pipeline_run(storage: LocalStorage, db: Path) 
     assert main(["build-gold", "--db", str(db)]) == 0
     rows = query(db, "SELECT task, status, rows_kept FROM ops.pipeline_runs WHERE task = 'gold'")
     assert rows == [("gold", "success", 1)]
+
+
+def _gold_report(args: list[str]) -> int:
+    import importlib.util
+
+    path = Path(__file__).resolve().parents[2] / "scripts" / "gold_report.py"
+    spec = importlib.util.spec_from_file_location("gold_report", path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return int(module.main(args))
+
+
+def test_gold_report_without_gold_schema_does_not_crash(
+    db: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    duckdb.connect(str(db)).close()  # an empty warehouse: no gold schema at all
+    assert _gold_report(["--db", str(db)]) == 0
+    out = capsys.readouterr().out
+    assert "does not exist yet" in out
+    assert "database_size" in out
+
+
+def test_gold_report_on_built_gold(
+    storage: LocalStorage, db: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    seed(storage, db, [gh_job("1", loc="Boston, MA")])
+    add_extraction(db, "1")
+    gold(db)
+    assert _gold_report(["--db", str(db)]) == 0
+    assert "fct_postings rows: 1" in capsys.readouterr().out

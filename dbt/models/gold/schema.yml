@@ -14,6 +14,8 @@ models:
       - {name: company_id, tests: [not_null]}
       - {name: source_id, tests: [not_null]}
       - {name: has_extraction, tests: [not_null]}
+      - name: city
+        description: Place label, one per (city, state/province, country), e.g. 'Dublin, Ireland' vs 'Dublin, California'. NULL when no single place can be parsed.
       - {name: has_advertised_salary, tests: [not_null]}
       - {name: salary_period_inferred, tests: [not_null]}
       - {name: first_seen_date, tests: [not_null]}
