@@ -2,6 +2,7 @@
 -- LCA wages are a separate dataset and are never joined here. Annual figures exist only where the
 -- period is known (stated or inferred); `salary_period_inferred` says which.
 {% set factors = var('annualization') %}
+{% set hosts = var('apply_url_hosts') %}
 
 with ext as (
     select * from {{ ref('int_latest_extraction') }}
@@ -13,6 +14,7 @@ base as (
         p.company_id,
         p.source_id,
         p.title,
+        p.apply_url,
         p.location_raw,
         p.source_status,
         cast(p.first_seen_date as date) as first_seen_date,
@@ -43,6 +45,13 @@ select
     b.company_id,
     b.source_id,
     b.title,
+    -- https only, and the host must be exactly an allow-listed ATS host (no credentials or port)
+    case
+        when b.apply_url like 'https://%'
+            and split_part(b.apply_url, '/', 3) in ({% for h in hosts %}'{{ h }}'{{ ',' if not loop.last }}{% endfor %})
+            and b.apply_url not similar to '.*[[:space:]"<>].*'
+        then b.apply_url
+    end as apply_url,
     b.has_extraction,
     tr.posting_key is not null as is_target_role,
     b.role_family,

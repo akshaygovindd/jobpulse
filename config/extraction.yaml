@@ -73,7 +73,11 @@ sample:
 # extract.extractions.salary_period_inferred and never presented as model output.
 salary_period_inference:
   year_min: 20000
-  hour_max: 500
+  # An hourly rate is inferred only inside this plausible range (QA P2-13: 170.4-255.6 was read as
+  # an hourly rate, i.e. $354K-$532K a year, when it was almost surely $170K-$256K). Amounts
+  # between hour_max and year_min are left without a period.
+  hour_min: 10
+  hour_max: 150
 
 # Evaluation settings (eval/ scripts). None of this affects extraction or the cache key.
 eval:

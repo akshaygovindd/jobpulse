@@ -123,10 +123,32 @@ class Store:
         self._period_cfg = ecfg.salary_period_inference
         ensure_extract_tables(con, ecfg)
         # Any stored row with an amount and no period is filled by the deterministic rule.
+        self.periods_revoked = self.revoke_stale_inferences()
         self.periods_inferred = self.apply_salary_period_inference()
 
     def t(self, table: str) -> str:
         return f'"{self.s}"."{table}"'
+
+    def revoke_stale_inferences(self) -> int:
+        """Undo inferred periods that the current rule would no longer infer (the rule was
+        tightened). Only rows flagged `salary_period_inferred` are touched; a period the model
+        stated never is. Idempotent. Returns the number of rows reverted."""
+        rows = self.con.execute(
+            f"SELECT content_hash, schema_version, prompt_version, salary_min, salary_max "
+            f"FROM {self.t('extractions')} WHERE coalesce(salary_period_inferred, FALSE) = TRUE"
+        ).fetchall()
+        revoked = 0
+        for h, sv, pv, lo, hi in rows:
+            _, still = infer_salary_period(lo, hi, None, self._period_cfg)
+            if not still:
+                self.con.execute(
+                    f"UPDATE {self.t('extractions')} SET salary_period = NULL, "
+                    "salary_period_inferred = FALSE "
+                    "WHERE content_hash = ? AND schema_version = ? AND prompt_version = ?",
+                    [h, sv, pv],
+                )
+                revoked += 1
+        return revoked
 
     def apply_salary_period_inference(self) -> int:
         """Fill salary_period where an amount exists and the period is empty (no API call).

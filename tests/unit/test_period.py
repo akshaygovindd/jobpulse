@@ -19,7 +19,7 @@ sys.path.insert(0, str(REPO_ROOT / "eval"))
 common = importlib.import_module("common")
 score = importlib.import_module("score")
 
-CFG = SalaryPeriodInferenceConfig(year_min=20000, hour_max=500)
+CFG = SalaryPeriodInferenceConfig(year_min=20000, hour_min=10, hour_max=150)
 
 
 # --- the rule ---------------------------------------------------------------------------------
@@ -29,8 +29,11 @@ CFG = SalaryPeriodInferenceConfig(year_min=20000, hour_max=500)
         (120000, 150000, None, ("year", True)),
         (20000, None, None, ("year", True)),  # boundary: >= 20000 is year
         (19999.99, None, None, (None, False)),  # between: left empty
-        (500, None, None, (None, False)),  # boundary: hour needs < 500
-        (499.99, None, None, ("hour", True)),
+        (150, None, None, (None, False)),  # boundary: hour needs < 150
+        (149.99, None, None, ("hour", True)),
+        (170.4, 255.6, None, (None, False)),  # QA P2-13: not an hourly rate of $170
+        (9.99, None, None, (None, False)),  # below any plausible hourly rate
+        (10, None, None, ("hour", True)),
         (45, 60, None, ("hour", True)),
         (None, 90000, None, ("year", True)),  # no minimum: falls back to the maximum
         (None, None, None, (None, False)),  # no amount: nothing to infer from
@@ -48,12 +51,12 @@ def test_rule(
 
 def test_config_rejects_overlapping_thresholds() -> None:
     with pytest.raises(ValueError, match="must not exceed"):
-        SalaryPeriodInferenceConfig(year_min=100, hour_max=500)
+        SalaryPeriodInferenceConfig(year_min=100, hour_min=10, hour_max=500)
 
 
 def test_live_config_matches_the_owner_decision() -> None:
     cfg = load_extraction().salary_period_inference
-    assert (cfg.year_min, cfg.hour_max) == (20000, 500)
+    assert (cfg.year_min, cfg.hour_min, cfg.hour_max) == (20000, 10, 150)  # tightened, QA P2-13
 
 
 # --- stored at extraction time ---------------------------------------------------------------
@@ -139,6 +142,43 @@ def test_migration_fills_legacy_rows_once_and_is_idempotent() -> None:
     }
     again = Store(con, load_pipeline().warehouse, ecfg, "v")
     assert again.periods_inferred == 0  # nothing left to fill; no flag is ever re-applied
+
+
+def test_a_tightened_rule_revokes_old_inferences_but_never_a_stated_period() -> None:
+    ecfg = load_extraction()
+    con = duckdb.connect()
+    con.execute('CREATE SCHEMA "extract"')
+    con.execute(f'CREATE TABLE "extract"."extractions" ({LEGACY})')
+    Store(con, load_pipeline().warehouse, ecfg, "v")  # adds the salary_period_inferred column
+    now = datetime(2026, 11, 1, tzinfo=UTC)
+    cases = [  # hash, min, max, period, inferred
+        ("old-hour-too-high", 170.4, 255.6, "hour", True),  # inferred under the old < 500 rule
+        ("ok-hour", 45, 60, "hour", True),
+        ("model-hour", 170.4, 255.6, "hour", False),  # the model said hour: never touched
+    ]
+    for h, lo, hi, per, inferred in cases:
+        con.execute(
+            'INSERT INTO "extract"."extractions" (content_hash, schema_version, prompt_version, '
+            "posting_key, model, escalated, salary_min, salary_max, salary_currency, "
+            "salary_period, confidence, extracted_at, salary_period_inferred) "
+            "VALUES (?, 1, 'v', 'pk', 'm', FALSE, ?, ?, 'USD', ?, 0.9, ?, ?)",
+            [h, lo, hi, per, now, inferred],
+        )
+    store = Store(con, load_pipeline().warehouse, ecfg, "v")
+    assert store.periods_revoked == 1
+    got = {
+        r[0]: (r[1], r[2])
+        for r in con.execute(
+            "SELECT content_hash, salary_period, salary_period_inferred "
+            'FROM "extract"."extractions"'
+        ).fetchall()
+    }
+    assert got == {
+        "old-hour-too-high": (None, False),
+        "ok-hour": ("hour", True),
+        "model-hour": ("hour", False),
+    }
+    assert Store(con, load_pipeline().warehouse, ecfg, "v").periods_revoked == 0
 
 
 # --- reporting ----------------------------------------------------------------------------------

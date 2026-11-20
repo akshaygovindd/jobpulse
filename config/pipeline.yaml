@@ -38,4 +38,7 @@ warehouse:
 gold:
   # Multiplier to annual pay per stated period. "day" is deliberately absent (not annualized).
   annualization: {year: 1, month: 12, week: 52, hour: 2080}  # hour: 40 h x 52 weeks
+  # A posting's apply link is published only when it is https and its host is exactly one of these
+  # applicant-tracking hosts (no credentials, no port): the app renders it as a clickable link.
+  apply_url_hosts: [boards.greenhouse.io, job-boards.greenhouse.io, jobs.lever.co, jobs.ashbyhq.com]
   min_salaries_for_percentiles: 5   # fewer salaries in a group => p25/p50/p75 are NULL

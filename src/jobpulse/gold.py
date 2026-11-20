@@ -145,6 +145,7 @@ def build_gold(
         "lca_wage_min": lca.wage.plausible_annual_min,
         "lca_wage_max": lca.wage.plausible_annual_max,
         "annualization": pipeline.gold.annualization,
+        "apply_url_hosts": pipeline.gold.apply_url_hosts,
         "min_salaries_for_percentiles": pipeline.gold.min_salaries_for_percentiles,
     }
     result = run_dbt(wh, ["path:models/gold", "path:snapshots"], variables, db_path=db_path)

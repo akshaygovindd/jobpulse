@@ -120,6 +120,7 @@ class GoldConfig(_Strict):
     annualization: dict[str, float]
     # An agg_salary_by_role_city group publishes percentiles only with at least this many salaries.
     min_salaries_for_percentiles: int = Field(ge=1)
+    apply_url_hosts: list[str] = Field(min_length=1)
 
     @model_validator(mode="after")
     def _factors_positive(self) -> GoldConfig:
@@ -253,12 +254,15 @@ class SponsorshipSampleConfig(_Strict):
 
 class SalaryPeriodInferenceConfig(_Strict):
     year_min: float = Field(gt=0)
+    hour_min: float = Field(gt=0)
     hour_max: float = Field(gt=0)
 
     @model_validator(mode="after")
     def _ordered(self) -> SalaryPeriodInferenceConfig:
         if self.hour_max > self.year_min:
             raise ValueError("hour_max must not exceed year_min")
+        if self.hour_min >= self.hour_max:
+            raise ValueError("hour_min must be below hour_max")
         return self
 
 
@@ -475,7 +479,12 @@ class TrendsConfig(_Strict):
     min_full_weeks: int = Field(ge=1)  # "Skills over time" appears once this many full weeks exist
 
 
+class SamplesConfig(_Strict):
+    min_group_n: int = Field(ge=1)  # smaller groups never drive an insight sentence or a default
+
+
 class AppConfig(_Strict):
+    samples: SamplesConfig
     kpi: KpiConfig
     map: MapConfig
     home: HomeConfig

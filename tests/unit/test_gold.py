@@ -456,3 +456,29 @@ def test_salary_by_role_has_no_city_dimension_and_matches_city_totals(
     assert by_role == [("data_engineer", "senior", "USD", 6, 6, True)]
     by_city = query(db, "SELECT sum(n_annualized) FROM gold.agg_salary_by_role_city")
     assert by_city == [(6,)]
+
+
+def test_apply_url_is_published_only_for_https_on_allow_listed_hosts(
+    storage: LocalStorage, db: Path
+) -> None:
+    urls = {
+        "1": "https://boards.greenhouse.io/acme/jobs/1",
+        "2": "https://jobs.lever.co/acme/abc",
+        "3": "http://boards.greenhouse.io/acme/jobs/3",  # not https
+        "4": "https://evil.example/acme/jobs/4",  # host not allow-listed
+        "5": "https://boards.greenhouse.io@evil.example/x",  # credentials trick
+        "6": "https://boards.greenhouse.io:8443/acme/6",  # port
+        "7": "https://jobs.ashbyhq.com/acme/7 onclick",  # whitespace
+        "8": "javascript:alert(1)",
+    }
+    jobs = []
+    for pid, url in urls.items():
+        job = gh_job(pid)
+        job["absolute_url"] = url
+        jobs.append(job)
+    seed(storage, db, jobs)
+    gold(db)
+    got = {pid: fct(db, pid)["apply_url"] for pid in urls}
+    assert got["1"] == urls["1"]
+    assert got["2"] == urls["2"]
+    assert all(got[p] is None for p in "345678"), got

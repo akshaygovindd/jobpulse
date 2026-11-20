@@ -14,6 +14,8 @@ models:
       - {name: company_id, tests: [not_null]}
       - {name: source_id, tests: [not_null]}
       - {name: has_extraction, tests: [not_null]}
+      - name: apply_url
+        description: Link to the posting, only https on an allow-listed ATS host (config/pipeline.yaml gold.apply_url_hosts); NULL otherwise.
       - name: city
         description: Place label, one per (city, state/province, country), e.g. 'Dublin, Ireland' vs 'Dublin, California'. NULL when no single place can be parsed.
       - {name: has_advertised_salary, tests: [not_null]}
