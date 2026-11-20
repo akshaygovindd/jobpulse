@@ -1,0 +1,22 @@
+# Publishing the gold layer for the public app. Validated by jobpulse.config.PublishConfig.
+# The public Streamlit app holds NO MotherDuck token: a daily CI job exports only the allow-listed
+# gold tables (app_data.GOLD_TABLES) into one DuckDB file and uploads it to a public GitHub Release.
+# The app downloads that file and opens it read-only.
+
+release:
+  tag: gold-latest              # one rolling release; the asset is replaced in place each day
+  asset: jobpulse_gold.duckdb   # not gold.duckdb: DuckDB names the catalog after the file
+  # The app refuses any other URL, so a misconfigured secret cannot point it elsewhere.
+  url_prefix: https://github.com/akshaygovindd/jobpulse/releases/download/
+
+export:
+  # Refuse to publish a suspiciously small export (a broken gold build); yesterday's asset stays.
+  min_rows:
+    fct_postings: 1000
+    dim_company: 10
+    dim_skill: 100
+
+app:
+  refresh_s: 3600               # re-download the file when the local copy is older than this
+  max_download_bytes: 200000000
+  cache_dir_name: jobpulse_gold # under the system temp dir

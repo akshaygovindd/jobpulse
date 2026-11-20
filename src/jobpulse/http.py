@@ -148,6 +148,8 @@ class HttpClient:
             raise FetchError(ReasonCode.HTTP_4XX, detail)
         if expect == "text":
             return resp.text
+        if expect == "bytes":
+            return resp.content
         try:
             return resp.json()
         except ValueError as e:
@@ -167,7 +169,7 @@ class HttpClient:
         expect: str = "json",
     ) -> Any:
         """Send a request with retries. `headers` are per-call (e.g. Authorization) and are never
-        logged. `expect` is "json" or "text"."""
+        logged. `expect` is "json", "text" or "bytes"."""
 
         def _log_retry(state: RetryCallState) -> None:
             exc = state.outcome.exception() if state.outcome else None

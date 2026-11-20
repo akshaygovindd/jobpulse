@@ -4,7 +4,8 @@ The app reads the gold schema only. This module is the single door to the wareho
 - a statement must be one SELECT/WITH query, with no write, DDL, attach, pragma or load keywords;
 - every table it reads must be `gold.<name>` and `<name>` must be in GOLD_TABLES (the working
   tables in gold_stage and the bronze/silver/ops/extract/ref schemas are not reachable);
-- the connection is opened read-only (local file) or with a MotherDuck read-scaling token.
+- the connection is opened read-only: a local file, the published gold file (the public deploy;
+  no token of any kind), or, for development only, a MotherDuck read-scaling token.
 Evidence from public filings, not a promise of sponsorship: nothing here changes that wording; the
 pages carry it.
 """
@@ -13,13 +14,17 @@ from __future__ import annotations
 
 import os
 import re
-from collections.abc import Mapping, Sequence
+import tempfile
+import time
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 import duckdb
+import httpx
 
-from jobpulse.config import load_pipeline
+from jobpulse.config import PublishConfig, load_pipeline, load_publish
+from jobpulse.http import FetchError, HttpClient
 
 GOLD_TABLES = frozenset(
     {
@@ -43,6 +48,7 @@ GOLD_TABLES = frozenset(
 )
 LOCAL_DB_ENV = "JOBPULSE_APP_DB"  # a local DuckDB file (dev, tests)
 READ_TOKEN_ENV = "MOTHERDUCK_READ_TOKEN"  # MotherDuck read-scaling token (never a write token)
+GOLD_URL_ENV = "JOBPULSE_GOLD_URL"  # the published gold file (public deploy; no token at all)
 
 _FORBIDDEN = re.compile(
     r"\b(insert|update|delete|drop|create|alter|attach|detach|copy|pragma|install|load|export|"
@@ -80,7 +86,8 @@ def validate_statement(sql: str) -> str:
 
 
 def connect(environ: Mapping[str, str] | None = None) -> duckdb.DuckDBPyConnection:
-    """Open the gold data read-only: a local file when JOBPULSE_APP_DB is set, else MotherDuck."""
+    """Open the gold data read-only: a local file when JOBPULSE_APP_DB is set, else the published
+    gold file when JOBPULSE_GOLD_URL is set, else MotherDuck with a read-scaling token (dev)."""
     env = os.environ if environ is None else environ
     local = env.get(LOCAL_DB_ENV)
     if local:
@@ -88,9 +95,15 @@ def connect(environ: Mapping[str, str] | None = None) -> duckdb.DuckDBPyConnecti
         if not path.exists():
             raise AppDataError(f"{LOCAL_DB_ENV} points to a file that does not exist")
         return duckdb.connect(str(path), read_only=True)
+    url = env.get(GOLD_URL_ENV)
+    if url:
+        return connect_published(url)
     token = env.get(READ_TOKEN_ENV)
     if not token:
-        raise AppDataError(f"set {LOCAL_DB_ENV} (a local file) or {READ_TOKEN_ENV} (MotherDuck)")
+        raise AppDataError(
+            f"set {LOCAL_DB_ENV} (a local file), {GOLD_URL_ENV} (the published gold file) "
+            f"or {READ_TOKEN_ENV} (MotherDuck, development only)"
+        )
     database = load_pipeline().warehouse.database
     try:
         return duckdb.connect(f"md:{database}", config={"motherduck_token": token})
@@ -98,6 +111,77 @@ def connect(environ: Mapping[str, str] | None = None) -> duckdb.DuckDBPyConnecti
         raise AppDataError(
             f"cannot connect to MotherDuck: {str(e).replace(token, '***')}"
         ) from None
+
+
+def published_path(cfg: PublishConfig) -> Path:
+    return Path(tempfile.gettempdir()) / cfg.app.cache_dir_name / cfg.release.asset
+
+
+def _is_gold_only(path: Path) -> bool:
+    """True when the file is a DuckDB database holding exactly the allow-listed gold tables."""
+    try:
+        con = duckdb.connect(str(path), read_only=True)
+    except duckdb.Error:
+        return False
+    try:
+        rows = con.execute(
+            "SELECT table_schema, table_name FROM information_schema.tables "
+            "WHERE table_schema NOT IN ('information_schema', 'pg_catalog')"
+        ).fetchall()
+    except duckdb.Error:
+        return False
+    finally:
+        con.close()
+    return {(r[0], r[1]) for r in rows} == {("gold", t) for t in GOLD_TABLES}
+
+
+def connect_published(
+    url: str,
+    *,
+    cfg: PublishConfig | None = None,
+    transport: httpx.BaseTransport | None = None,
+    clock: Callable[[], float] = time.time,
+) -> duckdb.DuckDBPyConnection:
+    """Open the published gold file read-only, downloading it when the local copy is missing or
+    older than `app.refresh_s`. A failed or invalid download keeps the previous copy; with no copy
+    at all the app reports that its data is unavailable. No credential is involved."""
+    cfg = cfg or load_publish()
+    if not url.startswith(cfg.release.url_prefix):
+        raise AppDataError(f"{GOLD_URL_ENV} must start with {cfg.release.url_prefix}")
+    path = published_path(cfg)
+    fresh = path.exists() and clock() - path.stat().st_mtime < cfg.app.refresh_s
+    if not fresh:
+        try:
+            _download(url, path, cfg, transport)
+        except (FetchError, OSError, AppDataError):
+            if not path.exists():
+                raise AppDataError("the published data could not be downloaded") from None
+    try:
+        return duckdb.connect(str(path), read_only=True)
+    except duckdb.Error:
+        raise AppDataError("the published data file could not be opened") from None
+
+
+def _download(
+    url: str, path: Path, cfg: PublishConfig, transport: httpx.BaseTransport | None
+) -> None:
+    with HttpClient(load_pipeline().http, transport=transport) as http:
+        data = http.request(
+            "GET",
+            url,
+            headers={"Accept": "application/octet-stream"},
+            timeout=120.0,
+            expect="bytes",
+        )
+    if len(data) > cfg.app.max_download_bytes:
+        raise AppDataError("the published file is larger than expected")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    part = path.with_name(path.name + ".part")
+    part.write_bytes(data)
+    if not _is_gold_only(part):
+        part.unlink(missing_ok=True)
+        raise AppDataError("the published file is not a gold export")
+    os.replace(part, path)
 
 
 def read_gold(con: duckdb.DuckDBPyConnection, sql: str, params: Sequence[Any] | None = None) -> Any:

@@ -188,3 +188,50 @@ jobs:
         env:
           MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
         run: uv run jobpulse build-gold
+
+  # Publishes the gold layer for the public app. The app holds no MotherDuck token: it downloads
+  # this one file (only the allow-listed gold tables, see app_data.GOLD_TABLES) from a public
+  # GitHub Release. Runs only when gold succeeded. If the export fails validation (missing table,
+  # row-count mismatch, suspiciously small), the export step fails and the upload is skipped, so
+  # yesterday's asset stays in place. The two secrets never meet: MOTHERDUCK_TOKEN is on the export
+  # step only, the release token on the upload step only. No AWS credentials, no OpenAI key.
+  publish:
+    needs: gold
+    if: ${{ !cancelled() && needs.gold.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment: prod
+    timeout-minutes: 15
+    permissions:
+      contents: write # create/update the gold-latest release asset with the built-in token (this job only)
+    env:
+      UV_NO_SYNC: "1" # the explicit `uv sync` step below picks the dependency groups; `uv run` must not re-sync
+    steps:
+      - name: Check required configuration
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+        run: |
+          [[ -n "$MOTHERDUCK_TOKEN" ]] || { echo "::error::prod environment secret MOTHERDUCK_TOKEN is not set"; exit 1; }
+
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+
+      - run: uv sync --frozen --no-default-groups
+
+      - name: Export gold (validated; fails without touching the published asset)
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+        run: uv run jobpulse export-gold --out dist/jobpulse_gold.duckdb
+
+      - name: Upload to the gold-latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="gold-latest"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --title "Gold data (latest)" --latest=false \
+              --notes "Daily export of the allow-listed gold tables for the public app. Public postings and public DOL data only; replaced in place every day."
+          fi
+          gh release upload "$tag" dist/jobpulse_gold.duckdb --clobber

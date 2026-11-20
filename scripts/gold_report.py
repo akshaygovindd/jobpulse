@@ -46,6 +46,14 @@ QUERIES: tuple[tuple[str, str], ...] = (
         "SELECT count(*) FROM {g}.fct_postings WHERE salary_period_inferred",
     ),
     ("dim_company rows", "SELECT count(*) FROM {g}.dim_company"),
+    (
+        "companies with certified H-1B filings (FY2025-FY2026)",
+        "SELECT count(*) FROM {g}.dim_company WHERE n_lca_certified > 0",
+    ),
+    (
+        "certified H-1B filings matched to our companies",
+        "SELECT sum(n_lca_certified) FROM {g}.dim_company",
+    ),
     ("dim_skill rows", "SELECT count(*) FROM {g}.dim_skill"),
     ("bridge_posting_skill rows", "SELECT count(*) FROM {g}.bridge_posting_skill"),
     ("agg_skill_demand_weekly rows", "SELECT count(*) FROM {g}.agg_skill_demand_weekly"),

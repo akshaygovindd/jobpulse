@@ -12,7 +12,7 @@ from typing import Any
 import duckdb
 import streamlit as st
 
-from jobpulse.app_data import LOCAL_DB_ENV, AppDataError, connect, read_gold
+from jobpulse.app_data import GOLD_URL_ENV, LOCAL_DB_ENV, AppDataError, connect, read_gold
 
 VISA_DISCLAIMER = (
     "Evidence from public filings, not a promise of sponsorship. LCAs are employer filings with "
@@ -21,9 +21,17 @@ VISA_DISCLAIMER = (
 CACHE_TTL_S = 3600  # gold changes once a day; a longer cache spares MotherDuck compute hours
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(ttl=CACHE_TTL_S, show_spinner=False)
 def _connection(source_key: str) -> duckdb.DuckDBPyConnection:
-    return connect()
+    env = dict(os.environ)
+    if GOLD_URL_ENV not in env:  # Community Cloud "Secrets" are also readable as st.secrets
+        try:
+            url = st.secrets.get(GOLD_URL_ENV)
+        except Exception:  # no secrets file: running locally
+            url = None
+        if isinstance(url, str) and url:
+            env[GOLD_URL_ENV] = url
+    return connect(env)
 
 
 @st.cache_data(ttl=CACHE_TTL_S, max_entries=128, show_spinner=False)
@@ -34,7 +42,7 @@ def _cached(sql: str, params: tuple[Any, ...], source_key: str) -> Any:
 def load(sql: str, params: Sequence[Any] | None = None) -> Any:
     """One read-only gold query, cached for an hour. Stops the page with a clear message if the
     data cannot be reached."""
-    source_key = os.environ.get(LOCAL_DB_ENV, "motherduck")
+    source_key = os.environ.get(LOCAL_DB_ENV, "published")
     try:
         return _cached(sql, tuple(params or ()), source_key)
     except AppDataError as e:
@@ -300,3 +308,14 @@ def salary_chart(data: Any) -> None:
     }  # fmt: skip
     rows = data["Role family"].nunique() * max(1, data["Seniority"].nunique())
     _chart(data, spec, max(200, 22 * rows + 70))
+
+
+def salary_range(low: Any, high: Any, currency: Any) -> str:
+    """'$120K-$160K' from annualized advertised salary; 'Not advertised' when there is none."""
+    lo, hi = usd_k(low), usd_k(high)
+    if lo is None and hi is None:
+        return "Not advertised"
+    sign = "$" if currency == "USD" else f"{currency} " if isinstance(currency, str) else ""
+    if lo is not None and hi is not None and round(lo) != round(hi):
+        return f"{sign}{lo:.0f}K to {sign}{hi:.0f}K"
+    return f"{sign}{(lo if lo is not None else hi):.0f}K"

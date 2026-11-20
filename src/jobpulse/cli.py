@@ -20,6 +20,7 @@ from jobpulse.config import (
     load_lca,
     load_lca_aliases,
     load_pipeline,
+    load_publish,
     load_sources,
 )
 from jobpulse.connectors import build_connectors
@@ -60,6 +61,7 @@ from jobpulse.ingest.storage import LocalStorage, S3Storage, Storage
 from jobpulse.logging import configure_logging, get_logger
 from jobpulse.ops.load_ops import load_ops, record_pipeline_run
 from jobpulse.ops.s3_ops import write_ops
+from jobpulse.publish import PublishError, export_gold
 from jobpulse.secrets import load_env_keys, redact
 from jobpulse.silver import build_silver
 from jobpulse.validate import dump_employers_yaml, refreshed, validate_employers
@@ -366,6 +368,33 @@ def cmd_load_lca(args: argparse.Namespace, clock: Clock) -> int:
     return EXIT_OK
 
 
+def cmd_export_gold(args: argparse.Namespace, clock: Clock) -> int:
+    """Write the allow-listed gold tables to one DuckDB file for the public app."""
+    cfg = load_publish()
+    out = Path(args.out) if args.out else Path("dist") / cfg.release.asset
+    out.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        con = _warehouse(args)
+    except WarehouseError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return EXIT_USAGE
+    try:
+        counts = export_gold(con, out, cfg, gold_schema=load_pipeline().warehouse.gold_schema)
+    except PublishError as e:
+        print(f"error: not published, the previous file is unchanged: {e}", file=sys.stderr)
+        return EXIT_ALERT
+    finally:
+        con.close()
+    summary = (
+        "## Gold export\n\n"
+        f"- File: `{out.name}` ({out.stat().st_size / 1_000_000:.1f} MB)\n"
+        + "".join(f"- `{t}`: {n:,} rows\n" for t, n in sorted(counts.items()))
+    )
+    print(summary)
+    _append_step_summary(summary)
+    return EXIT_OK
+
+
 def cmd_build_gold(args: argparse.Namespace, clock: Clock) -> int:
     pipeline = load_pipeline()
     cfg = pipeline.warehouse
@@ -651,6 +680,10 @@ def build_parser() -> argparse.ArgumentParser:
     bg = sub.add_parser("build-gold", help="run the dbt gold models, tests and snapshot")
     bg.add_argument("--db", help="local DuckDB file instead of MotherDuck")
 
+    eg = sub.add_parser("export-gold", help="export the gold tables to one file for the public app")
+    eg.add_argument("--db", help="local DuckDB file instead of MotherDuck")
+    eg.add_argument("--out", help="output file (default dist/<release asset name>)")
+
     ex = sub.add_parser("extract", help="LLM extraction for postings in target role families")
     ex.add_argument("--db", help="local DuckDB file instead of MotherDuck")
     ex.add_argument("--limit", type=int, help="process at most N postings")
@@ -689,6 +722,7 @@ def main(argv: Sequence[str] | None = None, clock: Clock | None = None) -> int:
         "build-silver": cmd_build_silver,
         "load-lca": cmd_load_lca,
         "build-gold": cmd_build_gold,
+        "export-gold": cmd_export_gold,
         "extract": cmd_extract,
         "check-freshness": cmd_check_freshness,
         "validate-employers": cmd_validate_employers,

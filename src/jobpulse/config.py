@@ -376,3 +376,70 @@ def load_lca(path: Path | None = None) -> LcaConfig:
 
 def load_lca_aliases(path: Path | None = None) -> LcaAliases:
     return LcaAliases.model_validate(_load_yaml(path or CONFIG_DIR / "lca_aliases.yaml"))
+
+
+class ResumeUploadConfig(_Strict):
+    max_bytes: int = Field(ge=1)
+    max_pdf_pages: int = Field(ge=1)
+    max_text_chars: int = Field(ge=1)
+    allowed_extensions: list[str] = Field(min_length=1)
+
+
+class ResumeParseConfig(_Strict):
+    max_ngram: int = Field(ge=1, le=8)
+    case_sensitive_skills: dict[str, str]
+    ignore_skills: list[str]
+    title_keywords: list[str] = Field(min_length=1)
+    max_title_chars: int = Field(ge=1)
+    max_titles: int = Field(ge=0)
+    max_years: int = Field(ge=1)
+
+
+class ResumeMatchConfig(_Strict):
+    min_posting_skills: int = Field(ge=1)
+    min_matched: int = Field(ge=1)
+    max_results: int = Field(ge=1)
+
+
+class ResumeConfig(_Strict):
+    upload: ResumeUploadConfig
+    parse: ResumeParseConfig
+    match: ResumeMatchConfig
+
+
+def load_resume(path: Path | None = None) -> ResumeConfig:
+    return ResumeConfig.model_validate(_load_yaml(path or CONFIG_DIR / "resume.yaml"))
+
+
+class PublishReleaseConfig(_Strict):
+    tag: str = Field(pattern=r"^[A-Za-z0-9._-]+$")
+    asset: str = Field(pattern=r"^[A-Za-z0-9._-]+\.duckdb$")
+    url_prefix: str = Field(pattern=r"^https://")
+
+    @model_validator(mode="after")
+    def _catalog_is_not_gold(self) -> PublishReleaseConfig:
+        # DuckDB names a database after its file; a catalog called "gold" would make `gold.table`
+        # ambiguous with the schema of the same name.
+        if self.asset.removesuffix(".duckdb") == "gold":
+            raise ValueError("the asset may not be called gold.duckdb")
+        return self
+
+
+class PublishExportConfig(_Strict):
+    min_rows: dict[str, int]
+
+
+class PublishAppConfig(_Strict):
+    refresh_s: int = Field(ge=0)
+    max_download_bytes: int = Field(ge=1)
+    cache_dir_name: str = Field(pattern=r"^[A-Za-z0-9._-]+$")
+
+
+class PublishConfig(_Strict):
+    release: PublishReleaseConfig
+    export: PublishExportConfig
+    app: PublishAppConfig
+
+
+def load_publish(path: Path | None = None) -> PublishConfig:
+    return PublishConfig.model_validate(_load_yaml(path or CONFIG_DIR / "publish.yaml"))
