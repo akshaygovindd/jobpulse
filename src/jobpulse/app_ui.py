@@ -43,10 +43,22 @@ def _cached(sql: str, params: tuple[Any, ...], source_key: str) -> Any:
     return read_gold(_connection(source_key), sql, params)
 
 
+def _published_version() -> str:
+    """Cache key for the published file: its modified time, so a refreshed file is read at once
+    instead of after the cache expires."""
+    try:
+        from jobpulse.app_data import published_path
+        from jobpulse.config import load_publish
+
+        return f"published:{int(published_path(load_publish()).stat().st_mtime)}"
+    except OSError:
+        return "published"
+
+
 def load(sql: str, params: Sequence[Any] | None = None) -> Any:
     """One read-only gold query, cached for an hour. Stops the page with a clear message if the
     data cannot be reached."""
-    source_key = os.environ.get(LOCAL_DB_ENV, "published")
+    source_key = os.environ.get(LOCAL_DB_ENV) or _published_version()
     try:
         return _cached(sql, tuple(params or ()), source_key)
     except AppDataError as e:

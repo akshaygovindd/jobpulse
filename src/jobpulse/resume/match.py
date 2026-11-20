@@ -78,12 +78,12 @@ def default_levels(years: int | None, titles: Iterable[str], cfg: ResumeLevelsCo
 
 
 def collapse_locations(postings: Iterable[PostingSkills]) -> list[PostingSkills]:
-    """One row per company + title + skill set. The same role opened in several places (London,
-    Warsaw, Toronto) is one posting here with a list of locations in `info["locations"]`; the
-    first posting (by key) supplies the apply link and the other fields."""
-    groups: dict[tuple[str, str, frozenset[str]], list[PostingSkills]] = {}
+    """One row per company + title. The same role opened in several places (London, Warsaw,
+    Toronto) is one posting here with a list of locations in `info["locations"]`; the first
+    posting (by key) supplies the skills, the apply link and the other fields."""
+    groups: dict[tuple[str, str], list[PostingSkills]] = {}
     for p in sorted(postings, key=lambda p: p.posting_key):
-        key = (str(p.info.get("company", "")), str(p.info.get("title", "")), p.skills)
+        key = (str(p.info.get("company", "")), str(p.info.get("title", "")))
         groups.setdefault(key, []).append(p)
     out = []
     for members in groups.values():

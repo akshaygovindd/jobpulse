@@ -72,6 +72,12 @@ _FORBIDDEN = re.compile(
     re.IGNORECASE,
 )
 _TABLE_REF = re.compile(r"\b(?:from|join)\s+([A-Za-z_][\w.\"]*)", re.IGNORECASE)
+# "FROM a x, b": a comma join would add a table the FROM/JOIN scan above never sees.
+_COMMA_JOIN = re.compile(
+    r"\b(?:from|join)\s+[\w.\"]+(?:\s+(?:as\s+)?(?!where\b|group\b|order\b|limit\b|having\b|union\b|on\b|"
+    r"join\b|left\b|right\b|inner\b|cross\b|full\b)\w+)?\s*,",
+    re.IGNORECASE,
+)
 
 
 GENERIC_PUBLIC_MESSAGE = "The data is temporarily unavailable. Please try again in a few minutes."
@@ -97,6 +103,8 @@ def validate_statement(sql: str) -> str:
         raise AppDataError("only SELECT queries are allowed")
     if _FORBIDDEN.search(re.sub(r"'(?:[^']|'')*'", "''", text)):  # ignore words inside literals
         raise AppDataError("the statement contains a keyword the app may not use")
+    if _COMMA_JOIN.search(re.sub(r"'(?:[^']|'')*'", "''", text)):
+        raise AppDataError("comma joins are not allowed; use JOIN")
     ctes = {m.lower() for m in re.findall(r"(?i)\b([A-Za-z_]\w*)\s+as\s*\(", text)}
     for ref in _TABLE_REF.findall(text):
         name = ref.replace('"', "")
@@ -217,6 +225,8 @@ def connect_published(
     try:
         con = duckdb.connect(str(path), read_only=True)
     except duckdb.Error:
+        # A fresh-looking but corrupt copy: drop it so the next attempt downloads a new one.
+        path.unlink(missing_ok=True)
         raise AppDataError("the published data file could not be opened") from None
     check_schema(con)
     return con

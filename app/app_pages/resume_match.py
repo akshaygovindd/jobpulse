@@ -80,6 +80,8 @@ def _analyze() -> None:
         )
     except ResumeError as e:
         st.session_state[ERROR] = str(e)
+        if len(st.session_state.get(TEXT, "")) > cfg.upload.max_text_chars:
+            st.session_state[TEXT] = ""  # do not keep an oversize paste in the session
         return
     st.session_state[TEXT] = ""  # drop the raw text
     st.session_state[NONCE] = st.session_state.get(NONCE, 0) + 1  # drops the uploaded file

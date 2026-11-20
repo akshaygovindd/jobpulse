@@ -252,7 +252,9 @@ def test_page_shows_privacy_notice_and_ranks_postings(
     assert "SQL" in frame["Matched skills"].iloc[0]
     assert "Posting says sponsorship is offered" in frame["Visa evidence"].iloc[0]
     assert frame["Advertised salary"].iloc[0] == "$100K to $140K"
-    assert len(frame) == 2  # posting 3 has too few skills
+    assert (
+        len(frame) == 1
+    )  # postings 1 and 2 are one role (same company and title); 3 has too few skills
     assert "Evidence from public filings, not a promise" in _everything(at)
 
 
@@ -415,7 +417,7 @@ def test_default_levels_follow_the_resume_but_are_only_a_default() -> None:
     assert "Manager and above" not in default_levels(15, [], lv)  # never defaulted
 
 
-def test_the_same_role_in_several_places_is_one_row_and_levels_do_not_change_scores() -> None:
+def test_the_same_role_in_several_places_is_one_row() -> None:
     from jobpulse.resume.match import collapse_locations
 
     skills = {"python", "sql", "dbt", "kafka", "spark"}
@@ -428,10 +430,10 @@ def test_the_same_role_in_several_places_is_one_row_and_levels_do_not_change_sco
     c = PostingSkills(
         "c",
         frozenset(skills - {"spark"}),
-        {"company": "Acme", "title": "ML Eng", "location": "Rome"},
+        {"company": "Acme", "title": "ML Researcher", "location": "Rome"},
     )
     merged = collapse_locations([b, a, c])
-    assert len(merged) == 2  # a+b collapse; c has a different skill set
+    assert len(merged) == 2  # a+b collapse (same company and title); c is another role
     two = next(m for m in merged if len(m.info["locations"]) == 2)
     assert two.posting_key == "a"
     assert two.info["locations"] == ["London", "Warsaw"]

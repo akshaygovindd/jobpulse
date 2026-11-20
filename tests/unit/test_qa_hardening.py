@@ -180,3 +180,30 @@ def test_title_lines_never_keep_contact_details() -> None:
     )
     titles = extract_profile(text, {"python"}, CFG).titles
     assert titles == ("Data Scientist", "ML Engineer")
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "select * from gold.dim_skill a, ref.lca_disclosures b",
+        "select * from gold.dim_skill, ref.lca_disclosures",
+        "select * from gold.dim_skill as a, gold.dim_company as b",
+    ],
+)
+def test_comma_joins_cannot_smuggle_in_another_table(sql: str) -> None:
+    from jobpulse.app_data import AppDataError, validate_statement
+
+    with pytest.raises(AppDataError):
+        validate_statement(sql)
+
+
+def test_ordinary_queries_still_validate() -> None:
+    from jobpulse.app_data import validate_statement
+
+    for sql in (
+        "select a, b from gold.dim_skill where skill_id in (1, 2) order by a, b",
+        "select count(*) from gold.fct_postings group by 1, 2",
+        "with x as (select 1), y as (select 2) select * from x join y on true",
+        "select * from gold.dim_skill limit 5",
+    ):
+        assert validate_statement(sql)
