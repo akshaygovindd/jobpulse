@@ -590,3 +590,27 @@ Active data alone is 134.3 MiB (1.3% of the limit). **Which components count aga
 1. Check the next scheduled Daily ingest: all four jobs green, and `extract` clears the outage-day postings (`gold_report.py` "with extraction" should rise above 481).
 2. Add `MOTHERDUCK_TOKEN` to the GitHub `prod` secret if you have not (the new token), otherwise the scheduled warehouse job still fails.
 3. In about two weeks run `uv run python scripts/storage_projection.py` and tell me the active and total figures.
+
+---
+
+## 2026-11-19 (late): P5 started: LCA loader, employer matching, match-review tooling (no real data yet)
+
+**Plan approved by the owner** (FY2024, FY2025, FY2026 full year or latest quarter; gold models over ops/LLM calls so the app reads gold only; a ~50-pair blind employer-match sheet the owner labels; commit per step). This entry covers the first two steps. Nothing has been loaded from real DOL files: **dol.gov returns 403 to automated requests, and I did not work around that**, so everything below is tested only on synthetic DOL-shaped files.
+
+**What was built**
+- `data/oflc/` is gitignored (manual downloads, large).
+- `jobpulse load-lca [--dir data/oflc] [--db FILE]` reads `.xlsx` (DuckDB's built-in `read_xlsx`, so **no new dependency**; the excel extension downloads once on first use) or `.csv`. Configured in `config/lca.yaml`: fiscal years, accepted column names per canonical column, required columns, certified statuses, match settings, review size. It keeps only H-1B (exact `VISA_CLASS`; H-1B1 and E-3 are excluded), only the listed columns (attorney, agent, contact and FEIN columns are never read), de-duplicates on `CASE_NUMBER` (latest decision wins, so overlapping quarterly files are fine), and fails loudly with the file's column list if a required column is missing.
+- Tables in schema `ref` (new `warehouse.ref_schema`): `lca_employer_names` (every H-1B employer name per year with counts), `employer_lca_match`, `lca_disclosures` (**matched employers' filings only**). Loading a fiscal year replaces that year's rows; reruns are idempotent. A run record (`task=lca`) goes to `ops.pipeline_runs`.
+- **Matching is deterministic** (`visa/normalize.py`, `visa/match.py`): `exact`, `normalized` (punctuation and legal suffixes removed), and `alias` (`config/lca_aliases.yaml`, owner-reviewed). Confidences: exact 1.0, alias 1.0, normalized 0.9; threshold 0.9. A name that matches two companies is ambiguous and not matched. Similarity is only used to *suggest* candidates for review, never as a match. `config/lca_aliases.yaml` is empty for now: I will not guess legal-entity names before I see the data.
+- `eval/employer_match_sample.py` writes a **blind** sheet (`pair_id, company, lca_employer_name, n_cases_all_years, label`) mixing our matches (about 60%) with similar-but-not-matched names; which is which, and the method, are only in `eval/employer_match_manifest.json`. `eval/employer_match_score.py` reads `eval/employer_match_labels.csv` and writes `eval/reports/employer_match_report.md`: precision of our matches overall and by method with a 95% Wilson interval, wrong matches, and "missed matches" (suggested pairs labeled yes, to become aliases).
+- Unrelated fix found on the way: `configure_logging` kept whatever `sys.stderr` existed at first use, which broke later tests after a CLI test under pytest capture; it now resolves `sys.stderr` at write time. `bulk_insert` moved from `gold.py` to `warehouse.py` (shared).
+
+**Not proven yet (needs the real files)**
+- That the real DOL headers match `config/lca.yaml` (I used the layout from memory: `CASE_NUMBER, CASE_STATUS, RECEIVED_DATE, DECISION_DATE, VISA_CLASS, JOB_TITLE, SOC_CODE, SOC_TITLE, FULL_TIME_POSITION, TOTAL_WORKER_POSITIONS, EMPLOYER_NAME, WORKSITE_CITY, WORKSITE_STATE, WAGE_RATE_OF_PAY_FROM/TO, WAGE_UNIT_OF_PAY, PREVAILING_WAGE, PW_UNIT_OF_PAY, PW_WAGE_LEVEL`), how date cells arrive from `.xlsx` (the code accepts ISO dates and Excel serial numbers), load time and memory on a 100+ MB workbook, and how many of the 43 companies match.
+- Real match precision, and how many matched pairs exist for the 50-pair target. **If fewer than about 30 of our matches exist, the sheet fills with near-miss suggestions, and the precision figure rests on fewer pairs than 50.** The report states both numbers.
+
+**Checks run (`make check`, final):** ruff, format, mypy strict (45 files), pytest **343 passed** (3 live deselected; +40 for LCA loading, matching and review), terraform fmt + validate both roots valid, gitleaks no leaks. Not run: anything against the real DOL files or MotherDuck for `load-lca`.
+
+**Owner steps (now)**
+1. Download the DOL files into `data/oflc/` (list in the session reply) and tell me.
+2. Then I will run `load-lca` locally against the files to confirm the layout, show you the match results, draft alias candidates for you to review, and continue with the gold visa tables.
