@@ -446,3 +446,30 @@ def test_every_page_warns_when_the_data_is_older_than_the_freshness_limit(
     for page in ("app_pages/market_overview.py", "app_pages/salary.py"):
         at = _page(history_db, monkeypatch, page)
         assert any("last refreshed on" in str(w.value) for w in at.warning), page
+
+
+def _lum(hex_color: str) -> float:
+    def ch(i: int) -> float:
+        c = int(hex_color[1 + 2 * i : 3 + 2 * i], 16) / 255
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
+    return 0.2126 * ch(0) + 0.7152 * ch(1) + 0.0722 * ch(2)
+
+
+def _contrast(a: str, b: str) -> float:
+    hi, lo = sorted((_lum(a), _lum(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def test_chart_text_and_series_colours_meet_contrast_targets() -> None:
+    from jobpulse import app_ui as ui
+
+    # value labels on the page background of each theme (white; Streamlit's dark #0E1117)
+    assert _contrast(ui.LABEL_COLOR_LIGHT, "#FFFFFF") >= 4.5
+    assert _contrast(ui.LABEL_COLOR_DARK, "#0E1117") >= 4.5
+    # heatmap: each of the five steps has a text colour at 4.5:1 or better
+    for i, step in enumerate(ui.HEATMAP_RAMP):
+        text = ui.TEXT_ON_LIGHT if i < 3 else ui.TEXT_ON_DARK
+        assert _contrast(step, text) >= 4.5, (i, step)
+    # the two first series colours are far apart in lightness
+    assert _contrast(ui.NEUTRAL[0], ui.NEUTRAL[1]) >= 3

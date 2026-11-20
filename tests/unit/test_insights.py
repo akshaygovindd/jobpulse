@@ -62,7 +62,9 @@ def test_skill_salary_and_sponsor_insights() -> None:
         "The highest median advertised pay is Senior Data Scientist: $180K (from 9 postings)."
     )
     text = i.sponsors_insight([("A", 90.0), ("B", 10.0)]) or ""
-    assert text.startswith("A has the most certified filings for these roles: 90, 90% of the 100")
+    assert text.startswith("A has the most certified filings for these roles: 90, 90% of all 100")
+    wider = i.sponsors_insight([("A", 90.0), ("B", 10.0)], total=600.0) or ""
+    assert "90, 15% of all 600" in wider  # share of every company, not of the top few shown
     assert "not that any posting is sponsored" in text  # the evidence caveat travels with it
 
 

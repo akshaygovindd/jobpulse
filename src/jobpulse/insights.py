@@ -110,14 +110,17 @@ def salary_insight(rows: Sequence[tuple[str, float, int]], min_n: int = 0) -> st
     return f"The highest median advertised pay is {label}: ${median:,.0f}K (from {n} postings)."
 
 
-def sponsors_insight(rows: Sequence[tuple[str, float]]) -> str | None:
+def sponsors_insight(rows: Sequence[tuple[str, float]], total: float | None = None) -> str | None:
+    """`total` is every company's filings for these roles; without it, the sum of the rows shown
+    (which would overstate the leader's share when the list is only the top few)."""
     top = _lead(rows)
-    total = sum(v for _, v in rows)
-    if not top or not total:
+    shown = sum(v for _, v in rows)
+    base = total if total else shown
+    if not top or not base:
         return None
     return (
         f"{top[0]} has the most certified filings for these roles: {top[1]:,.0f}, "
-        f"{share(top[1], total)} of the {total:,.0f} shown. Filings show an employer applied, "
+        f"{share(top[1], base)} of all {base:,.0f}. Filings show an employer applied, "
         "not that any posting is sponsored."
     )
 

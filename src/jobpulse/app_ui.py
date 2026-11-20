@@ -112,11 +112,17 @@ ACRONYMS = {"ai": "AI", "ml": "ML", "bi": "BI", "llm": "LLM", "usd": "USD", "lca
 # red/green). Every chart goes through `_chart`, which applies CHART_CONFIG, so changing the look
 # means editing this block (and `.streamlit/config.toml` for the Streamlit theme).
 PRIMARY = "#2F6DB5"  # same blue as the Streamlit theme's primaryColor
-NEUTRAL = ["#4C78A8", "#9AA5B1", "#7A8CA3", "#B7C4D6"]
-HEATMAP_RAMP = ["#DCE9F7", "#9ECAE1", "#4292C6", "#2171B5", "#08306B"]  # light to dark blue
+# Series colours: the first two are far apart in lightness (navy and light blue, about 6:1) and
+# the rest differ in hue, so a legend stays readable; lines also differ in dash pattern.
+NEUTRAL = ["#0B2545", "#6BA6E6", "#9AA5B1", "#2F6DB5"]
+# Five discrete steps (the scale is quantized). The first three are light enough for dark text and
+# the last two dark enough for white text, both at 4.5:1 or better, so every cell label is legible.
+HEATMAP_RAMP = ["#DCE9F7", "#9ECAE1", "#6BAED6", "#2F6DB5", "#08306B"]
 TEXT_ON_LIGHT = "#1B2A3A"
 TEXT_ON_DARK = "#FFFFFF"
-LABEL_COLOR = "#7F8FA6"  # mid slate: readable on both the light and the dark Streamlit theme
+# Bar-end value labels: no single slate passes 4.5:1 on both themes, so pick by theme.
+LABEL_COLOR_LIGHT = "#4A5A70"  # on white: 6.9:1
+LABEL_COLOR_DARK = "#A9B6C9"  # on the dark theme background: 8:1
 CHART_CONFIG: dict[str, Any] = {
     "font": "sans-serif",
     "view": {"stroke": None},
@@ -133,6 +139,15 @@ CHART_CONFIG: dict[str, Any] = {
     "bar": {"cornerRadiusEnd": 2},
     "line": {"strokeWidth": 2},
 }
+
+
+def label_color() -> str:
+    """Value-label colour for the viewer's theme (light unless Streamlit says the theme is dark)."""
+    try:
+        dark = st.context.theme.type == "dark"
+    except Exception:  # an old Streamlit, or no theme information: assume light
+        dark = False
+    return LABEL_COLOR_DARK if dark else LABEL_COLOR_LIGHT
 
 
 def human(value: Any, mapping: dict[str, str] | None = None) -> str:
@@ -233,7 +248,7 @@ def bar(
         "field": cat,
         "type": "nominal",
         "axis": {
-            "labelLimit": 600,
+            "labelLimit": 260,  # the longest label is about 170 px; a phone keeps room for bars
             "labelAngle": 0,
             "title": None,
             "labelOverlap": False,
@@ -259,7 +274,7 @@ def bar(
             "baseline": "middle" if horizontal else "bottom",
             "dx": 4 if horizontal else 0,
             "dy": 0 if horizontal else -2,
-            "color": LABEL_COLOR,
+            "color": label_color(),
         },
         "encoding": {"text": {"field": val, "type": "quantitative", "format": ",.0f"}},
     }
@@ -313,6 +328,8 @@ def date_chart(
         mark["width"] = {"band": 0.7}
     else:
         mark["point"] = True
+    if series and kind == "line":
+        enc["strokeDash"] = {"field": series, "type": "nominal", "legend": None}  # not colour alone
     if series:
         enc["color"] = {
             "field": series,
@@ -336,7 +353,7 @@ def salary_chart(data: Any) -> None:
     present = set(data["Seniority"])
     order = [v for v in SENIORITY_LABELS.values() if v in present]
     lo, hi = float(data["Median"].min()), float(data["Median"].max())
-    switch = lo + 0.55 * (hi - lo)  # darker than this: white text
+    switch = lo + 0.6 * (hi - lo)  # the top two of five steps are dark: white text
     tooltip = [
         {"field": "Role family", "type": "nominal"},
         {"field": "Seniority", "type": "nominal"},
@@ -351,13 +368,13 @@ def salary_chart(data: Any) -> None:
                 "field": "Seniority",
                 "type": "ordinal",
                 "sort": order,
-                "axis": {"title": None, "labelAngle": 0, "orient": "top", "labelOverlap": False},
+                "axis": {"title": None, "labelAngle": -30, "orient": "top", "labelOverlap": False},
             },
             "y": {
                 "field": "Role family",
                 "type": "ordinal",
                 "sort": {"field": "Median", "op": "max", "order": "descending"},
-                "axis": {"title": None, "labelLimit": 600, "labelOverlap": False},
+                "axis": {"title": None, "labelLimit": 260, "labelOverlap": False},
             },
         },
         "layer": [
@@ -367,7 +384,7 @@ def salary_chart(data: Any) -> None:
                     "color": {
                         "field": "Median",
                         "type": "quantitative",
-                        "scale": {"range": HEATMAP_RAMP},
+                        "scale": {"type": "quantize", "range": HEATMAP_RAMP},
                         "legend": {"title": "Median ($K)", "orient": "bottom"},
                     },
                     "tooltip": tooltip,

@@ -8,17 +8,26 @@ from jobpulse.app_ui import (
     bar,
     clean,
     human,
+    is_missing,
     key_insight,
     load,
+    pct,
     role_label,
     visa_disclaimer,
 )
 
 visa_disclaimer()
+years = load("SELECT min(fiscal_year) AS lo, max(fiscal_year) AS hi FROM gold.agg_lca_company_year")
+lo_fy, hi_fy = years["lo"].iloc[0], years["hi"].iloc[0]
+if is_missing(lo_fy) or lo_fy == hi_fy:
+    FY = "the loaded fiscal years"
+else:
+    FY = f"fiscal years {int(lo_fy)} and {int(hi_fy)}"
 st.caption(
-    "Public filings: US Department of Labor H-1B labor condition applications for fiscal years "
-    "2025 and 2026. Only plain 'certified' filings count as evidence; withdrawn and denied "
-    "filings are shown separately."
+    f"Public filings: US Department of Labor H-1B labor condition applications for {FY}. Only "
+    "plain 'certified' filings count as evidence; withdrawn and denied filings are shown "
+    "separately. 'No matching filings found' can also mean the employer files under a name we "
+    "could not match."
 )
 
 companies = load(
@@ -31,7 +40,7 @@ if companies.empty:
     st.warning("No company data yet.")
     st.stop()
 
-EVIDENCE = {"HISTORICAL_EVIDENCE": "Has certified filings", "UNKNOWN": "No filings found"}
+EVIDENCE = {"HISTORICAL_EVIDENCE": "Has certified filings", "UNKNOWN": "No matching filings found"}
 
 
 def match_words(methods: object) -> str:
@@ -62,14 +71,28 @@ if picked:
         "GROUP BY 1 ORDER BY 2 DESC LIMIT 15",
         picked,
     )
+    everyone = load(
+        "SELECT sum(n_certified) AS filings FROM gold.agg_lca_company_role "
+        f"WHERE role_family IN ({marks})",
+        picked,
+    )["filings"].iloc[0]
+    all_roles = load("SELECT sum(n_certified) AS filings FROM gold.agg_lca_company_role")[
+        "filings"
+    ].iloc[0]
+    everyone = 0.0 if is_missing(everyone) else float(everyone)
+    all_roles = 0.0 if is_missing(all_roles) else float(all_roles)
     key_insight(
-        insights.sponsors_insight(list(zip(sponsors["company"], sponsors["filings"], strict=True)))
+        insights.sponsors_insight(
+            list(zip(sponsors["company"], sponsors["filings"], strict=True)),
+            total=everyone or None,
+        )
     )
     bar(sponsors, x="company", y="filings", horizontal=True, sort="-filings")
     st.caption(
-        "Certified H-1B filings in fiscal years 2025 and 2026 for the selected roles. A filing "
-        "shows an employer applied for a role of that kind, not that a particular posting is "
-        "sponsored."
+        f"Certified H-1B filings in {FY} for the selected roles. A filing shows an employer "
+        "applied for a role of that kind, not that a particular posting is sponsored. The "
+        f"selected roles are {pct(everyone, all_roles)} of all certified filings of these "
+        "companies; the rest are in other roles, so this list shows the minority."
     )
 else:
     st.info("Pick at least one role family.")
@@ -97,7 +120,9 @@ st.dataframe(
         "How the filings were matched": st.column_config.TextColumn(width="large"),
         "n_lca_certified": st.column_config.NumberColumn("Certified filings", format="%d"),
         "n_lca_not_certified": st.column_config.NumberColumn(
-            "Withdrawn or denied", format="%d", help="Not counted as evidence."
+            "Withdrawn or denied",
+            format="%d",
+            help="Not counted as evidence. Includes filings certified and then withdrawn.",
         ),
         "n_active": st.column_config.NumberColumn("Open postings", format="%d"),
     },
@@ -167,7 +192,8 @@ with st.container(border=True):
     names = row["lca_employer_names"]
     if hasattr(names, "__len__") and len(names):
         matched_by = row["How the filings were matched"]
-        st.caption(f"Filed under: {', '.join(names)}. Matched by: {matched_by}.")
+        filed_as = ", ".join(n.rstrip(".") for n in names)
+        st.caption(f"Filed under: {filed_as}. Matched by: {matched_by}.")
         subs = row["lca_subsidiaries"]
         if hasattr(subs, "__len__") and len(subs):
             st.caption(
@@ -175,7 +201,7 @@ with st.container(border=True):
                 "They are counted in the certified filings above."
             )
     else:
-        st.caption("No H-1B filings found in fiscal years 2025 and 2026.")
+        st.caption(f"No matching H-1B filings found in {FY}.")
     st.caption(
         "Evidence from public filings, not a promise of sponsorship. Read the number of filings "
         "with the class: a handful is thin evidence."

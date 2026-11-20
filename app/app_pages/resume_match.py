@@ -40,7 +40,7 @@ CLASS_LABELS = {
     "CONFIRMED_OFFERED": "Posting says sponsorship is offered",
     "EXPLICITLY_UNAVAILABLE": "Posting says sponsorship is not available",
     "HISTORICAL_EVIDENCE": "Company has certified H-1B filings",
-    "UNKNOWN": "No filings found",
+    "UNKNOWN": "No matching filings found",
 }
 
 cfg = load_resume()
