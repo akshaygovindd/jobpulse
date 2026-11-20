@@ -396,12 +396,35 @@ class ResumeParseConfig(_Strict):
     ignore_skills: list[str]
     min_posting_frequency: int = Field(ge=1)
     title_keywords: list[str] = Field(min_length=1)
+    education_keywords: dict[str, list[str]]  # label -> lower-case phrases that signal it
     max_title_chars: int = Field(ge=1)
     max_titles: int = Field(ge=0)
     max_years: int = Field(ge=1)
 
 
+class ResumeLevelsConfig(_Strict):
+    # Experience-level groups -> the gold `seniority` values they cover. A filter and a default
+    # only: the level is never part of the match score.
+    groups: dict[str, list[str]] = Field(min_length=1)
+    entry_group: str
+    mid_group: str
+    senior_groups: list[str]
+    entry_max_years: int = Field(ge=0)  # at most this many years (or an intern title) => entry
+    senior_min_years: int = Field(ge=1)  # at least this many years => senior groups
+
+    @model_validator(mode="after")
+    def _groups_exist(self) -> ResumeLevelsConfig:
+        named = [self.entry_group, self.mid_group, *self.senior_groups]
+        missing = [g for g in named if g not in self.groups]
+        if missing:
+            raise ValueError(f"unknown experience groups: {missing}")
+        return self
+
+
 class ResumeMatchConfig(_Strict):
+    min_resume_skills: int = Field(ge=1)  # fewer recognized skills: nothing is ranked
+    top_learn_n: int = Field(ge=1)  # postings (best matches) used for "Top skills to learn"
+    top_learn_max: int = Field(ge=1)  # skills listed
     min_posting_skills: int = Field(ge=1)
     min_matched: int = Field(ge=1)
     max_results: int = Field(ge=1)
@@ -410,6 +433,7 @@ class ResumeMatchConfig(_Strict):
 class ResumeConfig(_Strict):
     upload: ResumeUploadConfig
     parse: ResumeParseConfig
+    levels: ResumeLevelsConfig
     match: ResumeMatchConfig
 
 

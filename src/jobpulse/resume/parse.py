@@ -11,6 +11,7 @@ No LLM: skills are found by looking up word n-grams, normalized with `jobpulse.s
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Collection
 from dataclasses import dataclass
 from io import BytesIO
@@ -23,7 +24,6 @@ from jobpulse.config import ResumeConfig
 from jobpulse.skills import norm_skill
 
 _SEGMENT_SPLIT = re.compile(r"[\n\r,;|:•·●]+")
-_YEARS = re.compile(r"(?i)\b(\d{1,2})\s*\+?\s*(?:years?|yrs?)\b")
 _EDGE_PUNCT = ".,;:()[]{}\"'"
 # Lines carrying contact details are never kept as a "title line": an email, a URL, or a phone-like
 # run of digits (7+ digits, with the usual separators).
@@ -41,7 +41,8 @@ class ResumeError(Exception):
 class ResumeProfile:
     skills: frozenset[str]  # canonical skill names present in the vocabulary
     titles: tuple[str, ...]  # short title-like lines, as written
-    years: int | None  # largest "N years" figure found, if plausible
+    years: int | None  # years of experience from date ranges, else an explicit "N years of ..."
+    education: tuple[str, ...] = ()  # degree labels found (PhD, Master's, ...)
 
 
 def read_resume(name: str, data: bytes, cfg: ResumeConfig) -> str:
@@ -104,8 +105,12 @@ def _pdf_text(data: bytes, max_pages: int, max_decoded_bytes: int) -> str:
         raise ResumeError("That PDF could not be read.") from None
 
 
-def extract_profile(text: str, vocabulary: Collection[str], cfg: ResumeConfig) -> ResumeProfile:
-    """Skills, titles and years from `text`. `vocabulary` is gold.dim_skill.canonical_name."""
+def extract_profile(
+    text: str, vocabulary: Collection[str], cfg: ResumeConfig, today_year: int | None = None
+) -> ResumeProfile:
+    """Skills, titles, education and years from `text`. `vocabulary` is the skill names that may
+    be recognized. `today_year` closes "Present" date ranges (the page passes the current year)."""
+    text = clean_text(text)
     p = cfg.parse
     vocab = set(vocabulary) - set(p.ignore_skills)
     found: set[str] = set()
@@ -121,7 +126,9 @@ def extract_profile(text: str, vocabulary: Collection[str], cfg: ResumeConfig) -
                 if required is not None and (size != 1 or window[0] != required):
                     continue
                 found.add(name)
-    return ResumeProfile(frozenset(found), _titles(text, cfg), _years(text, cfg))
+    return ResumeProfile(
+        frozenset(found), _titles(text, cfg), _years(text, cfg, today_year), _education(text, cfg)
+    )
 
 
 def _titles(text: str, cfg: ResumeConfig) -> tuple[str, ...]:
@@ -142,7 +149,64 @@ def _titles(text: str, cfg: ResumeConfig) -> tuple[str, ...]:
     return tuple(seen)
 
 
-def _years(text: str, cfg: ResumeConfig) -> int | None:
-    values = [int(m) for m in _YEARS.findall(text)]
-    plausible = [v for v in values if 0 < v <= cfg.parse.max_years]
+_RANGE = re.compile(
+    r"(?i)\b((?:19|20)\d\d)\s*(?:-|\u2013|\u2014|to)\s*((?:19|20)\d\d|present|current|now|today|ongoing)\b"
+)
+_EXPLICIT_YEARS = re.compile(
+    r"(?i)\b(\d{1,2})\s*\+?\s*(?:years?|yrs?)\s+(?:of\s+)?(?:\w+\s+){0,2}?experience\b"
+)
+_ZERO_WIDTH = dict.fromkeys(map(ord, "\u200b\u200c\u200d\u2060\ufeff"))
+
+
+def clean_text(text: str) -> str:
+    """NFKC-normalize (full-width letters, ligatures) and drop zero-width characters, so
+    spellings that only look different are read as the skill they spell."""
+    return unicodedata.normalize("NFKC", text).translate(_ZERO_WIDTH)
+
+
+def _years(text: str, cfg: ResumeConfig, today_year: int | None = None) -> int | None:
+    """Years of experience, or None when unsure. The union of the date ranges on lines that are
+    not about education (so overlapping jobs are not counted twice and a degree is not counted as
+    work). Without date ranges, an explicit "N years of ... experience". A bare "N years" anywhere
+    ("volunteered for 12 years") is never used."""
+    edu = [k.lower() for words in cfg.parse.education_keywords.values() for k in words]
+    edu += ["university", "college", "school", "institute"]
+    spans: list[tuple[int, int]] = []
+    for line in text.splitlines():
+        if any(k in line.lower() for k in edu):
+            continue
+        for m in _RANGE.finditer(line):
+            start = int(m.group(1))
+            end_raw = m.group(2).lower()
+            if end_raw.isdigit():
+                end = int(end_raw)
+            elif today_year is not None:
+                end = today_year
+            else:
+                continue
+            if start <= end:
+                spans.append((start, end))
+    if spans:
+        spans.sort()
+        total, cur_start, cur_end = 0, spans[0][0], spans[0][1]
+        for s, e in spans[1:]:
+            if s > cur_end:
+                total += cur_end - cur_start
+                cur_start, cur_end = s, e
+            else:
+                cur_end = max(cur_end, e)
+        total += cur_end - cur_start
+        if 0 < total <= cfg.parse.max_years:
+            return total
+    explicit = [int(v) for v in _EXPLICIT_YEARS.findall(text)]
+    plausible = [v for v in explicit if 0 < v <= cfg.parse.max_years]
     return max(plausible) if plausible else None
+
+
+def _education(text: str, cfg: ResumeConfig) -> tuple[str, ...]:
+    low = text.lower()
+    return tuple(
+        label
+        for label, words in cfg.parse.education_keywords.items()
+        if any(re.search(rf"(?<![a-z]){re.escape(w.lower())}(?![a-z])", low) for w in words)
+    )

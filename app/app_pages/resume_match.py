@@ -1,3 +1,6 @@
+from datetime import UTC, datetime
+from typing import Any
+
 import streamlit as st
 
 from jobpulse.app_ui import (
@@ -11,7 +14,15 @@ from jobpulse.app_ui import (
     visa_disclaimer,
 )
 from jobpulse.config import load_resume
-from jobpulse.resume.match import PostingSkills, rank_postings
+from jobpulse.resume.match import (
+    Match,
+    PostingSkills,
+    collapse_locations,
+    default_levels,
+    level_group,
+    rank_postings,
+    skills_to_learn,
+)
 from jobpulse.resume.parse import ResumeError, check_text, extract_profile, read_resume
 
 # Everything this page keeps about a resume lives under these session keys (all start with
@@ -61,7 +72,12 @@ def _analyze() -> None:
             text = read_resume(upload.name, upload.getvalue(), cfg)
         else:
             text = check_text(st.session_state.get(TEXT, ""), cfg)
-        st.session_state[PROFILE] = extract_profile(text, vocabulary, cfg)
+        profile = extract_profile(text, vocabulary, cfg, datetime.now(UTC).year)
+        st.session_state[PROFILE] = profile
+        # Experience level is a pre-selected filter, never part of the score.
+        st.session_state["resume_levels"] = default_levels(
+            profile.years, profile.titles, cfg.levels
+        )
     except ResumeError as e:
         st.session_state[ERROR] = str(e)
         return
@@ -80,8 +96,9 @@ def _delete() -> None:
 st.info(
     "**Privacy.** Your resume is processed in memory in this browser session only. It is never "
     "saved to disk or a database, never logged, and no AI service is called: skills are found by "
-    "matching words against the skill list built from the postings. Only the skills, a few title "
-    "lines and years of experience found are kept for this session, until you press **Delete** "
+    "matching words against the skill list built from the postings. Only the skills, a few short "
+    "lines (as written, without any email, phone number or link), the degrees and the years of "
+    "experience found are kept for this session, until you press **Delete** "
     "or close the tab. Nothing is sent to the project owner.",
     icon=":material/lock:",
 )
@@ -97,7 +114,7 @@ if profile is None:
     st.write(
         "Paste your resume text or upload a PDF or text file (up to "
         f"{cfg.upload.max_bytes / 1_000_000:.0f} MB). I will rank the open data and AI postings "
-        "by how many of the skills they ask for appear in your resume."
+        "by how many of the skills they ask for appear in your resume. English resumes only."
     )
     tab_paste, tab_file = st.tabs(["Paste text", "Upload a file"])
     with tab_paste:
@@ -118,32 +135,52 @@ if profile is None:
 with st.container(horizontal=True, vertical_alignment="center"):
     st.subheader("What I found in your resume")
     st.button("Delete my resume data", icon=":material/delete:", on_click=_delete)
-left, right = st.columns(2)
+left, middle, right = st.columns(3)
 with left:
     st.metric("Skills recognized", len(profile.skills), border=True)
     st.text(
         ", ".join(sorted(skill_label(v) for v in profile.skills))
         or "None. Try listing tools and methods by name."
     )
-with right:
+with middle:
     st.metric(
-        "Years of experience mentioned",
+        "Years of experience",
         "Not found" if profile.years is None else profile.years,
         border=True,
+        help="From the date ranges of your roles (overlaps counted once), or an explicit "
+        "'N years of experience'. Shown as 'Not found' when it cannot be told reliably.",
     )
+    st.text("Education: " + (", ".join(profile.education) or "not found"))
+with right:
+    st.markdown("**Roles found**")
     # Text taken from the resume is shown as plain text, never as markdown (no links, images or
     # LaTeX from an uploaded file).
-    st.text("; ".join(profile.titles) or "No title lines found.")
+    st.text("\n".join(profile.titles) or "No title lines found.")
 st.caption(
-    "Only skills that appear in the skill list built from the postings can be recognized, and "
-    "spelling variants the list does not know are missed. Single letters and everyday words "
-    "(for example R, C, Go, search, testing) count only in a form that is clearly a skill."
+    "Only skills that appear in several open postings can be recognized, and spelling variants "
+    "the list does not know are missed. Single letters and everyday words (for example R, C, Go, "
+    "search, testing) count only in a form that is clearly a skill."
 )
+if len(profile.skills) < cfg.match.min_resume_skills:
+    if profile.skills:
+        st.warning(
+            f"Only {len(profile.skills)} skill(s) recognized. Add your tools and methods (at "
+            f"least {cfg.match.min_resume_skills}) to get a ranking.",
+            icon=":material/info:",
+        )
+    else:
+        st.warning(
+            "No skills recognized. List your tools and methods by name (for example Python, "
+            "SQL, Spark). Resumes in English only.",
+            icon=":material/info:",
+        )
+    st.stop()
 
 postings = load(
     "SELECT p.posting_key, c.name AS company, p.title, p.role_family, p.remote_policy, p.city, "
-    "p.sponsorship_class, c.n_lca_certified, p.salary_min_annual, p.salary_max_annual, "
-    "p.salary_currency, list(s.canonical_name) AS skills "
+    "p.city_country, p.seniority, p.apply_url, p.sponsorship_class, c.n_lca_certified, "
+    "p.salary_min_annual, p.salary_max_annual, p.salary_currency, p.salary_period, "
+    "list(s.canonical_name) AS skills "
     "FROM gold.fct_postings p JOIN gold.dim_company c ON c.company_id = p.company_id "
     "JOIN gold.bridge_posting_skill b ON b.posting_key = p.posting_key "
     "JOIN gold.dim_skill s ON s.skill_id = b.skill_id "
@@ -158,11 +195,21 @@ st.subheader("Matching open postings")
 st.caption(
     f"Compared against the {len(postings):,} open data and AI postings whose skills the AI "
     "has read (a title filter chooses these roles; other open postings are not read). The match "
-    "is the share of the skills a posting asks for that appear in your resume. Postings with "
-    f"fewer than {cfg.match.min_posting_skills} extracted skills are not ranked."
+    "is the share of the skills a posting asks for that appear in your resume, so a posting that "
+    "lists few skills can score high. Postings with fewer than "
+    f"{cfg.match.min_posting_skills} extracted skills are not ranked. The same role in several "
+    "places is one row."
 )
 visa_disclaimer()
+postings["level"] = postings["seniority"].map(lambda v: level_group(v, cfg.levels))
 with st.container(horizontal=True):
+    levels = st.multiselect(
+        "Experience level",
+        list(cfg.levels.groups),
+        key="resume_levels",
+        help="Pre-selected from the years and titles in your resume; change it freely. A filter "
+        "only: it never changes a match score.",
+    )
     roles = st.multiselect(
         "Role family",
         sorted(set(postings["role_family"].dropna())),
@@ -192,6 +239,7 @@ with st.container(horizontal=True):
 
 view = postings
 for column, picked in (
+    ("level", levels),
     ("role_family", roles),
     ("remote_policy", remote),
     ("city", cities),
@@ -200,7 +248,20 @@ for column, picked in (
     if picked:
         view = view[view[column].isin(picked)]
 
-pool = [
+
+def _location(row: Any) -> str:
+    return clean(row.city) or clean(row.city_country)
+
+
+def _salary(row: Any) -> str:
+    text = salary_range(row.salary_min_annual, row.salary_max_annual, row.salary_currency)
+    period = clean(row.salary_period)
+    if text != "Not advertised" and period and period != "year":
+        text += f" (yearly equivalent of {period}ly pay)"
+    return text
+
+
+pool = collapse_locations(
     PostingSkills(
         str(r.posting_key),
         frozenset(r.skills),
@@ -209,30 +270,69 @@ pool = [
             "title": r.title,
             "role": r.role_family,
             "remote": r.remote_policy,
-            "city": r.city,
+            "location": _location(r),
+            "apply_url": clean(r.apply_url),
             "visa": CLASS_LABELS.get(str(r.sponsorship_class), "Unknown")
             + f" ({int(r.n_lca_certified)} filings)",
-            "salary": salary_range(r.salary_min_annual, r.salary_max_annual, r.salary_currency),
+            "salary": _salary(r),
         },
     )
     for r in view.itertuples()
-]
+)
 matches = rank_postings(profile.skills, pool, cfg.match)
 if not matches:
     st.info("No postings match with the current filters.", icon=":material/search_off:")
     st.stop()
+
+# ---- top skills to learn -------------------------------------------------------------------
+learn = skills_to_learn(
+    matches,
+    cfg.match.top_learn_n,
+    cfg.match.top_learn_max,
+    exclude=set(cfg.parse.ignore_skills),
+)
+if learn:
+    st.subheader("Top skills to learn")
+    st.caption(
+        f"Skills that the best {learn[0][2]} matches ask for and your resume does not list, "
+        "most common first. A hint from the postings, not a judgement of your profile."
+    )
+    st.dataframe(
+        [
+            {"Skill": skill_label(skill), "In postings": f"{n} of {total}"}
+            for skill, n, total in learn
+        ],
+        hide_index=True,
+        width="content",
+    )
+
+
+def _more(skills: tuple[str, ...], shown: int = 5) -> str:
+    names = [skill_label(v) for v in skills]
+    return ", ".join(names[:shown]) + (
+        f" (+{len(names) - shown} more)" if len(names) > shown else ""
+    )
+
+
+def _where(m: Match) -> str:
+    places = m.posting.info["locations"]
+    if not places:
+        return "No single city"
+    return places[0] if len(places) == 1 else f"{len(places)} locations: " + "; ".join(places)
+
 
 rows = [
     {
         "Match": round(100 * m.score),
         "Company": m.posting.info["company"],
         "Title": m.posting.info["title"],
-        "City": clean(m.posting.info["city"], "No single city"),
+        "Location": _where(m),
         "Remote": human(m.posting.info["remote"], REMOTE_LABELS),
-        "Matched skills": ", ".join(skill_label(v) for v in m.matched),
-        "Missing skills": ", ".join(skill_label(v) for v in m.missing),
+        "Matched skills": _more(m.matched, 8),
+        "Top missing skills": _more(m.missing),
         "Visa evidence": m.posting.info["visa"],
         "Advertised salary": m.posting.info["salary"],
+        "Apply": m.posting.info["apply_url"] or None,
     }
     for m in matches
 ]
@@ -244,17 +344,20 @@ st.dataframe(
             "Match", format="%d%%", min_value=0, max_value=100, width="small"
         ),
         "Company": st.column_config.TextColumn(width="small"),
-        "Title": st.column_config.TextColumn(width="medium"),
-        "City": st.column_config.TextColumn(width="small"),
+        "Title": st.column_config.TextColumn(width="large"),
+        "Location": st.column_config.TextColumn(width="medium"),
         "Remote": st.column_config.TextColumn(width="small"),
         "Matched skills": st.column_config.TextColumn(width="large"),
-        "Missing skills": st.column_config.TextColumn(width="large"),
+        "Top missing skills": st.column_config.TextColumn(width="large"),
         "Visa evidence": st.column_config.TextColumn(width="medium"),
-        "Advertised salary": st.column_config.TextColumn(width="small"),
+        "Advertised salary": st.column_config.TextColumn(width="medium"),
+        "Apply": st.column_config.LinkColumn("Apply", display_text="Open", width="small"),
     },
 )
 st.caption(
     "Advertised salary is what the posting states, converted to a yearly figure where the period "
-    "is known; it is not the wage on H-1B filings. "
-    f"Showing the best {len(matches)} matches (at most {cfg.match.max_results})."
+    "is known; hourly and monthly pay is a yearly equivalent, not a salary. It is not the wage "
+    "on H-1B filings. "
+    f"Showing the best {len(matches)} matches (at most {cfg.match.max_results}). "
+    "Apply links go to the employer's job board."
 )

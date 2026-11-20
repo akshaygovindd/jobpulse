@@ -245,7 +245,7 @@ def test_page_shows_privacy_notice_and_ranks_postings(
     at = _analyze(at, RESUME)
     assert not at.exception, at.exception
     assert at.metric[0].value == "6"  # python, sql, spark, kafka, airflow, dbt
-    frame = at.dataframe[0].value
+    frame = at.dataframe[-1].value
     assert frame["Title"].iloc[0] == "Data Engineer"
     assert frame["Match"].iloc[0] == 100  # posting 1: every skill it asks for is in the resume
     assert "Python" in frame["Matched skills"].iloc[0]  # shown as "Python", stored as "python"
@@ -270,10 +270,10 @@ def test_sponsorship_is_a_filter_and_never_changes_the_score(
     resume_db: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     at = _analyze(_open(resume_db, monkeypatch), RESUME)
-    frame0 = at.dataframe[0].value
+    frame0 = at.dataframe[-1].value
     before = dict(zip(frame0["Matched skills"], frame0["Match"], strict=True))
     at.multiselect(key="resume_classes").set_value(["CONFIRMED_OFFERED"]).run()
-    frame = at.dataframe[0].value
+    frame = at.dataframe[-1].value
     assert len(frame) == 1
     assert frame["Match"].iloc[0] == before[frame["Matched skills"].iloc[0]]
 
@@ -382,3 +382,83 @@ def test_no_resume_code_logs_prints_caches_or_opens_files() -> None:
                     "write_text",
                     "write_bytes",
                 }, path
+
+
+# ---- QA fixes: experience, education, levels, collapsing, learn list, thin resumes -------------
+def test_years_come_from_date_ranges_and_never_from_a_stray_number() -> None:
+    text = (
+        "Data Analyst, Acme 2019 - 2022\nSenior Analyst, Foo 2021-Present\n"
+        "BS Computer Science, State University 2015-2019\nVolunteered for 12 years."
+    )
+    p = extract_profile(text, VOCAB, CFG, today_year=2026)
+    assert p.years == 7  # 2019-2026, the overlap counted once, the degree not counted
+    assert p.education == ("Bachelor's",)
+    assert extract_profile("volunteer for 12 years", VOCAB, CFG).years is None
+    assert extract_profile("5 years of professional experience", VOCAB, CFG).years == 5
+
+
+def test_fullwidth_and_zero_width_spellings_are_recognized() -> None:
+    fullwidth = "".join(chr(c) for c in (0xFF33, 0xFF31, 0xFF2C))  # the letters S, Q, L
+    zero_width = chr(0x200B)
+    assert "sql" in extract_profile("Skills: " + fullwidth, VOCAB, CFG).skills
+    assert "python" in extract_profile(f"Py{zero_width}thon", VOCAB, CFG).skills
+
+
+def test_default_levels_follow_the_resume_but_are_only_a_default() -> None:
+    from jobpulse.resume.match import default_levels
+
+    lv = CFG.levels
+    assert default_levels(1, [], lv) == [lv.entry_group, lv.mid_group]
+    assert default_levels(None, ["Data Analyst Intern"], lv) == [lv.entry_group, lv.mid_group]
+    assert default_levels(9, [], lv) == lv.senior_groups
+    assert default_levels(None, [], lv) == []  # unknown: no filter
+    assert "Manager and above" not in default_levels(15, [], lv)  # never defaulted
+
+
+def test_the_same_role_in_several_places_is_one_row_and_levels_do_not_change_scores() -> None:
+    from jobpulse.resume.match import collapse_locations
+
+    skills = {"python", "sql", "dbt", "kafka", "spark"}
+    a = PostingSkills(
+        "a", frozenset(skills), {"company": "Acme", "title": "ML Eng", "location": "London"}
+    )
+    b = PostingSkills(
+        "b", frozenset(skills), {"company": "Acme", "title": "ML Eng", "location": "Warsaw"}
+    )
+    c = PostingSkills(
+        "c",
+        frozenset(skills - {"spark"}),
+        {"company": "Acme", "title": "ML Eng", "location": "Rome"},
+    )
+    merged = collapse_locations([b, a, c])
+    assert len(merged) == 2  # a+b collapse; c has a different skill set
+    two = next(m for m in merged if len(m.info["locations"]) == 2)
+    assert two.posting_key == "a"
+    assert two.info["locations"] == ["London", "Warsaw"]
+
+
+def test_skills_to_learn_counts_missing_skills_and_skips_the_stop_list() -> None:
+    from jobpulse.resume.match import skills_to_learn
+
+    postings = [
+        _p("a", {"python", "sql", "dbt", "kafka", "star"}),
+        _p("b", {"python", "dbt", "kafka", "airflow", "star"}),
+    ]
+    got = rank_postings({"python"}, postings, CFG.match)
+    assert skills_to_learn(got, 10, 3, exclude={"star"}) == [
+        ("dbt", 2, 2),
+        ("kafka", 2, 2),
+        ("airflow", 1, 2),
+    ]
+
+
+def test_a_thin_resume_gets_a_request_for_more_not_a_ranking(
+    resume_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    at = _analyze(_open(resume_db, monkeypatch), "Python")
+    assert not at.exception, at.exception
+    assert "Add your tools and methods" in _everything(at)
+    assert not at.dataframe  # nothing ranked
+    at = _analyze(_open(resume_db, monkeypatch), "I like gardening and long walks.")
+    assert "No skills recognized" in _everything(at)
+    assert "No postings match" not in _everything(at)

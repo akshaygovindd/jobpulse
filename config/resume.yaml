@@ -77,11 +77,34 @@ parse:
   # so one-off phrases (1,530 of 2,517 skills appear in a single posting) are not offered as skills.
   min_posting_frequency: 3
   title_keywords: [analyst, engineer, scientist, developer, researcher, architect, manager, intern]
+  # Degrees and programmes recognized in the text (label: phrases, matched case-insensitively).
+  education_keywords:
+    PhD: [phd, ph.d, doctorate, doctoral]
+    Master's: [master, m.s., msc, m.sc, mba, m.eng]
+    Bachelor's: [bachelor, bs, b.s., bsc, b.sc, b.a., b.eng]
+    Bootcamp or certificate: [bootcamp, boot camp, certificate, certification]
   max_title_chars: 60         # a "title" is a short line containing one of the keywords
   max_titles: 5
   max_years: 50               # a larger "N years" figure is ignored as not a career length
 
+# Experience-level filter on Resume match (a filter and a default, never part of the score).
+levels:
+  groups:
+    "Intern and junior": [intern, junior]
+    "Mid-level": [mid, unspecified]
+    "Senior": [senior]
+    "Staff and principal": [staff, principal]
+    "Manager and above": [manager, director, executive]
+  entry_group: "Intern and junior"
+  mid_group: "Mid-level"
+  senior_groups: ["Senior", "Staff and principal"]
+  entry_max_years: 2          # up to this many years of experience (or an intern title) => entry levels
+  senior_min_years: 6         # this many years or more => senior and staff levels
+
 match:
+  min_resume_skills: 3        # fewer recognized skills than this: ask for more instead of ranking
+  top_learn_n: 20             # "Top skills to learn" looks at the best N matches
+  top_learn_max: 8            # and lists at most this many skills
   min_posting_skills: 5       # postings with fewer extracted skills are not ranked (score would be noise)
   min_matched: 1
   max_results: 50
