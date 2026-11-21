@@ -68,6 +68,12 @@ def _populate(db: Path, tmp_path: Path, *, full: bool) -> None:
                 "'greenhouse', ?, ?, 5.0, 'success', 1, 1, 0, 10, 10, NULL, 0.0, 'prod')",
                 [NOW, NOW],
             )
+            for attempt, hour, status in (("a0", 6, "failed"), ("a2", 9, "success")):
+                con.execute(  # one failed 'silver' run, then a later one that succeeded
+                    "INSERT INTO ops.pipeline_runs VALUES (?, DATE '2026-11-11', 'silver', "
+                    "'greenhouse', ?, ?, 5.0, ?, 1, 1, 0, 10, 10, NULL, 0.0, 'prod')",
+                    [attempt, NOW.replace(hour=hour), NOW.replace(hour=hour), status],
+                )
             con.execute(
                 "INSERT INTO extract.llm_calls VALUES ('c1','a1','h1','m1','sync',100,50,0,"
                 "0.01,10,'ok',?)",
@@ -365,3 +371,21 @@ def test_lca_wages_default_to_data_roles_and_toggle_is_honoured(
     assert "Median offered wage by role and worksite" in [s.value for s in at.subheader]
     assert "highest median offered wage" in _page_text(at)
     assert not at.exception  # the chart gets only its two columns (duplicate names broke it once)
+
+
+def test_pipeline_health_explains_a_failed_run_in_plain_words(
+    full_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """QA: the one failed run needs a plain explanation (which step, when, did a later run
+    succeed), and no raw timestamp such as '2026-11-20 00:00:00'."""
+    monkeypatch.setenv(LOCAL_DB_ENV, str(full_db))
+    at = AppTest.from_file(str(APP), default_timeout=20).run()
+    at.switch_page("app_pages/pipeline_health.py").run()
+    assert not at.exception, at.exception
+    notice = " ".join(str(e.value) for e in [*at.info, *at.warning])
+    assert 'the "Clean and link" step for the 11 Nov data failed on 20 Nov at 06:00 UTC' in notice
+    assert "a later run of the same step succeeded" in notice
+    assert not re.search(
+        r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d", " ".join(str(e.value) for e in at.caption)
+    )
+    assert not re.search(r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d", notice)

@@ -162,7 +162,8 @@ def test_home_shows_data_computed_cards_links_and_the_disclaimer(
 ) -> None:
     at = _page(history_db, monkeypatch, None)  # Home is the default page
     metrics = {m.label: m.value for m in at.metric}
-    assert metrics["Open postings"] == "5"
+    assert "Open postings" not in metrics  # the headline is the data and AI roles
+    assert metrics["Open data & AI roles"] == "5"
     assert metrics["Most requested skill"] == "Python"
     assert metrics["Median advertised pay"] == "$120K"
     assert metrics["Companies with H-1B filings"] == "1 of 1"
@@ -228,7 +229,7 @@ def test_map_shows_open_postings_on_a_dark_carto_basemap_with_attribution(
     assert layer["data"][0]["postings"] == 5
     assert "mapbox" not in decks[0].proto.json.lower()  # no token-based basemap
     text = _text(at)
-    assert load_app().map.attribution in text
+    assert text.count(load_app().map.attribution) == 1  # printed once
     assert "5 open postings that name a single city are on the map; 0 more" in text
     assert "approximate city centres" in text
 
@@ -561,10 +562,10 @@ def test_pipeline_health_separates_eval_cost_counts_boards_once_and_explains_fai
     assert metrics["Pipeline spend"] == "$0.30"  # the eval call is not in it
     assert metrics["AI calls"] == "2"
     assert metrics["Model evaluation (one-off)"] == "$0.50"
-    warnings = " ".join(str(w.value) for w in at.warning)
-    assert "1 of the last 2 runs did not succeed" in warnings
-    assert "Clean and link" in warnings
-    assert "later succeeded" in warnings
+    notice = " ".join(str(e.value) for e in [*at.info, *at.warning])  # a recovered run is an info
+    assert "One run of the last 2 did not succeed" in notice
+    assert 'the "Clean and link" step for the 20 Nov data failed on 20 Nov at 08:00 UTC' in notice
+    assert "a later run of the same step succeeded" in notice
 
 
 def test_every_page_warns_when_the_data_is_older_than_the_freshness_limit(
@@ -691,14 +692,15 @@ def test_home_has_a_hero_kpi_icons_a_sparkline_and_the_map(
     text = _text(at)
     assert "Daily job-market intelligence for data and AI roles" in text
     assert "Data through" in text
-    opens = next(m for m in at.metric if m.label == "Open postings")
+    opens = next(m for m in at.metric if m.label == "Open data & AI roles")  # the headline
     assert opens.proto.icon  # every KPI card has an icon
     assert all(m.proto.icon for m in at.metric)
     # three settled days of history (Nov 10 to 12): a sparkline, taken from the same query as the
     # delta; the other cards have no history and draw none
     assert list(opens.proto.chart_data) == [3.0, 3.0, 4.0]
-    assert all(not m.proto.chart_data for m in at.metric if m.label != "Open postings")
-    assert at.get("deck_gl_json_chart")  # the postings map is on Home
+    assert all(not m.proto.chart_data for m in at.metric if m.label != "Open data & AI roles")
+    # the map is drawn once, on Market overview (where the filters apply), never on Home as well
+    assert not at.get("deck_gl_json_chart")
     assert any("not a promise of sponsorship" in str(i.value) for i in at.info)  # disclaimer kept
 
 
@@ -729,6 +731,15 @@ def test_visa_page_has_company_cards_and_keeps_raw_tables_in_expanders(
     # the data tables are inside expanders, not loose on the page
     assert not [d for d in at.main if getattr(d, "type", "") == "arrow_data_frame"]
     assert any("not a promise of sponsorship" in str(i.value) for i in at.info)
+
+
+def test_the_map_has_one_attribution_and_the_wheel_scrolls_the_page() -> None:
+    """QA P1-13: wheel over the map scrolled nothing (scroll-zoom ate it), and the attribution
+    printed twice (the basemap's own control plus the caption)."""
+    css = (ROOT / "app/style.css").read_text()
+    assert re.search(r'\.st-key-map_wrap \[class\*="ctrl-attrib"\]\s*\{\s*display: none;', css)
+    ui = (ROOT / "src/jobpulse/app_ui.py").read_text()
+    assert '"scrollZoom": False' in ui
 
 
 def test_the_map_does_not_trap_touch_scrolling_on_a_phone() -> None:

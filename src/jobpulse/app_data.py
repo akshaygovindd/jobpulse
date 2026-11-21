@@ -59,6 +59,7 @@ REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
     "fct_postings": frozenset(_FCT_POSTINGS_COLUMNS.split()),
     "dim_company": frozenset(["company_id", "name", "n_lca_certified", "visa_evidence_class"]),
     "dim_skill": frozenset(["skill_id", "canonical_name"]),
+    "agg_ingest_status_daily": frozenset(["snapshot_date", "n_authoritative_companies"]),
     "bridge_posting_skill": frozenset(["posting_key", "skill_id"]),
 }
 LOCAL_DB_ENV = "JOBPULSE_APP_DB"  # a local DuckDB file (dev, tests)

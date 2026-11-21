@@ -412,7 +412,14 @@ def day_label(iso: Any) -> str:
 
 
 def date_chart(
-    data: Any, *, x: str, y: str, kind: str = "bar", series: str | None = None, y_title: str = ""
+    data: Any,
+    *,
+    x: str,
+    y: str,
+    kind: str = "bar",
+    series: str | None = None,
+    y_title: str = "",
+    y_format: str = "~s",
 ) -> None:
     """Daily/weekly chart with dates labelled 'Nov 11' (horizontal, never rotated). `data[x]` holds
     ISO date strings. The x axis is a list of text labels made from the calendar dates (see
@@ -434,13 +441,15 @@ def date_chart(
             "field": y,
             "type": "quantitative",
             "title": y_title or human(y),
-            "axis": {"tickMinStep": 1, "format": "~s"},  # whole numbers, few ticks
+            "axis": {"tickCount": 5, "format": y_format},  # few ticks
         },
         "tooltip": [
             {"field": "Day", "type": "ordinal"},
             {"field": y, "type": "quantitative", "format": ",.2~f"},
         ],
     }
+    if y_format == "~s":  # counts and shares: whole numbers only (no "2.5 postings")
+        enc["y"]["axis"]["tickMinStep"] = 1
     mark: dict[str, Any] = {"type": "bar" if kind == "bar" else "line"}
     if kind == "bar":
         mark["width"] = {"band": 0.7}
@@ -636,7 +645,14 @@ def kpi_basis(days: int) -> str | None:
     return f"{settled:%d %b} vs {settled - timedelta(days=days):%d %b}"
 
 
-def kpi_comparison(days: int) -> tuple[dict[str, int], dict[str, int] | None]:
+def _active_on(target_only: bool) -> str:
+    """The open-on-a-day query, optionally limited to data and AI roles (the title filter)."""
+    return _ACTIVE_ON + (" AND is_target_role" if target_only else "")
+
+
+def kpi_comparison(
+    days: int, *, target_only: bool = False
+) -> tuple[dict[str, int], dict[str, int] | None]:
     """Open postings, companies hiring and cities on the newest *settled* day and `days` before.
 
     A posting is closed only after it is missing from two consecutive snapshots, so on the newest
@@ -656,13 +672,13 @@ def kpi_comparison(days: int) -> tuple[dict[str, int], dict[str, int] | None]:
     ref_day: date = settled - timedelta(days=days)
 
     def at(day: date) -> dict[str, int]:
-        row = load(_ACTIVE_ON, [day.isoformat(), day.isoformat()]).iloc[0]
+        row = load(_active_on(target_only), [day.isoformat(), day.isoformat()]).iloc[0]
         return {k: int(row[k]) for k in ("postings", "companies", "cities")}
 
     return at(settled), (at(ref_day) if ref_day >= first_day else None)
 
 
-def kpi_series(days: int = 7) -> list[int] | None:
+def kpi_series(days: int = 7, *, target_only: bool = False) -> list[int] | None:
     """Open postings on each of the last `days` settled days, oldest first, for a sparkline. None
     until the data goes back at least three days (a line needs a few points to mean anything)."""
     latest = load("SELECT max(newest_snapshot_date) AS d FROM gold.fct_snapshot_freshness")[
@@ -676,7 +692,7 @@ def kpi_series(days: int = 7) -> list[int] | None:
     settled = latest_day - timedelta(days=1)
     wanted = [settled - timedelta(days=i) for i in range(days - 1, -1, -1)]
     values = [
-        int(load(_ACTIVE_ON, [d.isoformat(), d.isoformat()]).iloc[0]["postings"])
+        int(load(_active_on(target_only), [d.isoformat(), d.isoformat()]).iloc[0]["postings"])
         for d in wanted
         if d >= first_day
     ]
@@ -735,6 +751,9 @@ def city_map(rows: Sequence[tuple[str, int]], height: int = 420) -> tuple[int, i
         initial_view_state=pdk.ViewState(
             latitude=cfg.initial_lat, longitude=cfg.initial_lon, zoom=cfg.initial_zoom
         ),
+        # The wheel scrolls the page; it does not zoom the map. Dragging still pans, and double
+        # click and the touch pinch still zoom.
+        views=[pdk.View(type="MapView", controller={"scrollZoom": False})],
         map_provider="carto",
         map_style=pdk.map_styles.CARTO_DARK,
         tooltip={"text": "{city}: {postings} open postings"},

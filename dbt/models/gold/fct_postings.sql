@@ -19,7 +19,7 @@ base as (
         p.location_raw,
         p.source_status,
         cast(p.first_seen_date as date) as first_seen_date,
-        cast(p.closed_at as date) as closed_date,
+        cast(p.closed_at at time zone 'UTC' as date) as closed_date,
         p.probable_duplicate_of,
         e.content_hash is not null as has_extraction,
         e.role_family,

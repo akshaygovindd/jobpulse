@@ -30,6 +30,11 @@
 }
 [class*="st-key-card_"]:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
 
+/* KPI titles wrap instead of being cut off with an ellipsis (four cards in 800 px). */
+[data-testid="stMetricLabel"], [data-testid="stMetricLabel"] p {
+  white-space: normal; overflow: visible; text-overflow: clip;
+}
+
 /* Company avatar: the hue comes from the company name. */
 .jp-avatar {
   width: 2.5rem; height: 2.5rem; flex: none;
@@ -43,6 +48,10 @@
 /* The salary heatmap needs room for nine columns of '$276K': below that width it scrolls sideways. */
 .st-key-wide_chart { overflow-x: auto; }
 .st-key-wide_chart [data-testid="stVegaLiteChart"] { min-width: 640px; }
+
+/* The basemap draws its own attribution control; the same text is printed once under the map
+   (config/app.yaml), so the control is hidden rather than showing it twice. */
+.st-key-map_wrap [class*="ctrl-attrib"] { display: none; }
 
 /* Phones: the map is a picture, not a gesture trap. Touches go to the page, so it keeps scrolling. */
 @media (max-width: 639px) {

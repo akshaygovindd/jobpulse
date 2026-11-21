@@ -100,29 +100,44 @@ runs = load(
 if runs.empty:
     st.info("No run records are available yet.")
 else:
+    if runs["started_at"].dt.tz is not None:  # labelled UTC below, so never the server's zone
+        runs["started_at"] = runs["started_at"].dt.tz_convert("UTC")
     failed = runs[runs["status"] != "success"]
     if len(failed):
-        # Say which step failed and when, and whether a later run of the same step succeeded.
+        # Plain words: which step failed, when, and whether a later run of the same step succeeded.
         notes = []
+        recovered = True
         for _, f in failed.iterrows():
             later_ok = runs[
                 (runs["task"] == f["task"])
                 & (runs["status"] == "success")
                 & (runs["started_at"] > f["started_at"])
             ]
+            recovered = recovered and bool(len(later_ok))
             when = (
-                f"{f['started_at']:%d %b %H:%M} UTC" if f["started_at"] == f["started_at"] else "?"
+                f"{f['started_at']:%d %b at %H:%M} UTC"
+                if f["started_at"] == f["started_at"]
+                else "?"
             )
+            day = f"{f['snapshot_date']:%d %b}" if f["snapshot_date"] == f["snapshot_date"] else "?"
             notes.append(
-                f"{human(f['task'], TASK_LABELS)} (data date {f['snapshot_date']}, started {when})"
-                + (", later succeeded" if len(later_ok) else ", not yet re-run successfully")
+                f'the "{human(f["task"], TASK_LABELS)}" step for the {day} data failed on {when}'
+                + (
+                    ", and a later run of the same step succeeded"
+                    if len(later_ok)
+                    else ", and it has not been re-run successfully yet"
+                )
             )
-        st.warning(
-            f"{len(failed)} of the last {len(runs)} runs did not succeed: "
+        count = "One run" if len(failed) == 1 else f"{len(failed)} runs"
+        message = (
+            f"{count} of the last {len(runs)} did not succeed: "
             + "; ".join(notes)
-            + ".",
-            icon=":material/warning:",
+            + ". The daily pipeline can be re-run safely, so a failed step is simply tried again."
         )
+        if recovered:
+            st.info(message, icon=":material/info:")
+        else:
+            st.warning(message, icon=":material/warning:")
         runs = runs.sort_values(
             "status", key=lambda s: s == "success", kind="stable"
         )  # failures first
@@ -163,15 +178,16 @@ else:
 
 st.subheader("Ingest outcomes by day")
 ingest = load(
-    "SELECT strftime(snapshot_date, '%Y-%m-%d') AS day, sum(n_authoritative) AS boards "
+    "SELECT strftime(snapshot_date, '%Y-%m-%d') AS day, "
+    "sum(n_authoritative_companies) AS companies "
     "FROM gold.agg_ingest_status_daily GROUP BY 1 ORDER BY 1"
 )
 if not ingest.empty:
     # Re-runs of the same day fetch each board again; only the snapshot that was kept counts.
-    date_chart(ingest, x="day", y="boards", y_title="Companies with a complete snapshot")
+    date_chart(ingest, x="day", y="companies", y_title="Companies with a complete snapshot")
     st.caption(
-        "Each company is counted once per day, for the snapshot that the analytics use. "
-        "Re-runs and failed attempts on the same day are not added up."
+        "Each company is counted once per day (distinct companies), for the snapshot that the "
+        "analytics use. Re-runs and failed attempts on the same day are not added up."
     )
 
 st.subheader("AI extraction cost")
@@ -197,7 +213,14 @@ else:
                 border=True,
             )
     if not prod.empty:
-        date_chart(prod, x="day", y="cost_usd", series="model", y_title="Spend (US dollars)")
+        date_chart(
+            prod,
+            x="day",
+            y="cost_usd",
+            series="model",
+            y_title="Spend (US dollars)",
+            y_format="$.2f",
+        )
     st.caption(
         "Pipeline spend is the daily extraction of new and changed postings; evaluation calls are "
         "shown separately. Cost is computed from token counts and the prices in config at call "

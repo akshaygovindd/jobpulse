@@ -3,9 +3,6 @@ import streamlit as st
 from jobpulse import insights
 from jobpulse.app_ui import (
     app_config,
-    city_coords,
-    city_map,
-    key_insight,
     kpi_basis,
     kpi_comparison,
     kpi_label,
@@ -49,7 +46,7 @@ with st.container(key="hero"):
 # ---- insight cards (all numbers computed from gold) ------------------------------------------
 cfg = app_config()
 days = cfg.kpi.delta_days
-now_kpi, before_kpi = kpi_comparison(days)
+now_kpi, before_kpi = kpi_comparison(days, target_only=True)  # data and AI roles
 open_delta = insights.delta_text(
     now_kpi["postings"],
     None if before_kpi is None else before_kpi["postings"],
@@ -93,35 +90,40 @@ with_filings = int((visa["n_lca_certified"] > 0).sum())
 
 c1, c2, c3, c4 = st.columns(4)
 with c1, st.container(border=True, height="stretch", key="card_kpi_0"):
-    trend = kpi_series(7)
+    trend = kpi_series(7, target_only=True)
     basis = kpi_basis(days)
     st.metric(
-        "Open postings",
-        f"{int(counts['active']):,}",
+        "Open data & AI roles",
+        f"{t_all:,}",
         delta=open_delta,
         delta_color="off",
         icon=":material/work:",
         chart_data=trend,
         chart_type="area",
-        help=(f"Sparkline: the last {len(trend)} settled days. " if trend else "")
+        help=(
+            f"Open postings whose job titles look like data and AI roles; the AI reads "
+            f"{t_done:,} of them ({pct(t_done, t_all)}). All roles together: "
+            f"{int(counts['active']):,} open postings. "
+        )
+        + (f"Sparkline: the last {len(trend)} settled days. " if trend else "")
         + (f"The change compares settled days: {basis}." if open_delta and basis else ""),
     )
-
     st.caption(
-        f"Across {int(counts['companies'])} companies. {t_done:,} of {t_all:,} open data and AI "
-        f"roles ({pct(t_done, t_all)}) are analyzed in depth."
+        f"of {int(counts['active']):,} open postings across {int(counts['companies'])} companies"
     )
     st.page_link("app_pages/market_overview.py", label="Market overview", icon=":material/public:")
 with c2, st.container(border=True, height="stretch", key="card_kpi_1"):
     if len(skills):
         top = skills.iloc[0]
         st.metric(
-            "Most requested skill", skill_label(str(top["skill"])), icon=":material/psychology:"
+            "Most requested skill",
+            skill_label(str(top["skill"])),
+            icon=":material/psychology:",
+            help=f"In {pct(top['n'], analyzed)} of {analyzed:,} analyzed postings.",
         )
         st.caption(
-            f"In {pct(top['n'], analyzed)} of {analyzed:,} analyzed postings. Next: "
+            f"In {pct(top['n'], analyzed)} of postings. Next: "
             + ", ".join(skill_label(v) for v in skills["skill"].iloc[1:])
-            + "."
         )
     else:
         st.metric("Most requested skill", "n/a", icon=":material/psychology:")
@@ -133,12 +135,12 @@ with c3, st.container(border=True, height="stretch", key="card_kpi_2"):
             "Median advertised pay",
             f"${float(pay['median_pay']) / 1000:,.0f}K",
             icon=":material/payments:",
-        )
-        st.caption(
-            f"Midpoint of the advertised range, in USD, over {int(pay['n'])} of the "
+            help=f"Midpoint of the advertised USD range over {int(pay['n'])} of the "
             f"{int(pay['n_usd'])} non-intern postings with a USD salary (of {analyzed:,} "
-            "analyzed). Hourly and monthly pay is converted to a yearly equivalent."
+            "analyzed). Hourly and monthly pay is converted to a yearly equivalent. Internships "
+            "are left out.",
         )
+        st.caption(f"Advertised yearly pay, USD, {int(pay['n'])} postings")
     else:
         st.metric("Median advertised pay", "n/a", icon=":material/payments:")
         st.caption("No advertised salaries yet.")
@@ -148,45 +150,28 @@ with c4, st.container(border=True, height="stretch", key="card_kpi_3"):
         "Companies with H-1B filings",
         f"{with_filings} of {len(visa)}",
         icon=":material/flight_takeoff:",
+        help="Evidence from public filings, not a promise of sponsorship.",
     )
     if with_filings:
         lead = visa.iloc[0]
-        st.caption(
-            f"Most certified filings: {lead['name']} ({int(lead['n_lca_certified']):,}). "
-            "Evidence, not a promise."
-        )
+        st.caption(f"Most filings: {lead['name']} ({int(lead['n_lca_certified']):,})")
     st.page_link("app_pages/visa.py", label="Visa intelligence", icon=":material/flight_takeoff:")
-
-# ---- the map ---------------------------------------------------------------------------------
-st.subheader("Where the open postings are")
-by_city = load(
-    "SELECT city, count(*) AS postings FROM gold.fct_postings "
-    "WHERE is_active AND NOT is_probable_duplicate AND city IS NOT NULL GROUP BY 1"
-)
-city_rows = [(str(c), int(n)) for c, n in zip(by_city["city"], by_city["postings"], strict=True)]
-coords = city_coords()
-key_insight(insights.concentration_insight([(c, float(n)) for c, n in city_rows if c in coords]))
-drawn, left_off = city_map(city_rows, height=520)
-st.caption(
-    f"{drawn:,} open postings that name a single city are on the map; {left_off:,} more are in "
-    "cities without a map position. Dot area shows the number of postings; positions are "
-    "approximate city centres. Remote-only and multi-location postings are not drawn."
-)
 
 # ---- where to go next ------------------------------------------------------------------------
 st.subheader("Try it with your resume")
 with st.container(border=True):
     st.markdown(
-        "Paste your resume and see which open data and AI postings match your skills, what is "
-        "missing, whether the company has H-1B filing history, and the advertised pay. Nothing "
-        "is stored or logged, and no AI service is called."
+        "Paste your resume to see which open data and AI postings match your skills, what is "
+        "missing, H-1B filing history and pay. Nothing is stored or logged, and no AI service "
+        "is called."
     )
     st.page_link(
         "app_pages/resume_match.py", label="Open Resume match", icon=":material/description:"
     )
 st.page_link(
     "app_pages/pipeline_health.py",
-    label="Pipeline health: how fresh and complete the data is",
+    label="Pipeline health",
     icon=":material/health_and_safety:",
+    help="How fresh and complete the data is",
 )
 visa_disclaimer()

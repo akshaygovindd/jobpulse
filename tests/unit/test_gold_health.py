@@ -95,3 +95,61 @@ def test_health_tables_summarise_ops_and_llm_calls(storage: LocalStorage, db: Pa
     assert quality["target_roles_analyzed"] == (1, 2)
     assert quality["advertised_salary"] == (1, 1)
     assert quality["sponsorship_stated"] == (1, 1)
+
+
+def test_ingest_daily_counts_each_company_once_however_many_attempts(
+    storage: LocalStorage, db: Path
+) -> None:
+    """Regression (QA P0-6): a day with several re-run attempts showed 205 'companies' for 43
+    boards, because the chart summed per-attempt rows. n_authoritative_companies counts distinct
+    boards."""
+    seed(storage, db, [gh_job("1")])
+    con = duckdb.connect(str(db))
+    try:
+        ensure_ops_tables(con, load_pipeline().warehouse)
+        for attempt in ("a1", "a2", "a3"):  # three runs of the same day, every one kept
+            for board in ("acme", "beta"):
+                con.execute(
+                    "INSERT INTO ops.company_snapshots VALUES "
+                    f"('{attempt}', DATE '2026-11-10', 'greenhouse', '{board}', '{board}', "
+                    "'complete', NULL, NULL, 1, 2, 'k', true, 'set', ?, ?)",
+                    [NOW, NOW],
+                )
+    finally:
+        con.close()
+    gold(db)
+    assert query(
+        db,
+        "SELECT n_boards, n_authoritative, n_companies, n_authoritative_companies "
+        "FROM gold.agg_ingest_status_daily",
+    ) == [(6, 6, 2, 2)]
+
+
+def test_llm_cost_day_is_the_utc_date_whatever_the_build_machines_zone(
+    storage: LocalStorage, db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression (QA P0-2, Pipeline health): a bare cast of a TIMESTAMPTZ to a date uses the
+    session time zone, so a build on a US laptop put a call made at 02:30 UTC on 10 Nov on 9 Nov,
+    a day before any data existed."""
+    import time
+
+    monkeypatch.setenv("TZ", "America/New_York")
+    time.tzset()
+    try:
+        seed(storage, db, [gh_job("1")])
+        con = duckdb.connect(str(db))
+        try:
+            ensure_extract_tables(con, load_extraction())
+            con.execute(
+                "INSERT INTO extract.llm_calls VALUES ('c1', 'a1', 'h1', 'm1', 'sync', 1, 1, 0, "
+                "0.01, 10, 'ok', TIMESTAMPTZ '2026-11-10 02:30:00+00')"
+            )
+        finally:
+            con.close()
+        gold(db)
+        assert query(db, "SELECT cast(call_date AS VARCHAR) FROM gold.agg_llm_cost_daily") == [
+            ("2026-11-10",)
+        ]
+    finally:
+        monkeypatch.undo()
+        time.tzset()
