@@ -141,8 +141,8 @@ All figures are as of 2026-11-20 (data through that day's snapshot). Each row st
 | LLM cost per 1,000 postings | $0.39 | `scripts/report_extraction_cost.py` |
 | Escalation to the stronger model / quarantined | 2.3% / 0.0% | `scripts/report_extraction_cost.py` |
 | Total extraction spend (excluding evaluation-only calls) | $0.25 | `scripts/report_extraction_cost.py` |
-| Companies matched to H-1B filings | 42 of 43 |
-| Daily runs with 43/43 companies complete | 11 of 11 days since 10 Nov | `scripts/gold_report.py` | `scripts/gold_report.py` |
+| Companies matched to H-1B filings | 42 of 43 | `scripts/gold_report.py` |
+| Daily runs with 43/43 companies complete | 11 of 11 days since 10 Nov | `scripts/gold_report.py` |
 | Certified H-1B filings matched (FY2025-FY2026) | 9,874 | `scripts/gold_report.py` |
 | Employer-match precision (recall not measured) | 100% on 35 labeled pairs (95% interval 90.1% to 100%) | `eval/employer_match_score.py` |
 | Hand-labeled pilot (n=38), one field only: salary min/max, currency | 96.4% precision and recall (a field-level figure, not overall AI accuracy) | `eval/score.py` ([report](eval/reports/extraction_report.md)) |

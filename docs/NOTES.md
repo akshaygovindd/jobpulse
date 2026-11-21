@@ -979,3 +979,8 @@ Checks: `make check` (see the last run below). Not verified: a real touch swipe 
 **Open questions for the owner.**
 1. One-time setting: GitHub repo Settings > Pages > Source = "GitHub Actions", then run the "dbt docs" workflow (or push). Until then the README link 404s.
 2. The Operations table is a one-day snapshot written by hand from `gold_report.py` and `fct_pipeline_runs`; refresh it when you want a newer day.
+
+## 2026-11-20 — README table fix after the reviewer pass
+- Changed: fixed two malformed rows in the README Key numbers table (missing and duplicated "Produced by" cell). Re-checked README, SPEC, ARCHITECTURE and ROADMAP for conflicting figures or wording; none found. All other requested items were already in place from the previous docs pass.
+- Checks: `make check` passed (ruff, mypy, pytest, terraform fmt/validate, gitleaks: no leaks).
+- Open question: GitHub Pages source must be set to "GitHub Actions" once for the dbt docs link to go live.
