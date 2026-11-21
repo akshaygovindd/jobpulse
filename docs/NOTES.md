@@ -928,3 +928,22 @@ Checks: `make check` green (see the last run); not verified in a browser. **Rebo
 
 Checks: `make check` (see the last run below). Not verified: a real touch swipe on a phone. **Reboot the Streamlit app after the push** (the stylesheet changed).
 
+
+
+---
+
+## 2026-11-20 (night): browser QA round 2 fixes
+
+**What changed and why.** An independent Chrome pass (America/New_York, desktop and 390 px) found wrong numbers and rough edges; everything P0, P1 and the cheap P2 is fixed (statuses and causes in `docs/QA_REPORT.md`, "Browser QA round 2"). Highlights: daily charts no longer shift a day in US zones; Market overview filters use only the filtered set; the salary sentence, heatmap, table and legend agree; Pipeline health counts distinct companies (43, not 205), uses UTC days, and explains the failed run; Home leads with 515 open data and AI roles; Resume match has a careers-page fallback, role-aware ordering, better parsing, a US-only H-1B badge and intern pay as posted; one map on Market overview; Visa lookup lists the 43 tracked companies when nothing matches; the LCA tab defaults to data roles and has a chart.
+
+**Gold.** `agg_ingest_status_daily` gained `n_authoritative_companies`; `agg_llm_cost_daily` and `fct_postings.closed_date` use the UTC date. `build-gold` passed, the export was uploaded to `gold-latest` (6,303,744 bytes) before the push, so the new code finds its columns (the app also checks the new column at connect).
+
+**Checks.** `make check` green after each commit (ruff, ruff format, mypy strict, 581 tests, terraform fmt/validate, gitleaks). Regression tests for every P0 (each fails on the old code where marked in the report). Chrome checks: Hiring trends dates, Salary (USD, CAD, INR), LCA tab, Pipeline health, Home at 1280, 800 and 390 px, map wheel scroll, Resume match with a pasted resume, Market overview with Intern filter, Visa at 390 px.
+
+**Open questions for the owner**
+1. **Reboot the Streamlit app** after the push.
+2. Ashby and Lever pay and workplace type are fetched but never reach the AI (Plaid example; 77 postings). Fix in `normalize.py` and re-extract them (cents)? I did not touch ingestion without your OK.
+3. The map now lives only on Market overview (filters apply there). Prefer it on Home instead?
+4. H-1B badge: postings with no place (remote or multi-location) keep it. Hide it for those too?
+5. Intern pay rule: yearly ranges wider than 2x are hidden (`config/app.yaml` `pay.intern_max_range_ratio`). OK?
+6. `careers_url` is set only for Lyft and Squarespace; the rest fall back to their ATS board page. Add real careers URLs for the others?

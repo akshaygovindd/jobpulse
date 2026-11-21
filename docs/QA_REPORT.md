@@ -4,6 +4,34 @@
 
 > Related: [SPEC.md](SPEC.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [ROADMAP.md](ROADMAP.md) · [NOTES.md](NOTES.md)
 
+## Browser QA round 2 (2026-11-20, real Chrome, America/New_York, desktop and 390 px)
+
+An independent browser pass found the items below. All P0 and P1 and the cheap P2 are fixed in small commits on `main` (each after a green `make check`, 581 tests now); gold was rebuilt on MotherDuck, exported and uploaded to `gold-latest` (6,303,744 bytes). Each fix was looked at in headless Chrome with the time zone set to America/New_York. **Reboot the Streamlit app after the push.**
+
+| ID | Status | What was done |
+|---|---|---|
+| B-P0-1 Market filters divide by unfiltered totals | **Fixed** | A filtered view uses only the filtered set: its own city share, no "The other N" sentence, the fourth KPI hidden. Test `test_market_overview_filtered_view_uses_only_the_filtered_set` fails on the old code. Chrome, Seniority = Intern: "has the most open postings: 9, 23% of all 39". |
+| B-P0-2 Daily charts one day early | **Fixed** | Date axes are text labels made in Python (`day_label`), never JS dates; no `temporal` axis is left in the app (a test greps for it). Chrome: busiest day Nov 11 = 217 and the first bar is Nov 11. Also fixed in gold: `agg_llm_cost_daily` and `closed_date` use the UTC date (a build on a US laptop had put evening calls on Nov 09, before data existed). Test fails on the old SQL. |
+| B-P0-3 Salary insight vs heatmap | **Fixed** | The sentence is computed from exactly the rows drawn, and says "small sample" under 10 salaries. Now: Principal ML/AI $329K (from 5). |
+| B-P0-4 "fewer than five" toggle did nothing | **Removed** on Advertised salary (the table always lists thin groups with dashes; an empty chart says how many salaries and groups exist). The LCA toggle works and stays. |
+| B-P0-5 Heatmap with 1-2 cells | **Fixed** | Under 3 cells a table; text colour follows the cell's colour step; legend "$138K ... $290K"; currency sign follows the currency (CAD 175K); one half-up rounding function for chart, table, sentences. |
+| B-P0-6 205 companies on one day | **Fixed** | New `n_authoritative_companies` (distinct boards). Chrome: 43 every day. Test with three attempts per board. |
+| B-P0-7 Card without Apply link | **Fixed** | "Careers page" button: `careers_url` in `config/employers.yaml` (Lyft, Squarespace), else the company's board on its ATS. Regression test on the page. |
+| B-P1-8 Home headline | **Fixed** | "515 open data & AI roles" leads, "of 8,445 open postings across 43 companies" below; details moved into help tooltips. |
+| B-P1-9 Resume parsing | **Fixed** | First-line title kept; a title next to an email survives; "2024-2025" is no longer a phone number; "MS ... student" is Master's (but not "MS Excel"); "BI" inside "Power BI" skipped; dashboard = dashboarding and data analysis = data analytic; stop-list gained mbr, qbr, metric, ai assisted tool, business analytics; "Google Sheets" displays properly. Stop-list words are also dropped from posting skills. |
+| B-P1-10 Ranking | **Fixed** | Postings in the role family the resume's title names are ordered higher by `match.role_family_boost` (0.15); the shown match % is unchanged; visa evidence is not in it (tested). |
+| B-P1-11 H-1B badge | **Fixed** | Postings whose places are all outside the US show "H-1B applies to US roles only" (also a filter option). Postings with no place (remote, multi-location) keep the badge because the US cannot be ruled out. |
+| B-P1-12 Intern pay | **Fixed** | Shown as posted everywhere ($40 per hour, $12,100 per month). **Cause of the $285K rows:** the seniority is right (the title says Intern); the DoorDash intern pages list a pay table for full-time levels I4 to I6 ("$130,600-$192,000 ... $193,800-$285,000") and the extraction took the lowest and highest. A yearly intern range wider than 2x (`pay.intern_max_range_ratio`) is shown as "not clearly stated" and left out of the intern table. |
+| B-P1-13 Map | **Fixed** | Wheel scrolls the page (checked with real wheel events in Chrome); the map is on Market overview only (where the filters apply), attribution printed once. |
+| B-P1-14 Company lookup | **Fixed** | Search box; no match says "We track 43 companies" and lists them. |
+| B-P1-15 LCA tab | **Fixed** | Defaults to data roles ("Other roles" opt-in) and has a chart of median offered wage by role and worksite. |
+| B-P1-16 Plaid extraction | **Found, not changed (needs your decision)** | See below. |
+| B-P2 | **Fixed** | Rounding ($173K everywhere), 5 axis ticks and whole counts, empty paste no longer says "scanned PDF", 507 vs 515 explained on the page (8 postings list no skills), "Inc.." and "1 more is", raw timestamp gone (and failed-run times now converted to UTC; they showed local time labelled UTC), Home link "Pipeline health", chip "Intern and junior" shows in full, Visa role chips collapsed, KPI titles wrap at 800 px. Pipeline health explains the failed run in plain words (which step, when, a later run succeeded). |
+
+**Why Plaid shows remote "Not stated" and salary "Not advertised".** Plaid is on Ashby. The Ashby API gives `workplaceType: "Hybrid"` and `compensation` ($249,120 - $367,920 for one Staff ML role) as structured fields, not in the description text. The pipeline fetches them (`includeCompensation=true`) and keeps the raw payload, but `bronze/normalize.py` maps only title, location, description and apply URL, so the AI never sees them. Same for Lever (`workplaceType`, `salaryRange`). Measured on analyzed postings: Greenhouse 80% have a salary and 31% have remote "Not stated"; Ashby 33% and 60%; Lever 32% and 100%. It affects 77 of 515 postings (15%). A fix is small (add "Workplace: ... Pay: ..." lines to the normalized text) but changes the content hash of those postings and re-extracts them (about 77 calls, cents). I did not do it: it touches ingestion and spends OpenAI money.
+
+**Not verified:** a real touch swipe on a phone, the map tiles (headless Chrome draws no WebGL tiles), the live Cloud build, an uploaded PDF in a browser.
+
 ## Fix status (2026-11-20, after the owner approved all P0, P1 and P2)
 
 Everything below was fixed in small commits on `main`, each after a green `make check`. Gold was rebuilt on MotherDuck (`build-gold`, 107 dbt checks passed), exported and uploaded to the `gold-latest` release (6,041,600 bytes, 16 tables, 9,681 postings), so the live app has the new schema. Every page and a sample resume ran without exceptions on that exact file (`AppTest`). Tests: 456 before, 536 now.
