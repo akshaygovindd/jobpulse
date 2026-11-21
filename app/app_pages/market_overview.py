@@ -86,7 +86,8 @@ city_where = analyzed_where if filtered else base_where
 if filtered:
     counts = load(
         "SELECT count(*) AS n, count(*) AS active, count(*) AS analyzed, "
-        "count(DISTINCT company_id) AS companies, count(DISTINCT city) AS cities "
+        "count(DISTINCT company_id) AS companies, count(DISTINCT city) AS cities, "
+        "count(city) AS with_city "
         f"FROM gold.fct_postings WHERE {analyzed_where}",
         params,
     ).iloc[0]
@@ -129,27 +130,37 @@ with st.container(horizontal=True):
         delta_color="off",
         border=True,
     )
-    st.metric(
-        "Data & AI roles analyzed",
-        f"{t_done:,}",
-        help="The AI reads only postings whose titles look like data and AI roles (a title "
-        "filter), to keep cost low. Role family, seniority, salary, skills and sponsorship "
-        "wording come from those postings.",
-        border=True,
-    )
+    if not filtered:  # with a filter every number here already counts analyzed postings only
+        st.metric(
+            "Data & AI roles analyzed",
+            f"{t_done:,}",
+            help="The AI reads only postings whose titles look like data and AI roles (a title "
+            "filter), to keep cost low. Role family, seniority, salary, skills and sponsorship "
+            "wording come from those postings.",
+            border=True,
+        )
 
-st.caption(
-    f"The AI reads only data and AI roles (chosen by job title). Of {t_all:,} open postings in "
-    f"those roles, {t_done:,} ({pct(t_done, t_all)}) have been analyzed so far. The other "
-    f"{int(counts['active']) - t_all:,} open postings are counted here but not read by the AI, so "
-    "the role, remote and pay breakdowns below cover analyzed postings only. Duplicates excluded."
-    + (
-        " Changes compare the last two fully settled days (a posting counts as closed only after "
-        "it is missing twice in a row)."
-        if before_kpi
-        else f" Changes {kpi_label(days)} appear once the data goes back that far."
+if filtered:
+    # Every share on this page uses the filtered set, so nothing here may mention the unfiltered
+    # totals (a filtered count minus the unfiltered one is meaningless, and negative).
+    st.caption(
+        f"Every number and chart below covers the {int(counts['active']):,} analyzed open postings "
+        "that match the filters. Duplicates excluded."
     )
-)
+else:
+    st.caption(
+        f"The AI reads only data and AI roles (chosen by job title). Of {t_all:,} open postings "
+        f"in those roles, {t_done:,} ({pct(t_done, t_all)}) have been analyzed so far. The other "
+        f"{int(counts['active']) - t_all:,} open postings are counted here but not read by the "
+        "AI, so the role, remote and pay breakdowns below cover analyzed postings only. "
+        "Duplicates excluded."
+        + (
+            " Changes compare the last two fully settled days (a posting counts as closed only "
+            "after it is missing twice in a row)."
+            if before_kpi
+            else f" Changes {kpi_label(days)} appear once the data goes back that far."
+        )
+    )
 
 left, right = st.columns(2)
 with left:
@@ -198,19 +209,23 @@ with right:
         f"WHERE {city_where} AND city IS NOT NULL GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 15",
         params,
     )
-    quality = load(
-        "SELECT numerator, denominator FROM gold.agg_data_quality WHERE metric = 'city_parsed'"
-    )
-    with_city = int(quality["numerator"].iloc[0]) if len(quality) else 0
+    if filtered:
+        with_city, of_postings = int(counts["with_city"]), int(counts["active"])
+    else:
+        quality = load(
+            "SELECT numerator, denominator FROM gold.agg_data_quality WHERE metric = 'city_parsed'"
+        )
+        with_city = int(quality["numerator"].iloc[0]) if len(quality) else 0
+        of_postings = int(quality["denominator"].iloc[0]) if len(quality) else 0
     key_insight(
         insights.city_insight(list(zip(cities["city"], cities["postings"], strict=True)), with_city)
     )
     bar(cities, x="city", y="postings", horizontal=True, sort="-postings")
-    if len(quality):
-        row = quality.iloc[0]
+    if of_postings:
         st.caption(
-            f"A single city could be read for {pct(row['numerator'], row['denominator'])} of "
-            "open postings; the rest are remote-only or list several locations."
+            f"A single city could be read for {pct(with_city, of_postings)} of "
+            f"{'the matching' if filtered else 'open'} postings; the rest are remote-only or list "
+            "several locations."
         )
 
 st.subheader("Where the open postings are")

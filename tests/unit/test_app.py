@@ -313,3 +313,37 @@ def test_streamlit_config_has_blue_primary_and_viewer_toolbar() -> None:
     r, g, b = (int(primary[i : i + 2], 16) for i in (0, 2, 4))
     assert b > r  # blue, not red
     assert b > g
+
+
+def _page_text(at: AppTest) -> str:
+    parts = [str(e.value) for e in at.markdown] + [str(e.value) for e in at.caption]
+    parts += [str(e.value) for e in at.info] + [str(m.value) for m in at.metric]
+    return "\n".join(parts)
+
+
+def test_market_overview_filtered_view_uses_only_the_filtered_set(
+    full_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression (QA P0-1): with a filter on, shares and captions were divided by the unfiltered
+    totals ("The other -465 open postings", "Boston leads with 6, 0% of the 5,263")."""
+    monkeypatch.setenv(LOCAL_DB_ENV, str(full_db))
+    at = AppTest.from_file(str(APP), default_timeout=20).run()
+    at.switch_page("app_pages/market_overview.py").run()
+    assert not at.exception, at.exception
+    unfiltered = _page_text(at)
+    assert "The other" in unfiltered  # the unfiltered explanation still exists
+    at.multiselect(key="mkt_roles").set_value(["data_scientist"]).run()
+    assert not at.exception, at.exception
+    text = _page_text(at)
+    assert "The other" not in text
+    assert "not read by the AI" not in text
+    assert not re.search(r"(?<![\w$])-\d[\d,]* (?:open )?postings", text), text
+    matching = int(at.metric[0].value.replace(",", ""))
+    assert at.metric[0].label == "Open postings (matching)"
+    assert matching == 1
+    assert f"Every number and chart below covers the {matching:,} analyzed" in text
+    # every share in a key insight is out of the filtered set (here: 1 posting), never the 3 open
+    for sentence in re.findall(r"Key insight\.\s*([^\n]+)", text):
+        for total in re.findall(r"of (?:all )?the?\s*([\d,]+)", sentence):
+            assert int(total.replace(",", "")) <= matching, sentence
+    assert "of open postings; the rest" not in text  # the unfiltered city caption is not shown
