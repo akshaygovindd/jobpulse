@@ -179,7 +179,9 @@ def test_title_lines_never_keep_contact_details() -> None:
         ]
     )
     titles = extract_profile(text, {"python"}, CFG).titles
-    assert titles == ("Data Scientist", "ML Engineer")
+    # a title next to an email is kept on its own; lines with no separable title are dropped
+    assert titles == ("Data Analyst Intern", "Data Scientist", "ML Engineer")
+    assert not any("@" in t or "555" in t or "http" in t for t in titles)
 
 
 @pytest.mark.parametrize(

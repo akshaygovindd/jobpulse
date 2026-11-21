@@ -108,6 +108,7 @@ def match_card(
     visa_icon: str,
     filings: int,
     apply_url: str,
+    apply_label: str = "Apply",
     matched_shown: int = 8,
     missing_shown: int = 5,
 ) -> None:
@@ -136,7 +137,9 @@ def match_card(
             if filings:
                 st.badge(f"{filings:,} certified H-1B filings", color="gray")
             if apply_url.startswith("https://"):
-                st.link_button("Apply", apply_url, icon=":material/open_in_new:", type="primary")
+                st.link_button(
+                    apply_label, apply_url, icon=":material/open_in_new:", type="primary"
+                )
 
 
 def company_card(

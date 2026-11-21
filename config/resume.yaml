@@ -63,6 +63,7 @@ parse:
     - analytic
     - analytics
     - business analytic
+    - business analytics  # a degree name (MS Business Analytics), not a tool
     - agent
     - dag
     - delta
@@ -72,6 +73,13 @@ parse:
     - training
     - vision
     - modeling
+    # Added after the browser QA of 2026-11-20: abbreviations and ordinary words that are not a
+    # skill claim ("MBR", "QBR" are meeting names, "metric" is a noun, "AI assisted tool" is a
+    # phrase from one posting).
+    - mbr
+    - qbr
+    - metric
+    - ai assisted tool
   # A skill must appear in at least this many open, analyzed postings to be recognized in a resume,
   # so one-off phrases (1,530 of 2,517 skills appear in a single posting) are not offered as skills.
   min_posting_frequency: 3
@@ -82,6 +90,36 @@ parse:
     Master's: [master, m.s., msc, m.sc, mba, m.eng]
     Bachelor's: [bachelor, bs, b.s., bsc, b.sc, b.a., b.eng]
     Bootcamp or certificate: [bootcamp, boot camp, certificate, certification]
+  # Abbreviations that are a degree only in context, per line (case-sensitive regexes).
+  education_patterns:
+    Master's:
+      - '\bMS\b(?=[^\n]*\b(?:student|candidate|graduate|degree|university|college|program)\b)'
+      - '\bM\.?S\.?\s+(?:in|of)\b'
+      - '\bMA\b(?=[^\n]*\b(?:student|candidate|degree|university)\b)'
+    Bachelor's:
+      - '\bB\.?S\.?\s+(?:in|of)\b'
+      - '\bBS\b(?=[^\n]*\b(?:student|candidate|degree|university|college)\b)'
+  # Skills that mean the same thing when matching; the first name stands for the group.
+  synonym_groups:
+    - [dashboard, dashboarding]
+    - [data analysis, data analytic]
+  # What role a title line is aiming at (longest phrase first wins), by gold role family.
+  title_roles:
+    data analyst: data_analyst
+    analytics engineer: analytics_engineer
+    data engineer: data_engineer
+    data scientist: data_scientist
+    research scientist: data_scientist
+    machine learning: ml_ai_engineer
+    ml engineer: ml_ai_engineer
+    ai engineer: ml_ai_engineer
+    business analyst: business_analyst
+    bi analyst: bi
+    bi engineer: bi
+    bi developer: bi
+    business intelligence: bi
+    reporting analyst: data_analyst
+    analyst: data_analyst
   max_title_chars: 60         # a "title" is a short line containing one of the keywords
   max_titles: 5
   max_years: 50               # a larger "N years" figure is ignored as not a career length
@@ -107,3 +145,4 @@ match:
   min_posting_skills: 5       # postings with fewer extracted skills are not ranked (score would be noise)
   min_matched: 1
   max_results: 50
+  role_family_boost: 0.15     # ordering only: a posting in the role the resume's title names ranks higher

@@ -67,6 +67,7 @@ def dump_employers_yaml(f: EmployersFile) -> str:
         f"  - {{company: {_q(e.company)}, source: {e.source}, board_id: {e.board_id}, "
         f'validated_at: "{_ts(e.validated_at)}", open_job_count: {e.open_job_count}'
         + (f", domains: [{', '.join(e.domains)}]" if e.domains else "")
+        + (f", careers_url: {_q(e.careers_url)}" if e.careers_url else "")
         + "}"
         for e in f.employers
     ]

@@ -32,8 +32,8 @@ employers:  # Greenhouse, Lever, Ashby
   - {company: "Figma", source: greenhouse, board_id: figma, validated_at: "2026-11-10T00:18:10Z", open_job_count: 146}
   - {company: "Asana", source: greenhouse, board_id: asana, validated_at: "2026-11-10T00:18:11Z", open_job_count: 111, domains: [asana.com]}
   - {company: "Dropbox", source: greenhouse, board_id: dropbox, validated_at: "2026-11-10T00:18:11Z", open_job_count: 33, domains: [dropbox.com]}
-  - {company: "Lyft", source: greenhouse, board_id: lyft, validated_at: "2026-11-10T00:18:11Z", open_job_count: 156}
-  - {company: "Squarespace", source: greenhouse, board_id: squarespace, validated_at: "2026-11-10T00:18:11Z", open_job_count: 21, domains: [squarespace.com]}
+  - {company: "Lyft", source: greenhouse, board_id: lyft, validated_at: "2026-11-10T00:18:11Z", open_job_count: 156, careers_url: "https://www.lyft.com/careers"}
+  - {company: "Squarespace", source: greenhouse, board_id: squarespace, validated_at: "2026-11-10T00:18:11Z", open_job_count: 21, domains: [squarespace.com], careers_url: "https://www.squarespace.com/about/careers"}
   - {company: "Twilio", source: greenhouse, board_id: twilio, validated_at: "2026-11-10T00:18:11Z", open_job_count: 129}
   - {company: "Okta", source: greenhouse, board_id: okta, validated_at: "2026-11-10T00:18:11Z", open_job_count: 378, domains: [okta.com]}
   - {company: "Peloton", source: greenhouse, board_id: peloton, validated_at: "2026-11-10T00:18:11Z", open_job_count: 43, domains: [onepeloton.com]}

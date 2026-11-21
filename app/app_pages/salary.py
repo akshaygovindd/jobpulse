@@ -195,7 +195,11 @@ with advertised_tab:
         "AS mid, max(coalesce(salary_max, salary_min)) AS high "
         "FROM gold.fct_postings WHERE is_active AND has_extraction AND NOT is_probable_duplicate "
         "AND seniority = 'intern' AND has_advertised_salary AND salary_period IS NOT NULL "
-        "AND salary_currency IS NOT NULL GROUP BY 1, 2 ORDER BY 3 DESC, 1, 2"
+        "AND salary_currency IS NOT NULL "
+        # a yearly range wider than this is a pay table for full-time levels, not intern pay
+        "AND NOT (salary_period = 'year' AND salary_max > ? * salary_min) "
+        "GROUP BY 1, 2 ORDER BY 3 DESC, 1, 2",
+        [app_config().pay.intern_max_range_ratio],
     )
     if intern.empty:
         st.caption("No internship postings with an advertised salary and a known pay period.")
@@ -215,7 +219,8 @@ with advertised_tab:
             )
         st.caption(
             "Shown in the unit and currency of the posting, never converted to a yearly figure: "
-            "an hourly or monthly internship rate is not a yearly salary."
+            "an hourly or monthly internship rate is not a yearly salary. A yearly range that "
+            "spans several job levels (a full-time pay table on an internship page) is left out."
         )
 
 with lca_tab:

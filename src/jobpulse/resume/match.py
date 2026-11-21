@@ -24,15 +24,34 @@ class PostingSkills:
 @dataclass(frozen=True)
 class Match:
     posting: PostingSkills
-    score: float
+    score: float  # skills matched / skills asked for: the shown "N% match"
     matched: tuple[str, ...]
     missing: tuple[str, ...]
+    order_score: float = 0.0  # what the list is sorted by: score plus the role-family boost
+
+
+def canonical_skills(skills: Iterable[str], groups: Iterable[Iterable[str]]) -> frozenset[str]:
+    """`skills` with every synonym replaced by the first name of its group, so that "dashboard"
+    and "dashboarding" are one skill on both sides of the match."""
+    head: dict[str, str] = {}
+    for group in groups:
+        names = list(group)
+        for name in names:
+            head[name] = names[0]
+    return frozenset(head.get(s, s) for s in skills)
 
 
 def rank_postings(
-    resume_skills: Collection[str], postings: Iterable[PostingSkills], cfg: ResumeMatchConfig
+    resume_skills: Collection[str],
+    postings: Iterable[PostingSkills],
+    cfg: ResumeMatchConfig,
+    role_families: Collection[str] = (),
 ) -> list[Match]:
+    """Rank by skill overlap. A posting whose role family is one of `role_families` (the role the
+    resume's title names) is ordered higher by `cfg.role_family_boost`; the shown score is not
+    changed. Sponsorship and visa evidence never enter either number."""
     have = set(resume_skills)
+    aimed = set(role_families)
     out: list[Match] = []
     for p in postings:
         if len(p.skills) < cfg.min_posting_skills:
@@ -41,9 +60,12 @@ def rank_postings(
         if len(matched) < cfg.min_matched:
             continue
         missing = tuple(sorted(p.skills - have))
-        out.append(Match(p, len(matched) / len(p.skills), matched, missing))
+        score = len(matched) / len(p.skills)
+        boost = cfg.role_family_boost if p.info.get("role") in aimed else 0.0
+        out.append(Match(p, score, matched, missing, score + boost))
     out.sort(
         key=lambda m: (
+            -m.order_score,
             -m.score,
             -len(m.matched),
             str(m.posting.info.get("company", "")),
@@ -80,18 +102,24 @@ def default_levels(years: int | None, titles: Iterable[str], cfg: ResumeLevelsCo
 def collapse_locations(postings: Iterable[PostingSkills]) -> list[PostingSkills]:
     """One row per company + title. The same role opened in several places (London, Warsaw,
     Toronto) is one posting here with a list of locations in `info["locations"]`; the first
-    posting (by key) supplies the skills, the apply link and the other fields."""
+    posting (by key, US-eligible ones first) supplies the skills and the other fields, and the
+    apply link is the first one any of them has."""
     groups: dict[tuple[str, str], list[PostingSkills]] = {}
     for p in sorted(postings, key=lambda p: p.posting_key):
         key = (str(p.info.get("company", "")), str(p.info.get("title", "")))
         groups.setdefault(key, []).append(p)
     out = []
     for members in groups.values():
+        # The row is shown as its US posting when there is one (H-1B evidence is about US jobs).
+        members.sort(key=lambda m: (not m.info.get("us_ok", True), m.posting_key))
         first = members[0]
         places = sorted({str(m.info["location"]) for m in members if m.info.get("location")})
-        out.append(
-            PostingSkills(first.posting_key, first.skills, {**first.info, "locations": places})
-        )
+        info = {**first.info, "locations": places}
+        if "apply_url" in info and not info["apply_url"]:
+            info["apply_url"] = next(
+                (m.info["apply_url"] for m in members if m.info["apply_url"]), ""
+            )
+        out.append(PostingSkills(first.posting_key, first.skills, info))
     return out
 
 

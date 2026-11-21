@@ -1,7 +1,7 @@
 import streamlit as st
 
 from jobpulse import insights
-from jobpulse.app_components import avatar, company_card
+from jobpulse.app_components import avatar, company_card, md_escape
 from jobpulse.app_ui import (
     DATA_ROLES,
     MATCH_LABELS,
@@ -54,16 +54,22 @@ companies["Evidence"] = companies["visa_evidence_class"].map(EVIDENCE)
 companies["How the filings were matched"] = companies["lca_match_methods"].map(match_words)
 
 st.subheader("Top sponsors by certified filings")
-picked = st.multiselect(
-    "Role families",
-    list(ROLE_LABELS),
-    default=DATA_ROLES,
-    format_func=role_label,
-    help="Certified filings are assigned a role family from the job title on the filing. This "
-    "is a keyword match, so the counts are lower bounds. Remove all data roles and pick 'Other "
-    "roles' to see the rest.",
-    key="visa_roles",
-)
+# The eight chips would fill the first screen on a phone, so the choice sits in a collapsed panel.
+chosen_now = st.session_state.get("visa_roles", DATA_ROLES)
+with st.expander(
+    f"Role families: {len(chosen_now)} of {len(ROLE_LABELS)} selected",
+    icon=":material/tune:",
+):
+    picked = st.multiselect(
+        "Role families",
+        list(ROLE_LABELS),
+        default=DATA_ROLES,
+        format_func=role_label,
+        help="Certified filings are assigned a role family from the job title on the filing. "
+        "This is a keyword match, so the counts are lower bounds. Remove all data roles and "
+        "pick 'Other roles' to see the rest.",
+        key="visa_roles",
+    )
 if picked:
     marks = ", ".join("?" for _ in picked)
     sponsors = load(
@@ -154,11 +160,29 @@ with st.expander("Show data: all companies", icon=":material/table:"):
     )
 
 st.subheader("Company lookup")
-name = st.selectbox(
+tracked = companies["name"].tolist()
+query = st.text_input(
     "Search for a company",
-    companies["name"].tolist(),
+    key="visa_query",
+    placeholder="Type a name, for example Stripe",
+    help=f"We track {len(tracked)} companies, listed below. Ordered by certified filings.",
+)
+matches = [n for n in tracked if query.strip().lower() in n.lower()] if query.strip() else tracked
+if not matches:
+    st.info(
+        f"No tracked company matches “{md_escape(query.strip())}”. We track {len(tracked)} "
+        f"{'company' if len(tracked) == 1 else 'companies'} (the job boards behind Market "
+        "overview), so any other employer is not here: "
+        + ", ".join(sorted(tracked, key=str.lower))
+        + ".",
+        icon=":material/search_off:",
+    )
+    st.stop()
+name = st.selectbox(
+    "Company",
+    matches,
     key="visa_company",
-    help="Type to search. Ordered by certified filings, most first.",
+    help=f"{len(matches)} of {len(tracked)} tracked companies. Ordered by certified filings.",
 )
 row = companies[companies["name"] == name].iloc[0]
 cid = row["company_id"]
@@ -221,8 +245,9 @@ with st.container(border=True):
         st.caption(f"Filed under: {filed_as}. Matched by: {matched_by}.")
         subs = row["lca_subsidiaries"]
         if hasattr(subs, "__len__") and len(subs):
+            sub_names = ", ".join(n.rstrip(".") for n in subs)  # no "Inc.." before the full stop
             st.caption(
-                f"Includes filings by subsidiaries (reviewed): {', '.join(subs)}. "
+                f"Includes filings by subsidiaries (reviewed): {sub_names}. "
                 "They are counted in the certified filings above."
             )
     else:

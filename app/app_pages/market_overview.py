@@ -239,9 +239,12 @@ coords = city_coords()  # parsed once per process, not once per city
 mapped = [r for r in city_rows if r[0] in coords]
 key_insight(insights.concentration_insight([(c, float(n)) for c, n in mapped]))
 drawn, left_off = city_map(city_rows)
+if left_off == 1:
+    off_text = "1 more is in a city that has no map position yet"
+else:
+    off_text = f"{left_off:,} more are in cities that have no map position yet"
 st.caption(
-    f"{drawn:,} open postings that name a single city are on the map; {left_off:,} more are in "
-    "cities that have no map position yet. Dot area shows the number of postings. Positions are "
-    "approximate city centres, not exact office locations. Remote-only and multi-location "
-    "postings have no single city and are not drawn."
+    f"{drawn:,} open postings that name a single city are on the map; {off_text}. Dot area shows "
+    "the number of postings. Positions are approximate city centres, not exact office "
+    "locations. Remote-only and multi-location postings have no single city and are not drawn."
 )

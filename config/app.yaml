@@ -22,3 +22,6 @@ samples:
 
 trends:
   min_full_weeks: 3             # "Skills over time" is hidden until this many full Mon-Sun weeks exist
+
+pay:
+  intern_max_range_ratio: 2.0   # an intern's yearly range wider than 2x is a full-time pay table

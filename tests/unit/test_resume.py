@@ -358,7 +358,10 @@ def test_a_bad_file_or_empty_input_shows_a_message(
     at = _open(resume_db, monkeypatch)
     at = _click(at, "Find matching postings")
     assert at.error
-    assert "No text found" in at.error[0].value
+    assert "Nothing to analyze yet" in at.error[0].value  # an empty box is not a scanned PDF
+    assert "scanned" not in at.error[0].value
+    with pytest.raises(ResumeError, match="scanned PDF"):  # while an image-only file is
+        read_resume("cv.txt", b"   \n ", CFG)
     assert "resume_profile" not in at.session_state
 
 
@@ -494,3 +497,180 @@ def test_results_are_cards_with_chips_a_match_bar_and_the_table_in_an_expander(
     assert not [b for b in at.get("link_button") if not b.proto.url.startswith("https://")]
     # raw resume text never reaches a card
     assert MARKER not in " ".join(str(m.value) for m in at.markdown)
+
+
+# ---- browser-QA fixes (2026-11-20): parsing and ranking ----------------------------------------
+
+QA_VOCAB = VOCAB | {
+    "bi", "power bi", "mbr", "qbr", "metric", "ai assisted tool", "google sheet", "dashboard",
+    "dashboarding", "data analysis", "excel",
+}  # fmt: skip
+QA_RESUME = """Data Analyst
+Priya Raman | priya@example.com | 555-123-4567 | Boston, MA
+MS Business Analytics student, Northeastern University
+
+Data Analyst Intern, Acme Retail (2024-2025)
+- Weekly MBR and QBR reviews: dashboarding in Power BI, Excel and Google Sheets
+- Defined KPI metric definitions and used an AI assisted tool for drafts
+Skills: SQL, Python, Tableau
+"""
+
+
+def test_first_line_title_is_kept_and_a_title_survives_next_to_contact_details() -> None:
+    p = extract_profile(QA_RESUME, QA_VOCAB, CFG, today_year=2026)
+    assert p.titles[0] == "Data Analyst"  # the headline line counts
+    assert "Data Analyst Intern, Acme Retail (2024-2025)" in p.titles  # "2024-2025" is not a phone
+    assert not any("@" in t or "555" in t for t in p.titles)  # contact parts are dropped, alone
+    mixed = extract_profile("Jane Doe | jane@x.com | Data Scientist\nPython", QA_VOCAB, CFG)
+    assert mixed.titles == ("Data Scientist",)
+
+
+def test_ms_student_is_education_but_ms_excel_is_not() -> None:
+    assert "Master's" in extract_profile(QA_RESUME, QA_VOCAB, CFG).education
+    assert "Master's" in extract_profile("MS in Data Science\nPython", QA_VOCAB, CFG).education
+    assert "Master's" not in extract_profile("Skills: MS Excel, SQL", QA_VOCAB, CFG).education
+    assert "Bachelor's" in extract_profile("B.S. in Statistics", QA_VOCAB, CFG).education
+
+
+def test_a_skill_inside_a_longer_skill_is_not_a_second_skill() -> None:
+    both = extract_profile("Tools: Power BI, Tableau", QA_VOCAB, CFG).skills
+    assert "power bi" in both
+    assert "bi" not in both
+    alone = extract_profile("Tools: Power BI\nBI reporting for finance", QA_VOCAB, CFG).skills
+    assert {"power bi", "bi"} <= alone  # "BI" written on its own elsewhere still counts
+
+
+def test_stop_list_drops_meeting_names_and_ordinary_words() -> None:
+    p = extract_profile(QA_RESUME, QA_VOCAB, CFG)
+    for noise in ("mbr", "qbr", "metric", "ai assisted tool"):
+        assert noise not in p.skills, noise
+    assert "google sheet" in p.skills  # a real tool, shown as "Google Sheets"
+    from jobpulse.app_ui import skill_label
+
+    assert skill_label("google sheet") == "Google Sheets"
+
+
+def test_synonyms_are_one_skill_on_both_sides() -> None:
+    from jobpulse.resume.match import canonical_skills
+
+    groups = CFG.parse.synonym_groups
+    assert canonical_skills({"dashboarding", "sql"}, groups) == {"dashboard", "sql"}
+    assert canonical_skills({"dashboard", "dashboarding"}, groups) == {"dashboard"}
+    posting = PostingSkills("p", canonical_skills({"dashboarding", "sql"}, groups), {})
+    got = rank_postings(
+        canonical_skills({"dashboard", "sql"}, groups),
+        [PostingSkills(posting.posting_key, posting.skills | {"a", "b", "c"}, {})],
+        CFG.match,
+    )
+    assert got[0].matched == ("dashboard", "sql")  # a "dashboard" resume matches "dashboarding"
+
+
+def test_resume_title_names_the_role_family_it_aims_at() -> None:
+    p = extract_profile(QA_RESUME, QA_VOCAB, CFG)
+    assert p.role_families == ("data_analyst",)  # the first line decides
+    later = extract_profile("Jane\nWorked as Machine Learning Engineer\nPython", QA_VOCAB, CFG)
+    assert later.role_families == ("ml_ai_engineer",)
+    assert extract_profile("Python, SQL", QA_VOCAB, CFG).role_families == ()
+
+
+def test_matching_role_family_is_ordered_first_but_the_shown_score_is_unchanged() -> None:
+    """QA P1-10: a Data Analyst resume was offered Data Engineer postings first."""
+    skills = frozenset({"python", "sql", "spark", "airflow", "kafka"})
+    engineer = PostingSkills(
+        "e", skills, {"company": "A", "title": "Data Engineer", "role": "data_engineer"}
+    )
+    analyst = PostingSkills(
+        "a",
+        frozenset({"sql", "python", "tableau", "excel", "dbt"}),
+        {"company": "B", "title": "Data Analyst", "role": "data_analyst"},
+    )
+    have = {"python", "sql", "spark", "airflow"}  # engineer 4/5 = 80%, analyst 2/5 = 40%
+    plain = rank_postings(have, [engineer, analyst], CFG.match)
+    assert [m.posting.posting_key for m in plain] == ["e", "a"]
+    aimed = rank_postings(have, [engineer, analyst], CFG.match, ("data_analyst",))
+    shown = {m.posting.posting_key: round(m.score, 2) for m in aimed}
+    assert shown == {"e": 0.8, "a": 0.4}  # the shown match % is never changed by the boost
+    ordering = {m.posting.posting_key: m.order_score for m in aimed}
+    assert ordering["a"] == pytest.approx(0.4 + CFG.match.role_family_boost)
+    assert ordering["e"] == pytest.approx(0.8)
+    big = CFG.match.model_copy(update={"role_family_boost": 0.5})
+    again = rank_postings(have, [engineer, analyst], big, ("data_analyst",))
+    assert [m.posting.posting_key for m in again] == ["a", "e"]  # with a big enough boost
+
+
+def test_visa_evidence_is_not_part_of_the_ordering() -> None:
+    src = (ROOT / "src/jobpulse/resume/match.py").read_text()
+    body = src[src.index("def rank_postings") : src.index("def level_group")]
+    assert "visa" not in body.lower().replace("visa evidence", "")
+    assert "sponsor" not in body.replace("Sponsorship and visa evidence never enter", "")
+
+
+def test_pay_as_posted_h1b_scope_careers_fallback_and_unclear_intern_range() -> None:
+    from jobpulse.app_ui import (
+        careers_urls,
+        h1b_applies,
+        intern_pay_unclear,
+        pay_as_posted,
+        salary_range,
+    )
+
+    assert pay_as_posted(64, 68, "USD", "hour") == "$64 to $68 per hour"
+    assert pay_as_posted(12100, 12100, "USD", "month") == "$12,100 per month"
+    assert pay_as_posted(8000, 8600, "CAD", "month") == "CAD 8,000 to CAD 8,600 per month"
+    assert pay_as_posted(120000, 150000, "USD", "year") == "$120K to $150K per year"
+    assert pay_as_posted(None, None, "USD", "hour") == "Not advertised"
+    assert salary_range(172500, 172500, "USD") == "$173K"  # the same rounding as the heatmap
+    # DoorDash's intern page lists full-time levels I4 to I6 as one yearly range
+    assert intern_pay_unclear(130600, 285000, "year", 2.0)
+    assert not intern_pay_unclear(120000, 150000, "year", 2.0)
+    assert not intern_pay_unclear(64, 200, "hour", 2.0)  # only yearly ranges are judged
+    assert h1b_applies(["United States"])
+    assert h1b_applies([None])
+    assert h1b_applies([])
+    assert h1b_applies(["United Kingdom", "United States"])
+    assert not h1b_applies(["United Kingdom"])
+    assert not h1b_applies(["Canada", "India"])
+    urls = careers_urls()
+    assert urls["Lyft"] == "https://www.lyft.com/careers"  # explicit, in config/employers.yaml
+    assert urls["Plaid"] == "https://jobs.ashbyhq.com/plaid"  # derived: its job board
+    assert urls["Stripe"].startswith("https://job-boards.greenhouse.io/")
+    assert all(u.startswith("https://") for u in urls.values())
+
+
+def test_collapse_prefers_the_us_posting_and_keeps_any_apply_link() -> None:
+    from jobpulse.resume.match import collapse_locations
+
+    uk = PostingSkills("a", frozenset({"x"}), {"company": "C", "title": "T", "location": "London",
+                       "us_ok": False, "apply_url": ""})  # fmt: skip
+    us = PostingSkills("b", frozenset({"x"}), {"company": "C", "title": "T", "location": "Boston",
+                       "us_ok": True, "apply_url": "https://c.example/b"})  # fmt: skip
+    (row,) = collapse_locations([uk, us])
+    assert row.posting_key == "b"
+    assert row.info["us_ok"] is True
+    assert row.info["locations"] == ["Boston", "London"]
+    (row2,) = collapse_locations(
+        [PostingSkills("a", frozenset({"x"}), {**uk.info, "us_ok": True}), us]
+    )
+    assert row2.info["apply_url"] == "https://c.example/b"  # the first posting had no link
+
+
+def test_a_card_without_an_apply_link_falls_back_to_the_careers_page(
+    resume_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression (QA P0-7): a Resume match card for Lyft had no Apply link at all. The fixture's
+    posting has no usable apply URL, so the card must offer the company's careers page."""
+    at = _open(resume_db, monkeypatch)
+    assert not at.get("link_button") or all(b.label for b in at.get("link_button"))
+    careers = "https://careers.acme.example/jobs"
+    monkeypatch.setattr("jobpulse.app_ui.careers_urls", lambda: {"Acme": careers})
+    at = _analyze(_open(resume_db, monkeypatch), RESUME)
+    assert not at.exception, at.exception
+    buttons = [(b.label, b.proto.url) for b in at.get("link_button")]
+    assert ("Careers page", careers) in buttons
+    assert not [b for b in buttons if b[0] == "Apply"]  # the posting itself has no link
+    # the table keeps the link in its Apply column too
+    assert at.dataframe[-1].value["Apply"].iloc[0] == careers
+    # and with no careers URL on file there is simply no button (never a broken one)
+    monkeypatch.setattr("jobpulse.app_ui.careers_urls", lambda: {})
+    none = _analyze(_open(resume_db, monkeypatch), RESUME)
+    assert not [b for b in none.get("link_button") if b.label in ("Apply", "Careers page")]

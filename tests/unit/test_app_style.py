@@ -230,7 +230,7 @@ def test_map_shows_open_postings_on_a_dark_carto_basemap_with_attribution(
     assert "mapbox" not in decks[0].proto.json.lower()  # no token-based basemap
     text = _text(at)
     assert text.count(load_app().map.attribution) == 1  # printed once
-    assert "5 open postings that name a single city are on the map; 0 more" in text
+    assert "5 open postings that name a single city are on the map; 0 more are in cities" in text
     assert "approximate city centres" in text
 
 
@@ -266,7 +266,8 @@ def test_city_coordinates_and_app_config_are_valid() -> None:
 def test_visa_company_lookup_card(history_db: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     at = _page(history_db, monkeypatch, "app_pages/visa.py")
     assert "Company lookup" in [s.value for s in at.subheader]
-    assert at.selectbox(key="visa_company").label == "Search for a company"
+    assert at.text_input(key="visa_query").label == "Search for a company"
+    assert at.selectbox(key="visa_company").label == "Company"
     text = _text(at)
     assert "-badge[" in text  # evidence class badge
     assert "Most certified filings came in FY" in text
@@ -754,3 +755,19 @@ def test_the_map_does_not_trap_touch_scrolling_on_a_phone() -> None:
     assert rule
     assert 'st.container(key="map_wrap")' in (ROOT / "src/jobpulse/app_ui.py").read_text()
     assert "pointer-events: none" not in css.split("@media")[0]  # never on desktop
+
+
+def test_visa_lookup_says_how_many_companies_we_track_when_nothing_matches(
+    history_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """QA P1-14: a search for Google showed a bare "No results". It now says what we do track."""
+    at = _page(history_db, monkeypatch, "app_pages/visa.py")
+    at.text_input(key="visa_query").set_value("Google").run()
+    assert not at.exception, at.exception
+    notice = " ".join(str(i.value) for i in at.info)
+    assert "No tracked company matches “Google”" in notice
+    assert "We track 1 company" in notice  # the count comes from the data (one company here)
+    assert "Acme" in notice  # and every tracked company is listed
+    assert not at.selectbox  # nothing to pick from
+    at.text_input(key="visa_query").set_value("").run()
+    assert at.selectbox(key="visa_company").options  # clearing the search brings the list back

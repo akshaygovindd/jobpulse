@@ -30,6 +30,16 @@ class Employer(_Strict):
     # subdomain), over https, is published as a link; vendors that host many companies' boards
     # (careerpuck and the like) must not be listed here.
     domains: list[str] = []
+    # Where to send a visitor when a posting has no usable apply link of its own. Optional: without
+    # it the app links the company's job board on its ATS (Greenhouse, Lever or Ashby).
+    careers_url: str | None = None
+
+    @field_validator("careers_url")
+    @classmethod
+    def _https_url(cls, v: str | None) -> str | None:
+        if v is not None and not re.fullmatch(r"https://[a-z0-9.-]+(/[A-Za-z0-9._~/-]*)?", v):
+            raise ValueError(f"careers_url must be a plain https URL: {v!r}")
+        return v
 
     @field_validator("domains")
     @classmethod
@@ -412,6 +422,14 @@ class ResumeParseConfig(_Strict):
     min_posting_frequency: int = Field(ge=1)
     title_keywords: list[str] = Field(min_length=1)
     education_keywords: dict[str, list[str]]  # label -> lower-case phrases that signal it
+    # label -> case-sensitive regexes applied to one line at a time, for abbreviations that are
+    # only a degree in context ("MS Data Science student", but not "MS Excel").
+    education_patterns: dict[str, list[str]] = {}
+    # Groups of canonical skills that mean the same thing for matching ("dashboard" and
+    # "dashboarding"). Both the resume and the postings are read through the first name.
+    synonym_groups: list[list[str]] = []
+    # Title phrase (lower case) -> role family, to find what role the resume is aiming at.
+    title_roles: dict[str, str] = {}
     max_title_chars: int = Field(ge=1)
     max_titles: int = Field(ge=0)
     max_years: int = Field(ge=1)
@@ -443,6 +461,9 @@ class ResumeMatchConfig(_Strict):
     min_posting_skills: int = Field(ge=1)
     min_matched: int = Field(ge=1)
     max_results: int = Field(ge=1)
+    # Added to the ORDERING score (never to the shown match %) of postings whose role family is the
+    # one the resume's title names. Visa evidence is never part of it.
+    role_family_boost: float = Field(ge=0, le=1)
 
 
 class ResumeConfig(_Strict):
@@ -517,6 +538,13 @@ class HomeConfig(_Strict):
     top_skills: int = Field(ge=1)
 
 
+class PayConfig(_Strict):
+    # An internship posting whose YEARLY range is wider than this ratio (max / min) is almost
+    # always a pay table for full-time levels copied onto the page (I4 to I6 at DoorDash), not what
+    # the intern earns, so it is not shown as pay.
+    intern_max_range_ratio: float = Field(gt=1)
+
+
 class TrendsConfig(_Strict):
     min_full_weeks: int = Field(ge=1)  # "Skills over time" appears once this many full weeks exist
 
@@ -531,6 +559,7 @@ class AppConfig(_Strict):
     map: MapConfig
     home: HomeConfig
     trends: TrendsConfig
+    pay: PayConfig
 
 
 def load_app(path: Path | None = None) -> AppConfig:

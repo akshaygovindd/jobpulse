@@ -43,6 +43,7 @@ class ResumeProfile:
     titles: tuple[str, ...]  # short title-like lines, as written
     years: int | None  # years of experience from date ranges, else an explicit "N years of ..."
     education: tuple[str, ...] = ()  # degree labels found (PhD, Master's, ...)
+    role_families: tuple[str, ...] = ()  # gold role families the resume's titles aim at
 
 
 def read_resume(name: str, data: bytes, cfg: ResumeConfig) -> str:
@@ -69,8 +70,10 @@ def read_resume(name: str, data: bytes, cfg: ResumeConfig) -> str:
     return check_text(text, cfg)
 
 
-def check_text(text: str, cfg: ResumeConfig) -> str:
+def check_text(text: str, cfg: ResumeConfig, *, pasted: bool = False) -> str:
     if not text.strip():
+        if pasted:  # an empty box is not a scanned file
+            raise ResumeError("Nothing to analyze yet. Paste your resume text or upload a file.")
         raise ResumeError("No text found. A scanned PDF (an image) cannot be read.")
     if len(text) > cfg.upload.max_text_chars:
         raise ResumeError(f"The text is longer than {cfg.upload.max_text_chars:,} characters.")
@@ -113,8 +116,8 @@ def extract_profile(
     text = clean_text(text)
     p = cfg.parse
     vocab = set(vocabulary) - set(p.ignore_skills)
-    found: set[str] = set()
-    for segment in _SEGMENT_SPLIT.split(text):
+    spans: list[tuple[int, int, int, str]] = []  # (segment, start word, end word, skill)
+    for seg_no, segment in enumerate(_SEGMENT_SPLIT.split(text)):
         words = [w for w in (t.strip(_EDGE_PUNCT) for t in segment.split()) if w]
         for start in range(len(words)):
             for size in range(1, min(p.max_ngram, len(words) - start) + 1):
@@ -125,10 +128,41 @@ def extract_profile(
                 required = p.case_sensitive_skills.get(name)
                 if required is not None and (size != 1 or window[0] != required):
                     continue
-                found.add(name)
+                spans.append((seg_no, start, start + size, name))
+    # A skill written only as part of a longer skill ("BI" inside "Power BI") is not a second
+    # skill; the same word elsewhere, on its own, still counts.
+    found = {
+        name
+        for seg, a, b, name in spans
+        if not any(
+            seg2 == seg and a2 <= a and b <= b2 and (b2 - a2) > (b - a) and name2 != name
+            for seg2, a2, b2, name2 in spans
+        )
+    }
+    titles = _titles(text, cfg)
     return ResumeProfile(
-        frozenset(found), _titles(text, cfg), _years(text, cfg, today_year), _education(text, cfg)
+        frozenset(found),
+        titles,
+        _years(text, cfg, today_year),
+        _education(text, cfg),
+        _role_families(text, titles, cfg),
     )
+
+
+def _is_contact(part: str) -> bool:
+    """An email, link or phone number. A year range ("2024-2025" is eight digits) is not a phone."""
+    return bool(_CONTACT.search(_RANGE.sub(" ", part)))
+
+
+_TITLE_PARTS = re.compile(r"[|•·●]|\s[-\u2013\u2014]\s|\s{2,}")
+
+
+def _title_candidates(line: str) -> list[str]:
+    """A line with several parts ("Jane Doe | jane@x.com | Data Analyst") yields its parts, so a
+    title survives next to contact details that are dropped. A line without a separator is one
+    part."""
+    parts = [p.strip(" \t-*•,;") for p in _TITLE_PARTS.split(line)]
+    return [p for p in parts if p]
 
 
 def _titles(text: str, cfg: ResumeConfig) -> tuple[str, ...]:
@@ -136,17 +170,41 @@ def _titles(text: str, cfg: ResumeConfig) -> tuple[str, ...]:
     keywords = tuple(k.lower() for k in p.title_keywords)
     seen: list[str] = []
     for line in text.splitlines():
-        line = line.strip(" \t-*•")
-        is_title = (
-            0 < len(line) <= p.max_title_chars
-            and any(k in line.lower() for k in keywords)
-            and not _CONTACT.search(line)
-        )
-        if is_title and line not in seen:
-            seen.append(line)
+        for part in _title_candidates(line):
+            is_title = (
+                0 < len(part) <= p.max_title_chars
+                and any(k in part.lower() for k in keywords)
+                and not _is_contact(part)
+            )
+            if is_title and part not in seen:
+                seen.append(part)
         if len(seen) >= p.max_titles:
             break
-    return tuple(seen)
+    return tuple(seen[: p.max_titles])
+
+
+def _family_of(title: str, cfg: ResumeConfig) -> str | None:
+    """Role family for a title line: the longest configured phrase it contains."""
+    low = title.lower()
+    for phrase in sorted(cfg.parse.title_roles, key=len, reverse=True):
+        if re.search(rf"(?<![a-z]){re.escape(phrase)}(?![a-z])", low):
+            return cfg.parse.title_roles[phrase]
+    return None
+
+
+def _role_families(text: str, titles: tuple[str, ...], cfg: ResumeConfig) -> tuple[str, ...]:
+    """The role the resume aims at. The first line is the headline title ("Data Analyst"); when it
+    names a role, that is the role. Otherwise every title line in the text counts, in order."""
+    first = next((ln for ln in text.splitlines() if ln.strip()), "")
+    for part in _title_candidates(first):
+        if not _is_contact(part) and (family := _family_of(part, cfg)):
+            return (family,)
+    out: list[str] = []
+    for title in titles:
+        family = _family_of(title, cfg)
+        if family and family not in out:
+            out.append(family)
+    return tuple(out)
 
 
 _RANGE = re.compile(
@@ -205,8 +263,14 @@ def _years(text: str, cfg: ResumeConfig, today_year: int | None = None) -> int |
 
 def _education(text: str, cfg: ResumeConfig) -> tuple[str, ...]:
     low = text.lower()
-    return tuple(
-        label
-        for label, words in cfg.parse.education_keywords.items()
-        if any(re.search(rf"(?<![a-z]){re.escape(w.lower())}(?![a-z])", low) for w in words)
-    )
+    out: list[str] = []
+    for label, words in cfg.parse.education_keywords.items():
+        by_word = any(re.search(rf"(?<![a-z]){re.escape(w.lower())}(?![a-z])", low) for w in words)
+        by_pattern = any(
+            re.search(pattern, line)
+            for pattern in cfg.parse.education_patterns.get(label, [])
+            for line in text.splitlines()
+        )
+        if by_word or by_pattern:
+            out.append(label)
+    return tuple(out)

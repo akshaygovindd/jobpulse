@@ -6,9 +6,14 @@ import streamlit as st
 from jobpulse.app_components import match_card
 from jobpulse.app_ui import (
     REMOTE_LABELS,
+    app_config,
+    careers_urls,
     clean,
+    h1b_applies,
     human,
+    intern_pay_unclear,
     load,
+    pay_as_posted,
     role_label,
     salary_range,
     skill_label,
@@ -18,6 +23,7 @@ from jobpulse.config import load_resume
 from jobpulse.resume.match import (
     Match,
     PostingSkills,
+    canonical_skills,
     collapse_locations,
     default_levels,
     level_group,
@@ -42,6 +48,7 @@ CLASS_LABELS = {
     "EXPLICITLY_UNAVAILABLE": "Posting says sponsorship is not available",
     "HISTORICAL_EVIDENCE": "Company has certified H-1B filings",
     "UNKNOWN": "No matching filings found",
+    "NOT_US": "H-1B applies to US roles only",
 }
 
 cfg = load_resume()
@@ -72,7 +79,7 @@ def _analyze() -> None:
         if upload is not None:
             text = read_resume(upload.name, upload.getvalue(), cfg)
         else:
-            text = check_text(st.session_state.get(TEXT, ""), cfg)
+            text = check_text(st.session_state.get(TEXT, ""), cfg, pasted=True)
         profile = extract_profile(text, vocabulary, cfg, datetime.now(UTC).year)
         st.session_state[PROFILE] = profile
         # Experience level is a pre-selected filter, never part of the score.
@@ -159,6 +166,8 @@ with right:
     # Text taken from the resume is shown as plain text, never as markdown (no links, images or
     # LaTeX from an uploaded file).
     st.text("\n".join(profile.titles) or "No title lines found.")
+    if profile.role_families:
+        st.caption("Aiming at: " + ", ".join(role_label(f) for f in profile.role_families))
 st.caption(
     "Only skills that appear in several open postings can be recognized, and spelling variants "
     "the list does not know are missed. Single letters and everyday words (for example R, C, Go, "
@@ -182,8 +191,8 @@ if len(profile.skills) < cfg.match.min_resume_skills:
 postings = load(
     "SELECT p.posting_key, c.name AS company, p.title, p.role_family, p.remote_policy, p.city, "
     "p.city_country, p.seniority, p.apply_url, p.sponsorship_class, c.n_lca_certified, "
-    "p.salary_min_annual, p.salary_max_annual, p.salary_currency, p.salary_period, "
-    "list(s.canonical_name) AS skills "
+    "p.salary_min_annual, p.salary_max_annual, p.salary_min, p.salary_max, p.salary_currency, "
+    "p.salary_period, list(s.canonical_name) AS skills "
     "FROM gold.fct_postings p JOIN gold.dim_company c ON c.company_id = p.company_id "
     "JOIN gold.bridge_posting_skill b ON b.posting_key = p.posting_key "
     "JOIN gold.dim_skill s ON s.skill_id = b.skill_id "
@@ -195,16 +204,35 @@ if postings.empty:
     st.stop()
 
 st.subheader("Matching open postings")
+open_roles = int(
+    load(
+        "SELECT count(*) AS n FROM gold.fct_postings WHERE is_active AND is_target_role "
+        "AND has_extraction AND NOT is_probable_duplicate"
+    )["n"].iloc[0]
+)
+no_skills = open_roles - len(postings)
 st.caption(
-    f"Compared against the {len(postings):,} open data and AI postings whose skills the AI "
-    "has read (a title filter chooses these roles; other open postings are not read). The match "
-    "is the share of the skills a posting asks for that appear in your resume, so a posting that "
-    "lists few skills can score high. Postings with fewer than "
+    f"Compared against {len(postings):,} of the {open_roles:,} open data and AI postings the AI "
+    "has read"
+    + (
+        f" (the other {no_skills:,} list no skills, so there is nothing to match). "
+        if no_skills > 0
+        else ". "
+    )
+    + "The match is the share of the skills a posting asks for that appear in your resume, so a "
+    "posting that lists few skills can score high. Postings with fewer than "
     f"{cfg.match.min_posting_skills} extracted skills are not ranked. The same role in several "
     "places is one row."
 )
 visa_disclaimer()
 postings["level"] = postings["seniority"].map(lambda v: level_group(v, cfg.levels))
+# H-1B filings are about US jobs: a posting abroad gets "H-1B applies to US roles only" instead of
+# the company's filing history (a posting's own sponsorship statement is still shown).
+postings["us_ok"] = postings["city_country"].map(lambda c: h1b_applies([c]))
+postings["visa_class"] = [
+    "NOT_US" if (not us and cls in ("HISTORICAL_EVIDENCE", "UNKNOWN")) else cls
+    for us, cls in zip(postings["us_ok"], postings["sponsorship_class"], strict=True)
+]
 with st.container(horizontal=True):
     levels = st.multiselect(
         "Experience level",
@@ -246,7 +274,7 @@ for column, picked in (
     ("role_family", roles),
     ("remote_policy", remote),
     ("city", cities),
-    ("sponsorship_class", classes),
+    ("visa_class", classes),
 ):
     if picked:
         view = view[view[column].isin(picked)]
@@ -257,6 +285,16 @@ def _location(row: Any) -> str:
 
 
 def _salary(row: Any) -> str:
+    if row.seniority == "intern":
+        # Internship pay is shown as posted (hourly or monthly), never as a yearly salary.
+        if intern_pay_unclear(
+            row.salary_min,
+            row.salary_max,
+            row.salary_period,
+            app_config().pay.intern_max_range_ratio,
+        ):
+            return "Not clearly stated (the range spans several levels)"
+        return pay_as_posted(row.salary_min, row.salary_max, row.salary_currency, row.salary_period)
     text = salary_range(row.salary_min_annual, row.salary_max_annual, row.salary_currency)
     period = clean(row.salary_period)
     if text != "Not advertised" and period and period != "year":
@@ -264,10 +302,14 @@ def _salary(row: Any) -> str:
     return text
 
 
+groups = cfg.parse.synonym_groups
+have = canonical_skills(profile.skills, groups)  # "dashboard" and "dashboarding" are one skill
+careers = careers_urls()
+ignored = frozenset(cfg.parse.ignore_skills)  # stop-list words are not skills on either side
 pool = collapse_locations(
     PostingSkills(
         str(r.posting_key),
-        frozenset(r.skills),
+        canonical_skills(r.skills, groups) - ignored,
         {
             "company": r.company,
             "title": r.title,
@@ -275,16 +317,19 @@ pool = collapse_locations(
             "remote": r.remote_policy,
             "location": _location(r),
             "apply_url": clean(r.apply_url),
-            "visa": CLASS_LABELS.get(str(r.sponsorship_class), "Unknown")
-            + f" ({int(r.n_lca_certified)} filings)",
-            "visa_class": str(r.sponsorship_class),
-            "filings": int(r.n_lca_certified),
+            "careers_url": careers.get(str(r.company), ""),
+            "us_ok": bool(r.us_ok),
+            "country": clean(r.city_country),
+            "visa": CLASS_LABELS.get(str(r.visa_class), "Unknown")
+            + (f" ({int(r.n_lca_certified)} filings)" if r.visa_class != "NOT_US" else ""),
+            "visa_class": str(r.visa_class),
+            "filings": 0 if r.visa_class == "NOT_US" else int(r.n_lca_certified),
             "salary": _salary(r),
         },
     )
     for r in view.itertuples()
 )
-matches = rank_postings(profile.skills, pool, cfg.match)
+matches = rank_postings(have, pool, cfg.match, profile.role_families)
 if not matches:
     st.info("No postings match with the current filters.", icon=":material/search_off:")
     st.stop()
@@ -354,6 +399,7 @@ VISA_BADGE = {
     "EXPLICITLY_UNAVAILABLE": ("Posting: no sponsorship", "orange", ":material/block:"),
     "HISTORICAL_EVIDENCE": ("Company has certified filings", "blue", ":material/verified:"),
     "UNKNOWN": ("No matching filings found", "gray", ":material/help:"),
+    "NOT_US": ("H-1B applies to US roles only", "gray", ":material/public:"),
 }
 PAGE_SIZE = 10
 SHOWN = "resume_shown"
@@ -381,7 +427,8 @@ for rank, m in enumerate(matches[:shown]):
         visa_color=color,
         visa_icon=icon,
         filings=info["filings"],
-        apply_url=info["apply_url"],
+        apply_url=info["apply_url"] or info["careers_url"],
+        apply_label="Apply" if info["apply_url"] else "Careers page",
     )
 if len(matches) > shown:
     st.button(
@@ -402,7 +449,7 @@ rows = [
         "Top missing skills": _more(m.missing),
         "Visa evidence": m.posting.info["visa"],
         "Advertised salary": m.posting.info["salary"],
-        "Apply": m.posting.info["apply_url"] or None,
+        "Apply": m.posting.info["apply_url"] or m.posting.info["careers_url"] or None,
     }
     for m in matches
 ]

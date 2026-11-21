@@ -53,6 +53,14 @@
    (config/app.yaml), so the control is hidden rather than showing it twice. */
 .st-key-map_wrap [class*="ctrl-attrib"] { display: none; }
 
+/* The experience-level filter holds long option names ("Intern and junior"): give it room. */
+.st-key-resume_levels, .st-key-mkt_levels { min-width: min(22rem, 100%); }
+
+/* Selected options in a multiselect (for example "Intern and junior") keep their whole text and
+   wrap instead of being cut to "Intern...". */
+[data-baseweb="tag"] { max-width: 100%; height: auto; }
+[data-baseweb="tag"] span { max-width: none; white-space: normal; overflow: visible; }
+
 /* Phones: the map is a picture, not a gesture trap. Touches go to the page, so it keeps scrolling. */
 @media (max-width: 639px) {
   .st-key-map_wrap [data-testid="stDeckGlJsonChart"] { pointer-events: none; }

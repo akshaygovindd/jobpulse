@@ -16,7 +16,13 @@ import duckdb
 import streamlit as st
 
 from jobpulse.app_data import GOLD_URL_ENV, LOCAL_DB_ENV, AppDataError, connect, read_gold
-from jobpulse.config import AppConfig, load_app, load_city_coords, load_skill_display
+from jobpulse.config import (
+    AppConfig,
+    load_app,
+    load_city_coords,
+    load_employers,
+    load_skill_display,
+)
 from jobpulse.insights import k_text
 
 VISA_DISCLAIMER = (
@@ -570,7 +576,7 @@ def salary_chart(data: Any, min_cells: int = 3, sign: str = "$") -> None:
 
 
 def salary_range(low: Any, high: Any, currency: Any) -> str:
-    """'$120K-$160K' from annualized advertised salary; 'Not advertised' when there is none."""
+    """'$120K to $160K' from annualized advertised salary; 'Not advertised' when there is none."""
     lo, hi = usd_k(low), usd_k(high)
     if lo is None and hi is None:
         return "Not advertised"
@@ -578,6 +584,69 @@ def salary_range(low: Any, high: Any, currency: Any) -> str:
     if lo is not None and hi is not None and k_text(lo, sign) != k_text(hi, sign):
         return f"{k_text(lo, sign)} to {k_text(hi, sign)}"
     return k_text(lo if lo is not None else hi, sign)
+
+
+def pay_as_posted(low: Any, high: Any, currency: Any, period: Any) -> str:
+    """Pay in the unit the posting states it, never converted to a yearly figure: '$64 to $68 per
+    hour', '$12,100 per month', '$120K to $150K per year'. Internships are shown this way
+    everywhere (an hourly or monthly internship rate is not a yearly salary)."""
+    lo = None if is_missing(low) else float(low)
+    hi = None if is_missing(high) else float(high)
+    if lo is None and hi is None:
+        return "Not advertised"
+    sign = "$" if currency == "USD" else f"{currency} " if isinstance(currency, str) else ""
+    unit = clean(period)
+    if unit == "year":
+
+        def fmt(v: float) -> str:
+            return k_text(v / 1000, sign)
+
+    else:
+
+        def fmt(v: float) -> str:
+            return f"{sign}{v:,.0f}"
+
+    a, b = (
+        fmt(lo if lo is not None else float(hi or 0)),
+        fmt(hi if hi is not None else float(lo or 0)),
+    )
+    text = a if a == b else f"{a} to {b}"
+    return f"{text} per {unit}" if unit else text
+
+
+def intern_pay_unclear(low: Any, high: Any, period: Any, max_ratio: float) -> bool:
+    """True for an internship whose YEARLY range is wider than `max_ratio` (max / min): that is a
+    pay table for full-time levels copied onto the posting, not what an intern earns."""
+    if clean(period) != "year" or is_missing(low) or is_missing(high) or not float(low):
+        return False
+    return float(high) / float(low) > max_ratio
+
+
+US = "United States"
+
+
+def h1b_applies(countries: Sequence[Any]) -> bool:
+    """H-1B filings are about US jobs. True when any of a posting's places is in the United States
+    or has no country (remote and multi-location postings: we cannot rule the US out); False when
+    every place is known and abroad."""
+    return any(is_missing(c) or c == US for c in countries) or not countries
+
+
+_ATS_BOARDS = {
+    "greenhouse": "https://job-boards.greenhouse.io/{}",
+    "lever": "https://jobs.lever.co/{}",
+    "ashby": "https://jobs.ashbyhq.com/{}",
+}
+
+
+@functools.lru_cache(maxsize=1)
+def careers_urls() -> dict[str, str]:
+    """Company name -> its careers page: `careers_url` in config/employers.yaml, else the
+    company's job board on its ATS. Where a posting has no apply link of its own."""
+    out: dict[str, str] = {}
+    for e in load_employers().employers:
+        out[e.company] = e.careers_url or _ATS_BOARDS[e.source].format(e.board_id)
+    return out
 
 
 @functools.lru_cache(maxsize=1)
