@@ -143,7 +143,6 @@ def test_locations_config_is_consistent() -> None:
         "San Francisco, CA • New York, NY",
         "San Francisco or Seattle",
         "Toronto, Chicago, Atlanta",
-        "Hybrid - New York, NY",
         "Texas, USA",
     ],
 )
@@ -184,3 +183,28 @@ def test_norm_skill_collapses_variants() -> None:
 def test_junk_and_misspelled_locations_from_the_qa_audit(raw: str, label: str | None) -> None:
     place = PARSER.parse(raw)
     assert (place.label if place else None) == label
+
+
+@pytest.mark.parametrize(
+    ("raw", "label"),
+    [
+        ("Hybrid - New York, NY", "New York, New York"),
+        ("Remote - New York, NY", "New York, New York"),
+        ("On-site - Boston, MA", "Boston, Massachusetts"),
+        ("Onsite – Austin, TX", "Austin, Texas"),
+        ("hybrid: Toronto, ON", "Toronto, Ontario"),
+    ],
+)
+def test_workplace_prefix_is_stripped_before_the_city_is_parsed(raw: str, label: str) -> None:
+    """QA: Coinbase "People Analytics Intern" ("Hybrid - New York, NY") had no city."""
+    place = PARSER.parse(raw)
+    assert place is not None
+    assert place.label == label
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["Remote - United States", "Remote - Anywhere", "Hybrid -", "Remote", "Hybrid - NYC / SF"],
+)
+def test_a_workplace_prefix_never_invents_a_city(raw: str) -> None:
+    assert PARSER.parse(raw) is None

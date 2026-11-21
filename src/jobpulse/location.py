@@ -45,6 +45,7 @@ class Place:
 class CityParser:
     def __init__(self, cfg: LocationsConfig) -> None:
         self._ignored = {s.lower() for s in cfg.ignored_locations}
+        self._prefix = re.compile(cfg.workplace_prefix_pattern)
         self._remote = re.compile(cfg.remote_pattern)
         self._multi = re.compile(cfg.multi_pattern)
         self._noise = re.compile(cfg.noise_pattern)
@@ -66,7 +67,7 @@ class CityParser:
         self._known = {k.lower(): v for k, v in cfg.known_places.items()}
 
     def parse(self, location_raw: str | None) -> Place | None:
-        raw = (location_raw or "").strip()
+        raw = self._prefix.sub("", (location_raw or "").strip(), count=1).strip()
         if not raw or raw.lower() in self._ignored:
             return None
         if self._remote.search(raw):

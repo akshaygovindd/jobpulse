@@ -20,6 +20,10 @@ ignored_locations:
   - chicago, new york
   - towson, ma
 
+# A workplace-type label in front of the place ("Hybrid - New York, NY") is not part of it: it is
+# stripped before parsing, so the city is found. The remainder is parsed as usual ("Remote - US"
+# is still no city; the remote policy itself comes from the posting, not from this).
+workplace_prefix_pattern: '(?i)^\s*(?:hybrid|remote|on[- ]?site|in[- ]?office)\s*[-\u2013\u2014:]\s*'
 remote_pattern: '(?i)\b(remote|anywhere|n/a)\b'
 multi_pattern: '(?i)(;|•|\||/|\bor\b|\band\b| - | – )'
 noise_pattern: '(?i)(\(\s*hq\s*\)|\bhq\b|\boffice\b|\bheadquarters\b)'
