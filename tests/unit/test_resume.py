@@ -241,7 +241,7 @@ def test_page_shows_privacy_notice_and_ranks_postings(
     resume_db: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     at = _open(resume_db, monkeypatch)
-    assert "never saved to disk or a database, never logged" in _everything(at)
+    assert "never saved, logged or sent to an AI" in _everything(at)
     at = _analyze(at, RESUME)
     assert not at.exception, at.exception
     assert at.metric[0].value == "6"  # python, sql, spark, kafka, airflow, dbt

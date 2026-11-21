@@ -105,12 +105,12 @@ def _delete() -> None:
 
 
 st.info(
-    "**Privacy.** Your resume is processed in memory in this browser session only. It is never "
-    "saved to disk or a database, never logged, and no AI service is called: skills are found by "
-    "matching words against the skill list built from the postings. Only the skills, a few short "
-    "lines (as written, without any email, phone number or link), the degrees and the years of "
-    "experience found are kept for this session, until you press **Delete** "
-    "or close the tab. Nothing is sent to the project owner.",
+    "**Privacy.** Resume files and raw text are never saved, logged or sent to an AI; extracted "
+    "skills are held only in session memory until Delete or tab close. Skills are found by "
+    "matching words against the skill list built from the postings. Besides the skills, a few "
+    "short lines (as written, without any email, phone number or link), the degrees and the "
+    "years of experience found stay in this session until you press **Delete** or close the tab. "
+    "Nothing is sent to the project owner.",
     icon=":material/lock:",
 )
 
@@ -241,10 +241,11 @@ postings["visa_class"] = [
 ]
 with st.container(horizontal=True):
     levels = st.multiselect(
-        "Experience level",
+        "Experience level (approximate)",
         list(cfg.levels.groups),
         key="resume_levels",
-        help="Pre-selected from the years and titles in your resume; change it freely. A filter "
+        help="Approximate: pre-selected from the years and titles in your resume, and seniority "
+        "labels are only about 55% accurate on the labeled pilot. Change it freely. A filter "
         "only: it never changes a match score.",
     )
     roles = st.multiselect(

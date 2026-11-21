@@ -1,0 +1,51 @@
+name: dbt docs
+
+# Publishes the dbt docs site (lineage graph, model descriptions, tests) to GitHub Pages.
+# No warehouse connection or secret: the docs are built from the model SQL and YAML only
+# (scripts/build_dbt_docs.py). One-time owner setup: Settings > Pages > Source = "GitHub Actions".
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "dbt/**"
+      - "scripts/build_dbt_docs.py"
+      - ".github/workflows/dbt_docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --frozen --no-default-groups --group dbt
+      - run: uv run python scripts/build_dbt_docs.py site
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

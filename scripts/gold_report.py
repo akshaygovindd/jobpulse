@@ -45,6 +45,32 @@ QUERIES: tuple[tuple[str, str], ...] = (
         "  salary period inferred (rows)",
         "SELECT count(*) FROM {g}.fct_postings WHERE salary_period_inferred",
     ),
+    (
+        "  analyzed (target-role) postings with an apply link (%)",
+        "SELECT round(100.0 * count(apply_url) / nullif(count(*), 0), 1) "
+        "FROM {g}.fct_postings WHERE is_active AND has_extraction AND NOT is_probable_duplicate",
+    ),
+    (
+        "  all open postings with an apply link (%)",
+        "SELECT round(100.0 * count(apply_url) / nullif(count(*), 0), 1) "
+        "FROM {g}.fct_postings WHERE is_active",
+    ),
+    (
+        "  latest day: boards complete / failed (distinct companies)",
+        "SELECT snapshot_date::varchar || ': ' || "
+        "coalesce(sum(n_authoritative_companies), 0)::varchar "
+        "|| ' complete, ' "
+        "|| coalesce(sum(n_companies) FILTER (WHERE status <> 'complete'), 0)::varchar "
+        "|| ' not complete' FROM {g}.agg_ingest_status_daily "
+        "WHERE snapshot_date = (SELECT max(snapshot_date) FROM {g}.agg_ingest_status_daily) "
+        "GROUP BY snapshot_date",
+    ),
+    (
+        "  complete days (all boards authoritative) / days observed",
+        "SELECT count(*) FILTER (WHERE c >= 43)::varchar || ' / ' || count(*)::varchar FROM ("
+        "SELECT snapshot_date, sum(n_authoritative_companies) c "
+        "FROM {g}.agg_ingest_status_daily GROUP BY 1)",
+    ),
     ("dim_company rows", "SELECT count(*) FROM {g}.dim_company"),
     (
         "companies with certified H-1B filings (FY2025-FY2026)",

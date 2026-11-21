@@ -126,23 +126,10 @@ def company_domains() -> dict[str, list[str]]:
     return out
 
 
-def build_gold(
-    pipeline: PipelineConfig | None = None,
-    *,
-    db_path: Path | None = None,
-    extraction: ExtractionConfig | None = None,
-    locations: LocationsConfig | None = None,
-) -> tuple[SilverResult, StagedMaps]:
-    pipeline = pipeline or load_pipeline()
-    ecfg = extraction or load_extraction()
+def gold_variables(pipeline: PipelineConfig, ecfg: ExtractionConfig) -> dict[str, object]:
     wh = pipeline.warehouse
     lca = load_lca()
-    con = connect(wh, db_path=db_path)
-    try:
-        maps = stage_maps(con, pipeline, ecfg, locations or load_locations())
-    finally:
-        con.close()  # release the file lock before dbt opens its own connection
-    variables: dict[str, object] = {
+    return {
         "bronze_schema": wh.bronze_schema,
         "silver_schema": wh.silver_schema,
         "gold_schema": wh.gold_schema,
@@ -162,5 +149,23 @@ def build_gold(
         "company_domains": company_domains(),
         "min_salaries_for_percentiles": pipeline.gold.min_salaries_for_percentiles,
     }
+
+
+def build_gold(
+    pipeline: PipelineConfig | None = None,
+    *,
+    db_path: Path | None = None,
+    extraction: ExtractionConfig | None = None,
+    locations: LocationsConfig | None = None,
+) -> tuple[SilverResult, StagedMaps]:
+    pipeline = pipeline or load_pipeline()
+    ecfg = extraction or load_extraction()
+    wh = pipeline.warehouse
+    con = connect(wh, db_path=db_path)
+    try:
+        maps = stage_maps(con, pipeline, ecfg, locations or load_locations())
+    finally:
+        con.close()  # release the file lock before dbt opens its own connection
+    variables = gold_variables(pipeline, ecfg)
     result = run_dbt(wh, ["path:models/gold", "path:snapshots"], variables, db_path=db_path)
     return result, maps

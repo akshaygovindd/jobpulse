@@ -80,14 +80,11 @@ def run_dbt(
     return result
 
 
-def build_silver(
-    cfg: WarehouseConfig,
-    *,
-    db_path: Path | None = None,
-    extraction: ExtractionConfig | None = None,
-) -> SilverResult:
+def silver_variables(
+    cfg: WarehouseConfig, extraction: ExtractionConfig | None = None
+) -> dict[str, object]:
     flt = (extraction or load_extraction()).title_filter
-    variables: dict[str, object] = {
+    return {
         "extraction_exclude": flt.exclude,
         "extraction_families": [f.model_dump() for f in flt.families],
         "bronze_schema": cfg.bronze_schema,
@@ -99,4 +96,13 @@ def build_silver(
         "ops_schema": cfg.ops_schema,
         "closure_consecutive_absences": cfg.closure_consecutive_absences,
     }
+
+
+def build_silver(
+    cfg: WarehouseConfig,
+    *,
+    db_path: Path | None = None,
+    extraction: ExtractionConfig | None = None,
+) -> SilverResult:
+    variables = silver_variables(cfg, extraction)
     return run_dbt(cfg, ["path:models/staging", "path:models/silver"], variables, db_path=db_path)

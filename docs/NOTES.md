@@ -964,3 +964,18 @@ Checks: `make check` (see the last run below). Not verified: a real touch swipe 
 ## 2026-11-20 (last): workplace prefix in locations
 
 `workplace_prefix_pattern` in `config/locations.yaml` strips "Hybrid - ", "Remote - ", "On-site - " before the city is parsed (tests added; the old test that expected no city for "Hybrid - New York, NY" was replaced). Cities parsed: 5,263 to 5,355 of open postings (365 to 372 labels); Coinbase "People Analytics Intern" is now New York. Gold rebuilt and uploaded. Reboot the Streamlit app.
+
+## 2026-11-20 (docs pass after two external reviews)
+
+**What changed and why.** Documentation-only pass, plus the small tooling needed so every new figure comes from a script.
+- README: "production-style daily data platform", "deployed, running daily, being hardened". Key numbers now state their population and date: advertised salary 79% of the 515 analyzed data and AI roles (was 72.8%/"73%"); apply links 94% of the 515 analyzed roles, 98% of all 8,445 open postings (the old "about half" was stale); parsed city 63.4% of open postings. Employer match: 100% precision on 35 labeled pairs, recall not measured. The 96.4% row is labeled a single-field figure, not overall accuracy. "43/43 complete on every daily run since 10 Nov" (11 of 11 days). dbt tests are described as running in the daily pipeline, not per-push CI; browser QA is "automated" with no scores.
+- Privacy sentence ("Resume files and raw text are never saved, logged or sent to an AI; extracted skills are held only in session memory until Delete or tab close.") is now identical in the README, ARCHITECTURE and the Resume match page.
+- Resume match experience filter is labeled "Experience level (approximate)" with a help text citing the 55% seniority accuracy; still user-adjustable and never in the score.
+- README additions: Mermaid gold dimensional model, Failure drill (links `test_c_failed_fetch_day_has_no_pointer_and_does_not_count`), Operations snapshot of 2026-11-20.
+- `scripts/gold_report.py` gained apply-link %, latest-day companies complete/failed, and complete-days lines. `gold_variables()` / `silver_variables()` were factored out of `build_gold` / `build_silver` (no behavior change) so `scripts/build_dbt_docs.py` can build the dbt docs with no warehouse connection. New workflow `.github/workflows/dbt_docs.yml` publishes them to GitHub Pages (no paid service, no secrets).
+
+**Checks.** `make check`: ruff, ruff format, mypy (53 files) and pytest (593 tests) green after fixing one test that asserted the old privacy wording; no infra changes, so terraform checks were not needed. The docs build was run locally (28 models, 1 snapshot, 146 data tests, 175 manifest nodes). The workflow itself has not run yet.
+
+**Open questions for the owner.**
+1. One-time setting: GitHub repo Settings > Pages > Source = "GitHub Actions", then run the "dbt docs" workflow (or push). Until then the README link 404s.
+2. The Operations table is a one-day snapshot written by hand from `gold_report.py` and `fct_pipeline_runs`; refresh it when you want a newer day.
