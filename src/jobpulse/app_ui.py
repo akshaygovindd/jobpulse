@@ -282,18 +282,25 @@ def _titles(data: Any) -> tuple[Any, dict[str, str]]:
     return data.rename(columns=names), names
 
 
-def _chart(data: Any, spec: dict[str, Any], height: int) -> None:
+HEATMAP_CELL_PX = 84  # width of one seniority column in the salary heatmap
+
+
+def _chart(data: Any, spec: dict[str, Any], height: int, width: int | None = None) -> None:
+    """`width` (pixels) draws a fixed-size plot area, so the chart never depends on the layout
+    width at the moment it first renders; without it the chart fills its container."""
+    fixed = width is not None
     spec = {
         "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
         "height": height,
         # Axes and padding count inside the container's width, so long category labels on the left
         # and value labels past the longest bar are never clipped on a narrow screen.
-        "autosize": {"type": "fit", "contains": "padding"},
+        "autosize": {"type": "pad" if fixed else "fit", "contains": "padding"},
         "padding": {"top": 8, "left": 10, "right": 36, "bottom": 4},
         "config": CHART_CONFIG,
+        **({"width": width} if fixed else {}),
         **spec,
     }
-    st.vega_lite_chart(data, spec, width="stretch")
+    st.vega_lite_chart(data, spec, width="content" if fixed else "stretch")
 
 
 def bar(
@@ -331,7 +338,7 @@ def bar(
     value: dict[str, Any] = {
         "field": val,
         "type": "quantitative",
-        "axis": {"title": val, "format": "~s", "tickCount": 5, "tickMinStep": 1},  # few, whole
+        "axis": {"title": val, "format": ",d", "tickCount": 5, "tickMinStep": 1},  # plain ints
     }
     cat_ch, val_ch = ("y", "x") if horizontal else ("x", "y")
     # hovering a bar lights it up (the others dim a little); the tooltip names the exact value
@@ -572,7 +579,12 @@ def salary_chart(data: Any, min_cells: int = 3, sign: str = "$") -> None:
         ],
     }
     with st.container(key="wide_chart"):  # scrolls sideways on a phone (see app/style.css)
-        _chart(data, spec, max(200, 52 * data["Role family"].nunique() + 100))
+        _chart(
+            data,
+            spec,
+            max(200, 52 * data["Role family"].nunique() + 100),
+            width=HEATMAP_CELL_PX * len(order),
+        )
 
 
 def salary_range(low: Any, high: Any, currency: Any) -> str:
@@ -818,7 +830,7 @@ def city_map(rows: Sequence[tuple[str, int]], height: int = 420) -> tuple[int, i
         get_position="[lon, lat]",
         get_radius="radius",
         radius_units="pixels",
-        get_fill_color=[47, 109, 181, 190],
+        get_fill_color=[47, 109, 181, 130],
         get_line_color=[255, 255, 255, 120],
         line_width_min_pixels=1,
         stroked=True,

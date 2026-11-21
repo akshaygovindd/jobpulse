@@ -75,6 +75,7 @@ def _upload_key() -> str:
 def _analyze() -> None:
     st.session_state.pop(ERROR, None)
     st.session_state.pop(DELETED, None)
+    st.session_state.pop("resume_roles", None)  # re-preselected from the new resume's title
     upload = st.session_state.get(_upload_key())
     try:
         if upload is not None:
@@ -248,9 +249,12 @@ with st.container(horizontal=True):
         "labels are only about 55% accurate on the labeled pilot. Change it freely. A filter "
         "only: it never changes a match score.",
     )
+    families = sorted(set(postings["role_family"].dropna()))
+    if "resume_roles" not in st.session_state:  # pre-select the resume's role; user can clear it
+        st.session_state["resume_roles"] = [f for f in profile.role_families if f in families]
     roles = st.multiselect(
         "Role family",
-        sorted(set(postings["role_family"].dropna())),
+        families,
         format_func=role_label,
         key="resume_roles",
     )

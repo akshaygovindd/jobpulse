@@ -27,7 +27,7 @@ select 'city_parsed', 'active postings with a parsed city',
     count(*) filter (where city is not null), count(*)
 from p
 union all
-select 'role_family_known', 'extracted postings with a role family other than other',
+select 'role_family_known', 'extracted postings with a specific role family',
     count(*) filter (where role_family <> 'other'), count(*)
 from p where has_extraction
 union all

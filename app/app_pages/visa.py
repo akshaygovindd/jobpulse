@@ -1,7 +1,7 @@
 import streamlit as st
 
 from jobpulse import insights
-from jobpulse.app_components import avatar, company_card, md_escape
+from jobpulse.app_components import avatar, company_card
 from jobpulse.app_ui import (
     DATA_ROLES,
     MATCH_LABELS,
@@ -161,28 +161,12 @@ with st.expander("Show data: all companies", icon=":material/table:"):
 
 st.subheader("Company lookup")
 tracked = companies["name"].tolist()
-query = st.text_input(
-    "Search for a company",
-    key="visa_query",
-    placeholder="Type a name, for example Stripe",
-    help=f"We track {len(tracked)} companies, listed below. Ordered by certified filings.",
-)
-matches = [n for n in tracked if query.strip().lower() in n.lower()] if query.strip() else tracked
-if not matches:
-    st.info(
-        f"No tracked company matches “{md_escape(query.strip())}”. We track {len(tracked)} "
-        f"{'company' if len(tracked) == 1 else 'companies'} (the job boards behind Market "
-        "overview), so any other employer is not here: "
-        + ", ".join(sorted(tracked, key=str.lower))
-        + ".",
-        icon=":material/search_off:",
-    )
-    st.stop()
 name = st.selectbox(
     "Company",
-    matches,
+    tracked,
     key="visa_company",
-    help=f"{len(matches)} of {len(tracked)} tracked companies. Ordered by certified filings.",
+    placeholder="Type to search, for example Stripe",
+    help=f"We track {len(tracked)} companies. Type to search; ordered by certified filings.",
 )
 row = companies[companies["name"] == name].iloc[0]
 cid = row["company_id"]

@@ -116,20 +116,22 @@ def match_card(
     """One Resume match result. `matched` and `missing` are display names; everything else is
     already a display string. The apply link is shown only for an https URL."""
     with st.container(border=True, key=f"card_match_{key}"):
-        with st.container(horizontal=True, vertical_alignment="center", gap="small"):
-            avatar(company)
-            with st.container(gap="xxsmall"):
-                st.caption(md_escape(company))
-                st.markdown(f"**{md_escape(title)}**")
-        total = len(matched) + len(missing)
-        st.progress(
-            min(max(score, 0.0), 1.0),
-            text=f"**{round(100 * score)}% match** ({len(matched)} of {total} skills asked for)",
-        )
-        chips(matched, color="green", icon=":material/check:", shown=matched_shown)
-        chips(missing, color="red", icon=":material/close:", shown=missing_shown)
-        meta_line([("location_on", location), ("home_work", remote), ("payments", salary)])
-        with st.container(horizontal=True, vertical_alignment="center"):
+        main, side = st.columns([3, 2], gap="medium")
+        with main:
+            with st.container(horizontal=True, vertical_alignment="center", gap="small"):
+                avatar(company)
+                with st.container(gap="xxsmall"):
+                    st.caption(md_escape(company))
+                    st.markdown(f"**{md_escape(title)}**")
+            total = len(matched) + len(missing)
+            st.progress(
+                min(max(score, 0.0), 1.0),
+                text=f"**{round(100 * score)}% match** ({len(matched)} of {total} skills)",
+            )
+            chips(matched, color="green", icon=":material/check:", shown=matched_shown)
+            chips(missing, color="red", icon=":material/close:", shown=missing_shown)
+        with side:
+            meta_line([("location_on", location), ("home_work", remote), ("payments", salary)])
             st.badge(
                 badge_text(visa_label),
                 color=visa_color,  # type: ignore[arg-type]

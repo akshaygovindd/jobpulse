@@ -89,7 +89,7 @@ visa = load(
 with_filings = int((visa["n_lca_certified"] > 0).sum())
 
 c1, c2, c3, c4 = st.columns(4)
-with c1, st.container(border=True, height="stretch", key="card_kpi_0"):
+with c1, st.container(border=True, key="card_kpi_0"):
     trend = kpi_series(7, target_only=True)
     basis = kpi_basis(days)
     st.metric(
@@ -119,7 +119,7 @@ with c1, st.container(border=True, height="stretch", key="card_kpi_0"):
         f"roles) across {int(counts['companies'])} companies"
     )
     st.page_link("app_pages/market_overview.py", label="Market overview", icon=":material/public:")
-with c2, st.container(border=True, height="stretch", key="card_kpi_1"):
+with c2, st.container(border=True, key="card_kpi_1"):
     if len(skills):
         top = skills.iloc[0]
         st.metric(
@@ -136,7 +136,7 @@ with c2, st.container(border=True, height="stretch", key="card_kpi_1"):
         st.metric("Most requested skill", "n/a", icon=":material/psychology:")
         st.caption("No analyzed postings yet.")
     st.page_link("app_pages/hiring_trends.py", label="Hiring trends", icon=":material/trending_up:")
-with c3, st.container(border=True, height="stretch", key="card_kpi_2"):
+with c3, st.container(border=True, key="card_kpi_2"):
     if pay["n"]:
         st.metric(
             "Median advertised pay",
@@ -152,7 +152,7 @@ with c3, st.container(border=True, height="stretch", key="card_kpi_2"):
         st.metric("Median advertised pay", "n/a", icon=":material/payments:")
         st.caption("No advertised salaries yet.")
     st.page_link("app_pages/salary.py", label="Salary", icon=":material/payments:")
-with c4, st.container(border=True, height="stretch", key="card_kpi_3"):
+with c4, st.container(border=True, key="card_kpi_3"):
     st.metric(
         "Companies with H-1B filings",
         f"{with_filings} of {len(visa)}",

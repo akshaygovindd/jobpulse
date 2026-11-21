@@ -984,3 +984,9 @@ Checks: `make check` (see the last run below). Not verified: a real touch swipe 
 - Changed: fixed two malformed rows in the README Key numbers table (missing and duplicated "Produced by" cell). Re-checked README, SPEC, ARCHITECTURE and ROADMAP for conflicting figures or wording; none found. All other requested items were already in place from the previous docs pass.
 - Checks: `make check` passed (ruff, mypy, pytest, terraform fmt/validate, gitleaks: no leaks).
 - Open question: GitHub Pages source must be set to "GitHub Actions" once for the dbt docs link to go live.
+
+## 2026-11-21 — screenshots in README and final app polish
+- Changed: README now embeds six screenshots (home, resume match, visa, salary, map, lineage) with captions and links the rest in a "More screenshots" block; oversize images were shrunk (lineage resized, market converted to JPEG). Resume match pre-selects the Role family filter from the resume's title (clearable; order stays by match %) and its cards put location, pay, visa badge and Apply in a right column. Home KPI cards no longer stretch to equal height. Map dots are smaller (max radius 36 to 22 px) and more transparent. Visa lookup keeps only the Company dropdown (type to search). Salary heatmap has a fixed plot width (84 px per seniority column). Company chart axis shows plain integers. The data-quality label now reads "with a specific role family". The dbt docs get a project overview page (`dbt/models/overview.md`), republished by the docs workflow on push.
+- Not done: map "keep dots inside the frame" is only addressed by smaller dots; I did not change the initial view or check it in a browser, so please look at it after the reboot.
+- Checks: `make check` passed (ruff, format, mypy, pytest, terraform fmt/validate, gitleaks).
+- Open questions: does the map still clip dots at the edges? If so I would adjust the initial zoom or centre in `config/app.yaml`.

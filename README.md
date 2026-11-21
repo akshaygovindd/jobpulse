@@ -4,7 +4,20 @@ A production-style daily data platform for job-market intelligence on data and A
 
 **Live app: [jobpulse-insights.streamlit.app](https://jobpulse-insights.streamlit.app)** (Streamlit Community Cloud; it may take a few seconds to wake up if idle).
 
-**Screenshots:** _to be added: Home, Market overview (map), Salary (heatmap), Visa intelligence, Resume match._
+| | |
+|---|---|
+| ![Home](docs/screenshots/home.png)<br>**Home:** headline numbers and links | ![Resume match](docs/screenshots/resume_match.png)<br>**Resume match:** postings ranked by skill overlap |
+| ![Visa intelligence](docs/screenshots/visa.png)<br>**Visa intelligence:** top sponsors, evidence not a promise | ![Salary](docs/screenshots/salary.png)<br>**Salary:** advertised pay with coverage % |
+| ![Map](docs/screenshots/map.png)<br>**Map:** open postings by city | ![Lineage](docs/screenshots/lineage.png)<br>**Lineage:** the dbt graph |
+
+<details><summary>More screenshots</summary>
+
+- [Market overview](docs/screenshots/market.jpg)
+- [Visa company lookup](docs/screenshots/visa_company.png)
+- [Pipeline health](docs/screenshots/pipeline_health.png)
+- [Mobile home](docs/screenshots/mobile_home.png)
+
+</details>
 
 - Product spec: [docs/SPEC.md](docs/SPEC.md)
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
