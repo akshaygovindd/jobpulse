@@ -120,6 +120,15 @@ parse:
     business intelligence: bi
     reporting analyst: data_analyst
     analyst: data_analyst
+  # Skills a role's name already implies: never suggested as "to learn" for a resume aiming at it.
+  role_implied_skills:
+    data_analyst: [data analysis, data analytic]
+    data_scientist: [data science]
+    data_engineer: [data engineering]
+    analytics_engineer: [analytics engineering]
+    ml_ai_engineer: [machine learning]
+    business_analyst: [business analysis]
+    bi: [business intelligence]
   max_title_chars: 60         # a "title" is a short line containing one of the keywords
   max_titles: 5
   max_years: 50               # a larger "N years" figure is ignored as not a career length
@@ -145,4 +154,3 @@ match:
   min_posting_skills: 5       # postings with fewer extracted skills are not ranked (score would be noise)
   min_matched: 1
   max_results: 50
-  role_family_boost: 0.15     # ordering only: a posting in the role the resume's title names ranks higher

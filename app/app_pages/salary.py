@@ -58,16 +58,18 @@ with advertised_tab:
             st.stop()
         left, right = st.columns(2)
         with left:
-            cur = st.segmented_control(
+            cur = st.pills(  # pills wrap onto a second line; a segmented control cut off SGD
                 "Currency (never converted or mixed)",
                 currencies["salary_currency"].tolist(),
                 default=currencies["salary_currency"].iloc[0],
                 key="sal_currency",
             )
+        # Every city with any salary stays selectable, so changing the currency never silently
+        # resets the city; a city with none in this currency says so below.
         city_rows = load(
             "SELECT city, sum(n_annualized) AS n FROM gold.agg_salary_by_role_city "
-            "WHERE salary_currency = ? GROUP BY 1 HAVING sum(n_annualized) > 0 ORDER BY 2 DESC",
-            [cur or ""],
+            "WHERE salary_currency <> 'none' GROUP BY 1 HAVING sum(n_annualized) > 0 "
+            "ORDER BY 2 DESC"
         )
         city_options = ["All cities", *city_rows["city"].tolist()]
         with right:
@@ -82,7 +84,7 @@ with advertised_tab:
         if cur:
             if city == "All cities":
                 table = load(
-                    "SELECT role_family, seniority, n_postings, n_with_salary, coverage_pct, "
+                    "SELECT role_family, seniority, n_postings, n_currency_salary, "
                     "n_annualized, p25_annual, p50_annual, p75_annual "
                     "FROM gold.agg_salary_by_role WHERE salary_currency = ? "
                     "ORDER BY n_annualized DESC, n_postings DESC",
@@ -90,11 +92,17 @@ with advertised_tab:
                 )
             else:
                 table = load(
-                    "SELECT role_family, seniority, n_postings, n_with_salary, coverage_pct, "
+                    "SELECT role_family, seniority, n_postings, n_currency_salary, "
                     "n_annualized, p25_annual, p50_annual, p75_annual "
                     "FROM gold.agg_salary_by_role_city WHERE salary_currency = ? AND city = ? "
                     "ORDER BY n_annualized DESC, n_postings DESC",
                     [cur, city],
+                )
+            if table.empty:
+                st.info(
+                    f"No {cur} salaries for {NO_CITY if city == 'unspecified' else city} yet. "
+                    "Pick another city or 'All cities', or another currency.",
+                    icon=":material/info:",
                 )
             table = table[table["seniority"] != "intern"]  # internship pay: its own table below
             table["Role family"] = table["role_family"].map(role_label)
@@ -154,9 +162,7 @@ with advertised_tab:
                         [
                             "Role family",
                             "Seniority",
-                            "n_postings",
-                            "n_with_salary",
-                            "coverage_pct",
+                            "n_currency_salary",
                             "n_annualized",
                             "P25",
                             "Median",
@@ -167,14 +173,10 @@ with advertised_tab:
                     column_config={
                         "Role family": st.column_config.TextColumn(width="medium"),
                         "Seniority": st.column_config.TextColumn(width="small"),
-                        "n_postings": st.column_config.NumberColumn("Postings", format="%d"),
-                        "n_with_salary": st.column_config.NumberColumn(
-                            "With a salary", format="%d"
-                        ),
-                        "coverage_pct": st.column_config.NumberColumn(
-                            "Coverage",
-                            format="%.0f%%",
-                            help="Share of postings that state a salary.",
+                        "n_currency_salary": st.column_config.NumberColumn(
+                            f"{cur} salaries",
+                            format="%d",
+                            help=f"Postings in this group that state a salary in {cur} only.",
                         ),
                         "n_annualized": st.column_config.NumberColumn(
                             "Yearly figure known", format="%d"
@@ -206,7 +208,10 @@ with advertised_tab:
     else:
         intern["Pay period"] = intern["period"].map(lambda v: f"per {v}")
         for col, name in (("low", "Lowest"), ("mid", "Median midpoint"), ("high", "Highest")):
-            intern[name] = intern[col].map(lambda v: dash(v, "{:,.0f}"))
+            intern[name] = [  # always with the currency: "$64", "CAD 8,000"
+                dash(v, ("$" if cur == "USD" else f"{cur} ") + "{:,.0f}")
+                for v, cur in zip(intern[col], intern["currency"], strict=True)
+            ]
         with st.expander("Show data: internship pay", icon=":material/table:"):
             st.dataframe(
                 intern[["currency", "Pay period", "n", "Lowest", "Median midpoint", "Highest"]],

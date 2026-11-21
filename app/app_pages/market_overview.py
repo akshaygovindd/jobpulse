@@ -42,6 +42,7 @@ st.markdown(
 )
 days = app_config().kpi.delta_days
 now_kpi, before_kpi = kpi_comparison(days)
+roles_now, roles_before = kpi_comparison(days, target_only=True)  # same basis as Home's headline
 
 # ---- filters: they apply to every number, chart and the map on this page --------------------
 # Role family, seniority and remote policy come from the AI's reading of a posting, so a filtered
@@ -70,6 +71,15 @@ with st.container(horizontal=True):
         key="mkt_remote",
     )
 filtered = bool(pick_roles or pick_levels or pick_remote)
+
+
+def _clear_filters() -> None:
+    for key in ("mkt_roles", "mkt_levels", "mkt_remote"):
+        st.session_state[key] = []
+
+
+if filtered:
+    st.button("Clear filters", icon=":material/filter_alt_off:", on_click=_clear_filters)
 conditions = ["is_active", "NOT is_probable_duplicate"]
 params: list[str] = []
 for column, picked in (
@@ -132,11 +142,18 @@ with st.container(horizontal=True):
     )
     if not filtered:  # with a filter every number here already counts analyzed postings only
         st.metric(
-            "Data & AI roles analyzed",
-            f"{t_done:,}",
-            help="The AI reads only postings whose titles look like data and AI roles (a title "
-            "filter), to keep cost low. Role family, seniority, salary, skills and sponsorship "
-            "wording come from those postings.",
+            "Open data & AI roles",
+            f"{t_all:,}",
+            delta=insights.delta_text(
+                roles_now["postings"],
+                None if roles_before is None else roles_before["postings"],
+                unit=kpi_label(days),
+            ),
+            delta_color="off",
+            help=f"The AI has analyzed {t_done:,} of them ({pct(t_done, t_all)}). The AI reads "
+            "only postings whose titles look like data and AI roles (a title filter), to keep "
+            "cost low. Role family, seniority, salary, skills and sponsorship wording come from "
+            "those postings. Same basis as the Home headline.",
             border=True,
         )
 

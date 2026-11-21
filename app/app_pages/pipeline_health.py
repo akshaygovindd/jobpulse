@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 
+import pandas as pd
 import streamlit as st
 
 from jobpulse.app_ui import (
@@ -10,6 +11,7 @@ from jobpulse.app_ui import (
     date_chart,
     human,
     load,
+    pct,
     sentence,
 )
 
@@ -67,8 +69,8 @@ quality = load("SELECT metric, description, numerator, denominator FROM gold.agg
 if not quality.empty:
     quality["share"] = quality.apply(
         lambda r: (
-            dash(100 * r["numerator"] / r["denominator"], "{:.0f}%") if r["denominator"] else "—"
-        ),
+            pct(r["numerator"], r["denominator"]) if r["denominator"] else "—"
+        ),  # 99.7%, not 100%
         axis=1,
     )
     quality["numerator"] = quality["numerator"].map(dash)
@@ -138,9 +140,6 @@ else:
             st.info(message, icon=":material/info:")
         else:
             st.warning(message, icon=":material/warning:")
-        runs = runs.sort_values(
-            "status", key=lambda s: s == "success", kind="stable"
-        )  # failures first
     runs["Step"] = runs["task"].map(lambda v: human(v, TASK_LABELS))
     runs["Source"] = runs["source_id"].map(lambda v: human(v, SOURCE_LABELS))
     runs["Result"] = runs["status"].map(lambda v: human(v, STATUS_LABELS))
@@ -168,26 +167,42 @@ else:
                 "snapshot_date": st.column_config.DateColumn("Data date"),
                 "duration_s": st.column_config.TextColumn("Seconds", width="small"),
                 "companies_complete": st.column_config.TextColumn(
-                    "Companies complete", width="small"
+                    "Companies complete", width="medium"
                 ),
-                "companies_failed": st.column_config.TextColumn("Companies failed", width="small"),
-                "rows_kept": st.column_config.TextColumn("Rows kept", width="small"),
+                "companies_failed": st.column_config.TextColumn("Companies failed", width="medium"),
+                "rows_kept": st.column_config.TextColumn("Rows kept", width="medium"),
             },
             alt="Most recent pipeline runs",
         )
 
-st.subheader("Ingest outcomes by day")
+st.subheader("Company fetches by day")
 ingest = load(
     "SELECT strftime(snapshot_date, '%Y-%m-%d') AS day, "
-    "sum(n_authoritative_companies) AS companies "
-    "FROM gold.agg_ingest_status_daily GROUP BY 1 ORDER BY 1"
+    "sum(n_companies) FILTER (WHERE status <> 'complete') AS failed, "
+    "max(n_total) AS companies FROM (SELECT snapshot_date, status, n_companies, "
+    "sum(n_companies) OVER (PARTITION BY snapshot_date) AS n_total "
+    "FROM gold.agg_ingest_status_daily) GROUP BY 1 ORDER BY 1"
 )
 if not ingest.empty:
-    # Re-runs of the same day fetch each board again; only the snapshot that was kept counts.
-    date_chart(ingest, x="day", y="companies", y_title="Companies with a complete snapshot")
+    ingest["failed"] = ingest["failed"].fillna(0)
+    if ingest["failed"].sum() == 0:
+        st.success(
+            f"Every company was fetched completely on each of the {len(ingest)} days of data "
+            f"(up to {int(ingest['companies'].max())} companies a day).",
+            icon=":material/check_circle:",
+        )
+    else:
+        date_chart(
+            ingest,
+            x="day",
+            y="failed",
+            y_title="Companies with a failed or incomplete fetch",
+        )
     st.caption(
-        "Each company is counted once per day (distinct companies), for the snapshot that the "
-        "analytics use. Re-runs and failed attempts on the same day are not added up."
+        "Counts companies (not attempts) whose fetch failed or came back incomplete on a day, "
+        "in any attempt. A company that failed and then succeeded on a re-run is still counted "
+        "here; the analytics use only the complete snapshot, and a failed or incomplete fetch "
+        "never closes a posting."
     )
 
 st.subheader("AI extraction cost")
@@ -213,6 +228,16 @@ else:
                 border=True,
             )
     if not prod.empty:
+        # Days with no spend are drawn as $0 (a missing bar would look like missing data).
+        every_day = sorted(set(prod["day"]) | set(ingest["day"] if not ingest.empty else []))
+        have_days = set(prod["day"])
+        zeros = [
+            {"day": d, "model": prod["model"].iloc[0], "mode": "sync", "cost_usd": 0.0, "calls": 0}
+            for d in every_day
+            if d not in have_days
+        ]
+        if zeros:
+            prod = pd.concat([prod, pd.DataFrame(zeros)], ignore_index=True)
         date_chart(
             prod,
             x="day",

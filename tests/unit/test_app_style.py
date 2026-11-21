@@ -249,6 +249,11 @@ def test_map_points_sum_variants_and_report_what_is_left_off() -> None:
     one, _ = map_points([("Boston, Massachusetts", 4), ("São Paulo, Brazil", 1)], coords, 4, 36)
     assert one[0]["radius"] == 36
     assert one[1]["radius"] == pytest.approx(4 + 32 * 0.5)  # sqrt(1/4) = 0.5
+    # QA round 3: a filter that leaves few postings must not draw huge dots
+    small, _ = map_points([("Boston, Massachusetts", 5)], coords, 4, 36, full_size_postings=100)
+    assert small[0]["radius"] == pytest.approx(4 + 32 * (5 / 100) ** 0.5)  # about 11 px, not 36
+    big, _ = map_points([("Boston, Massachusetts", 400)], coords, 4, 36, full_size_postings=100)
+    assert big[0]["radius"] == 36  # still capped
 
 
 def test_city_coordinates_and_app_config_are_valid() -> None:
@@ -679,8 +684,8 @@ def test_interns_are_out_of_the_yearly_salary_view_and_shown_as_posted(
     interns = next(f for f in frames if "Pay period" in f.columns)
     assert list(interns["Pay period"]) == ["per hour"]
     assert list(interns["n"]) == [2]
-    assert list(interns["Lowest"]) == ["40"]
-    assert list(interns["Highest"]) == ["50"]
+    assert list(interns["Lowest"]) == ["$40"]
+    assert list(interns["Highest"]) == ["$50"]
 
 
 # ---- the visual pass: hero, sparkline, map, cards, accents, expanders ---------------------------

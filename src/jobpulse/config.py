@@ -430,6 +430,7 @@ class ResumeParseConfig(_Strict):
     synonym_groups: list[list[str]] = []
     # Title phrase (lower case) -> role family, to find what role the resume is aiming at.
     title_roles: dict[str, str] = {}
+    role_implied_skills: dict[str, list[str]] = {}  # role family -> skills its name implies
     max_title_chars: int = Field(ge=1)
     max_titles: int = Field(ge=0)
     max_years: int = Field(ge=1)
@@ -461,9 +462,6 @@ class ResumeMatchConfig(_Strict):
     min_posting_skills: int = Field(ge=1)
     min_matched: int = Field(ge=1)
     max_results: int = Field(ge=1)
-    # Added to the ORDERING score (never to the shown match %) of postings whose role family is the
-    # one the resume's title names. Visa evidence is never part of it.
-    role_family_boost: float = Field(ge=0, le=1)
 
 
 class ResumeConfig(_Strict):
@@ -525,6 +523,8 @@ class MapConfig(_Strict):
     initial_zoom: float = Field(ge=0, le=20)
     min_radius_px: int = Field(ge=1)
     max_radius_px: int = Field(ge=1)
+    # A city with this many postings (or the busiest city, if larger) gets the largest dot.
+    full_size_postings: int = Field(ge=1)
     attribution: str = Field(min_length=1)
 
     @model_validator(mode="after")

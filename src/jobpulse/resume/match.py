@@ -27,7 +27,6 @@ class Match:
     score: float  # skills matched / skills asked for: the shown "N% match"
     matched: tuple[str, ...]
     missing: tuple[str, ...]
-    order_score: float = 0.0  # what the list is sorted by: score plus the role-family boost
 
 
 def canonical_skills(skills: Iterable[str], groups: Iterable[Iterable[str]]) -> frozenset[str]:
@@ -47,9 +46,10 @@ def rank_postings(
     cfg: ResumeMatchConfig,
     role_families: Collection[str] = (),
 ) -> list[Match]:
-    """Rank by skill overlap. A posting whose role family is one of `role_families` (the role the
-    resume's title names) is ordered higher by `cfg.role_family_boost`; the shown score is not
-    changed. Sponsorship and visa evidence never enter either number."""
+    """Rank by the shown match % (whole percent, highest first). Postings tied on that percent are
+    ordered by role-family fit: those in `role_families` (the role the resume's title names) first.
+    There is no hidden boost: the visible order is always by visible %. Sponsorship and visa
+    evidence never enter."""
     have = set(resume_skills)
     aimed = set(role_families)
     out: list[Match] = []
@@ -61,11 +61,11 @@ def rank_postings(
             continue
         missing = tuple(sorted(p.skills - have))
         score = len(matched) / len(p.skills)
-        boost = cfg.role_family_boost if p.info.get("role") in aimed else 0.0
-        out.append(Match(p, score, matched, missing, score + boost))
+        out.append(Match(p, score, matched, missing))
     out.sort(
         key=lambda m: (
-            -m.order_score,
+            -round(100 * m.score),  # the percent the card shows
+            m.posting.info.get("role") not in aimed,  # role fit breaks ties
             -m.score,
             -len(m.matched),
             str(m.posting.info.get("company", "")),
@@ -74,6 +74,15 @@ def rank_postings(
         )
     )
     return out[: cfg.max_results]
+
+
+def effective_visa_class(base_class: str, us_ok: bool) -> str:
+    """The class a card's badge shows. A posting's own statement ("offered", "not available")
+    always stands; filing history and "no filings" are about US jobs, so a card whose places are all
+    abroad says so instead."""
+    if base_class in ("HISTORICAL_EVIDENCE", "UNKNOWN") and not us_ok:
+        return "NOT_US"
+    return base_class
 
 
 def level_group(seniority: str | None, cfg: ResumeLevelsConfig) -> str | None:
@@ -111,10 +120,17 @@ def collapse_locations(postings: Iterable[PostingSkills]) -> list[PostingSkills]
     out = []
     for members in groups.values():
         # The row is shown as its US posting when there is one (H-1B evidence is about US jobs).
-        members.sort(key=lambda m: (not m.info.get("us_ok", True), m.posting_key))
+        # The card lists only members that name a place, so US-ness follows those places: a
+        # sibling with no place (remote) must not make a Toronto-only card look US.
+        located = [m for m in members if m.info.get("location")]
+        members.sort(
+            key=lambda m: (not m.info.get("location"), not m.info.get("us_ok", True), m.posting_key)
+        )
         first = members[0]
-        places = sorted({str(m.info["location"]) for m in members if m.info.get("location")})
+        places = sorted({str(m.info["location"]) for m in located})
         info = {**first.info, "locations": places}
+        if "us_ok" in info:
+            info["us_ok"] = any(m.info["us_ok"] for m in located) if located else True
         if "apply_url" in info and not info["apply_url"]:
             info["apply_url"] = next(
                 (m.info["apply_url"] for m in members if m.info["apply_url"]), ""

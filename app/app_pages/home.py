@@ -108,8 +108,15 @@ with c1, st.container(border=True, height="stretch", key="card_kpi_0"):
         + (f"Sparkline: the last {len(trend)} settled days. " if trend else "")
         + (f"The change compares settled days: {basis}." if open_delta and basis else ""),
     )
+    all_now, all_before = kpi_comparison(days)  # all roles, as on Market overview
+    all_delta = insights.delta_text(
+        all_now["postings"],
+        None if all_before is None else all_before["postings"],
+        unit=kpi_label(days),
+    )
     st.caption(
-        f"of {int(counts['active']):,} open postings across {int(counts['companies'])} companies"
+        f"of {int(counts['active']):,} open postings ({all_delta + '; ' if all_delta else ''}all "
+        f"roles) across {int(counts['companies'])} companies"
     )
     st.page_link("app_pages/market_overview.py", label="Market overview", icon=":material/public:")
 with c2, st.container(border=True, height="stretch", key="card_kpi_1"):

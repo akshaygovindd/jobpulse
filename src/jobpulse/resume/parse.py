@@ -140,12 +140,20 @@ def extract_profile(
         )
     }
     titles = _titles(text, cfg)
+    families = _role_families(text, titles, cfg)
+    if families:  # a role the resume aims at must also be listed among the roles found
+        first = next((ln for ln in text.splitlines() if ln.strip()), "")
+        head = next(
+            (c for c in _title_candidates(first) if not _is_contact(c) and _family_of(c, cfg)), ""
+        )
+        if head and head[: p.max_title_chars] not in titles:
+            titles = (head[: p.max_title_chars], *titles)[: max(p.max_titles, 1)]
     return ResumeProfile(
         frozenset(found),
         titles,
         _years(text, cfg, today_year),
         _education(text, cfg),
-        _role_families(text, titles, cfg),
+        families,
     )
 
 
@@ -154,7 +162,7 @@ def _is_contact(part: str) -> bool:
     return bool(_CONTACT.search(_RANGE.sub(" ", part)))
 
 
-_TITLE_PARTS = re.compile(r"[|•·●]|\s[-\u2013\u2014]\s|\s{2,}")
+_TITLE_PARTS = re.compile(r"[|•·●,;]|\s[-\u2013\u2014]\s|\s{2,}")
 
 
 def _title_candidates(line: str) -> list[str]:

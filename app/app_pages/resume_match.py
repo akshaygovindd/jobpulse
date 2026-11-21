@@ -26,6 +26,7 @@ from jobpulse.resume.match import (
     canonical_skills,
     collapse_locations,
     default_levels,
+    effective_visa_class,
     level_group,
     rank_postings,
     skills_to_learn,
@@ -128,7 +129,12 @@ if profile is None:
     )
     tab_paste, tab_file = st.tabs(["Paste text", "Upload a file"])
     with tab_paste:
-        st.text_area("Resume text", key=TEXT, height=240)
+        st.text_area(
+            "Resume text",
+            key=TEXT,
+            height=240,
+            on_change=lambda: st.session_state.pop(ERROR, None),  # a new paste clears the old error
+        )
     with tab_file:
         st.file_uploader(
             "Resume file",
@@ -323,12 +329,21 @@ pool = collapse_locations(
             "visa": CLASS_LABELS.get(str(r.visa_class), "Unknown")
             + (f" ({int(r.n_lca_certified)} filings)" if r.visa_class != "NOT_US" else ""),
             "visa_class": str(r.visa_class),
-            "filings": 0 if r.visa_class == "NOT_US" else int(r.n_lca_certified),
+            "base_class": str(r.sponsorship_class),
+            "filings_all": int(r.n_lca_certified),
+            "filings": 0,
             "salary": _salary(r),
         },
     )
     for r in view.itertuples()
 )
+for _p in pool:  # the badge follows the places the card lists (see collapse_locations)
+    _i = _p.info
+    _i["visa_class"] = effective_visa_class(_i["base_class"], _i["us_ok"])
+    _i["visa"] = CLASS_LABELS.get(_i["visa_class"], "Unknown") + (
+        f" ({_i['filings_all']} filings)" if _i["visa_class"] != "NOT_US" else ""
+    )
+    _i["filings"] = 0 if _i["visa_class"] == "NOT_US" else _i["filings_all"]
 matches = rank_postings(have, pool, cfg.match, profile.role_families)
 if not matches:
     st.info("No postings match with the current filters.", icon=":material/search_off:")
@@ -339,7 +354,12 @@ learn = skills_to_learn(
     matches,
     cfg.match.top_learn_n,
     cfg.match.top_learn_max,
-    exclude=set(cfg.parse.ignore_skills),
+    exclude=set(cfg.parse.ignore_skills)
+    | {
+        skill
+        for family in profile.role_families
+        for skill in cfg.parse.role_implied_skills.get(family, [])
+    },  # "Data analysis" is not news to a Data Analyst
 )
 if learn:
     st.subheader("Top skills to learn")
@@ -432,7 +452,7 @@ for rank, m in enumerate(matches[:shown]):
         # no stated place (remote or multi-location): the badge stays, with the scope in a tooltip
         visa_help=(
             "H-1B applies to US roles only"
-            if not info["country"] and info["visa_class"] in ("HISTORICAL_EVIDENCE", "UNKNOWN")
+            if not info["locations"] and info["visa_class"] in ("HISTORICAL_EVIDENCE", "UNKNOWN")
             else None
         ),
     )
@@ -465,6 +485,11 @@ st.caption(
     "Advertised salary is what the posting states, converted to a yearly figure where the period "
     "is known; hourly and monthly pay is a yearly equivalent, not a salary. It is not the wage "
     "on H-1B filings. "
-    f"Showing the best {len(matches)} matches (at most {cfg.match.max_results}). "
+    + (
+        f"Showing the top {len(matches)} matches."
+        if len(matches) >= cfg.match.max_results
+        else f"Showing all {len(matches)} matches."
+    )
+    + " "
     "Apply links go to the employer's job board."
 )

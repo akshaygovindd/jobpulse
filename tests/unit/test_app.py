@@ -283,7 +283,7 @@ def test_market_overview_explains_what_the_ai_reads(
     at.switch_page("app_pages/market_overview.py").run()
     assert not at.exception
     assert "tech employers' public job boards" in _text(at)
-    assert "Data & AI roles analyzed" in {m.label for m in at.metric}
+    assert "Open data & AI roles" in {m.label for m in at.metric}
     assert "only data and AI roles" in _text(at)
 
 

@@ -773,6 +773,7 @@ def map_points(
     coords: dict[str, tuple[float, float]],
     min_radius: float,
     max_radius: float,
+    full_size_postings: int = 1,
 ) -> tuple[list[dict[str, Any]], int]:
     """(points to draw, postings left off). Cities that share a coordinate (spelling variants) are
     summed; the dot radius grows with the square root of postings, between the two radii."""
@@ -787,9 +788,15 @@ def map_points(
             left_off += int(n)
     data = sorted(points.values(), key=lambda p: -p["postings"])
     if data:
-        top = data[0]["postings"]
+        # Sized against the busiest drawn city, but never as if it were bigger than
+        # `full_size_postings` is small: a filter that leaves 5 postings in a city must not draw a
+        # 36 px dot on top of its neighbours.
+        top = max(data[0]["postings"], full_size_postings)
         for p in data:
-            p["radius"] = min_radius + (max_radius - min_radius) * (p["postings"] / top) ** 0.5
+            p["radius"] = min(
+                max_radius,
+                min_radius + (max_radius - min_radius) * (p["postings"] / top) ** 0.5,
+            )
     return data, left_off
 
 
@@ -799,7 +806,9 @@ def city_map(rows: Sequence[tuple[str, int]], height: int = 420) -> tuple[int, i
     import pydeck as pdk
 
     cfg = app_config().map
-    data, left_off = map_points(rows, city_coords(), cfg.min_radius_px, cfg.max_radius_px)
+    data, left_off = map_points(
+        rows, city_coords(), cfg.min_radius_px, cfg.max_radius_px, cfg.full_size_postings
+    )
     if not data:
         st.caption("No mappable cities yet.")
         return 0, left_off

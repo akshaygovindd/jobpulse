@@ -519,7 +519,8 @@ Skills: SQL, Python, Tableau
 def test_first_line_title_is_kept_and_a_title_survives_next_to_contact_details() -> None:
     p = extract_profile(QA_RESUME, QA_VOCAB, CFG, today_year=2026)
     assert p.titles[0] == "Data Analyst"  # the headline line counts
-    assert "Data Analyst Intern, Acme Retail (2024-2025)" in p.titles  # "2024-2025" is not a phone
+    assert "Data Analyst Intern" in p.titles  # the year range is not a phone number, the rest of
+    # the line (company, dates) is a separate part
     assert not any("@" in t or "555" in t for t in p.titles)  # contact parts are dropped, alone
     mixed = extract_profile("Jane Doe | jane@x.com | Data Scientist\nPython", QA_VOCAB, CFG)
     assert mixed.titles == ("Data Scientist",)
@@ -573,36 +574,36 @@ def test_resume_title_names_the_role_family_it_aims_at() -> None:
     assert extract_profile("Python, SQL", QA_VOCAB, CFG).role_families == ()
 
 
-def test_matching_role_family_is_ordered_first_but_the_shown_score_is_unchanged() -> None:
-    """QA P1-10: a Data Analyst resume was offered Data Engineer postings first."""
+def test_cards_are_ordered_by_shown_percent_and_role_fit_only_breaks_ties() -> None:
+    """QA round 3: no hidden boost. The list is sorted by the visible match %; among equal
+    percents the posting in the role the resume's title names comes first."""
     skills = frozenset({"python", "sql", "spark", "airflow", "kafka"})
-    engineer = PostingSkills(
-        "e", skills, {"company": "A", "title": "Data Engineer", "role": "data_engineer"}
-    )
+    engineer = PostingSkills("e", skills, {"company": "A", "title": "DE", "role": "data_engineer"})
     analyst = PostingSkills(
-        "a",
-        frozenset({"sql", "python", "tableau", "excel", "dbt"}),
-        {"company": "B", "title": "Data Analyst", "role": "data_analyst"},
-    )
-    have = {"python", "sql", "spark", "airflow"}  # engineer 4/5 = 80%, analyst 2/5 = 40%
-    plain = rank_postings(have, [engineer, analyst], CFG.match)
-    assert [m.posting.posting_key for m in plain] == ["e", "a"]
-    aimed = rank_postings(have, [engineer, analyst], CFG.match, ("data_analyst",))
-    shown = {m.posting.posting_key: round(m.score, 2) for m in aimed}
-    assert shown == {"e": 0.8, "a": 0.4}  # the shown match % is never changed by the boost
-    ordering = {m.posting.posting_key: m.order_score for m in aimed}
-    assert ordering["a"] == pytest.approx(0.4 + CFG.match.role_family_boost)
-    assert ordering["e"] == pytest.approx(0.8)
-    big = CFG.match.model_copy(update={"role_family_boost": 0.5})
-    again = rank_postings(have, [engineer, analyst], big, ("data_analyst",))
-    assert [m.posting.posting_key for m in again] == ["a", "e"]  # with a big enough boost
+        "a", frozenset({"sql", "python", "tableau", "excel", "dbt"}),
+        {"company": "B", "title": "DA", "role": "data_analyst"},
+    )  # fmt: skip
+    have = {"python", "sql", "spark", "airflow"}  # engineer 80%, analyst 40%
+    aimed = rank_postings(have, [analyst, engineer], CFG.match, ("data_analyst",))
+    assert [m.posting.posting_key for m in aimed] == ["e", "a"]  # higher % first, role aside
+    pcts = [round(100 * m.score) for m in aimed]
+    assert pcts == sorted(pcts, reverse=True)
+    tied_e = PostingSkills("e2", frozenset({"sql", "python", "x1", "x2", "x3"}), engineer.info)
+    tied_a = PostingSkills("a2", frozenset({"sql", "python", "y1", "y2", "y3"}), analyst.info)
+    tie = rank_postings({"sql", "python"}, [tied_e, tied_a], CFG.match, ("data_analyst",))
+    assert [m.posting.posting_key for m in tie] == ["a2", "e2"]  # equal 40%: role fit decides
+    plain = rank_postings({"sql", "python"}, [tied_e, tied_a], CFG.match)
+    assert [m.posting.posting_key for m in plain] == ["e2", "a2"]  # then company, as before
 
 
 def test_visa_evidence_is_not_part_of_the_ordering() -> None:
     src = (ROOT / "src/jobpulse/resume/match.py").read_text()
-    body = src[src.index("def rank_postings") : src.index("def level_group")]
-    assert "visa" not in body.lower().replace("visa evidence", "")
-    assert "sponsor" not in body.replace("Sponsorship and visa evidence never enter", "")
+    body = " ".join(
+        src[src.index("def rank_postings") : src.index("def effective_visa_class")].split()
+    )
+    code = body.split('"""')[2]  # the code after the docstring
+    assert "visa" not in code.lower()
+    assert "sponsor" not in code.lower()
 
 
 def test_pay_as_posted_h1b_scope_careers_fallback_and_unclear_intern_range() -> None:
@@ -685,3 +686,30 @@ def test_badge_for_a_posting_with_no_stated_place_carries_the_us_only_tooltip(
     assert "H-1B applies to US roles only" in " ".join(helps) or not helps
     source = (ROOT / "app/app_pages/resume_match.py").read_text()
     assert 'visa_help=(\n            "H-1B applies to US roles only"' in source
+
+
+def test_h1b_badge_follows_the_places_the_card_lists() -> None:
+    """QA round 3: "Stripe, Data Analyst, Intern" listed Toronto only but showed "Company has
+    certified filings", because a sibling posting with no place made the group count as US."""
+    from jobpulse.resume.match import collapse_locations, effective_visa_class
+
+    base = {"company": "Stripe", "title": "T", "base_class": "HISTORICAL_EVIDENCE"}
+    toronto = PostingSkills(
+        "a", frozenset({"x"}), {**base, "location": "Toronto, Ontario", "us_ok": False}
+    )
+    nowhere = PostingSkills("b", frozenset({"x"}), {**base, "location": "", "us_ok": True})
+    (row,) = collapse_locations([nowhere, toronto])
+    assert row.info["locations"] == ["Toronto, Ontario"]
+    assert row.info["us_ok"] is False
+    assert effective_visa_class(row.info["base_class"], row.info["us_ok"]) == "NOT_US"
+    # no place anywhere (remote): the US cannot be ruled out, the badge stays
+    (remote,) = collapse_locations([nowhere])
+    assert remote.info["us_ok"] is True
+    # one US place keeps it; and a posting's own statement is never replaced
+    boston = PostingSkills(
+        "c", frozenset({"x"}), {**toronto.info, "location": "Boston", "us_ok": True}
+    )
+    (both,) = collapse_locations([toronto, boston])
+    assert both.info["us_ok"] is True
+    assert effective_visa_class("EXPLICITLY_UNAVAILABLE", False) == "EXPLICITLY_UNAVAILABLE"
+    assert effective_visa_class("UNKNOWN", False) == "NOT_US"
