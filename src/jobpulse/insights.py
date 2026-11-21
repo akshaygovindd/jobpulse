@@ -10,6 +10,16 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import date, timedelta
+from decimal import ROUND_HALF_UP, Decimal
+
+
+def k_text(value: float | None, sign: str = "$") -> str:
+    """'$173K' from a figure already in thousands, rounded half up. One function labels the heatmap
+    cell, the table and every sentence, so the same number never reads $173K in one place and
+    $172K in another (Python rounds 172.5 to 172, JavaScript to 173)."""
+    if value is None or value != value:
+        return "—"
+    return f"{sign}{Decimal(str(float(value))).quantize(Decimal(1), rounding=ROUND_HALF_UP)}K"
 
 
 def share(part: float, whole: float) -> str:
@@ -100,14 +110,21 @@ def skill_insight(rows: Sequence[tuple[str, float]], role: str, n: int | None = 
     )
 
 
-def salary_insight(rows: Sequence[tuple[str, float, int]], min_n: int = 0) -> str | None:
-    """rows: (group label, median in $K, number of salaries). Highest median among the groups
-    with at least `min_n` salaries (a tiny group must not crown itself)."""
-    clean = [r for r in rows if r[1] == r[1] and r[2] >= min_n]
+def salary_insight(
+    rows: Sequence[tuple[str, float, int]], small_below: int = 0, sign: str = "$"
+) -> str | None:
+    """rows: (group label, median in $K, number of salaries), exactly the groups the chart shows.
+    The highest median among them; a group with fewer than `small_below` salaries is named as a
+    small sample instead of being skipped, so the sentence never disagrees with the chart."""
+    clean = [r for r in rows if r[1] == r[1]]
     if not clean:
         return None
     label, median, n = max(clean, key=lambda r: r[1])
-    return f"The highest median advertised pay is {label}: ${median:,.0f}K (from {n} postings)."
+    small = " This is a small sample." if n < small_below else ""
+    return (
+        f"The highest median advertised pay is {label}: {k_text(median, sign)} (from {n} postings)."
+        f"{small}"
+    )
 
 
 def sponsors_insight(rows: Sequence[tuple[str, float]], total: float | None = None) -> str | None:

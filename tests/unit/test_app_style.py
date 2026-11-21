@@ -378,10 +378,73 @@ def test_salary_chart_is_a_labelled_heatmap() -> None:
     marks = [layer["mark"]["type"] for layer in spec["layer"]]
     assert marks == ["rect", "text"]
     assert spec["encoding"]["x"]["sort"] == ["Mid-level", "Senior"]
-    assert "'$' + format(datum.Median, '.0f') + 'K'" in spec["transform"][0]["calculate"]
+    assert spec["layer"][1]["encoding"]["text"]["field"] == "label"  # '$NNNK', made in Python
+    assert "transform" not in spec  # no JavaScript rounding that could disagree with the table
     assert {"field": "n_annualized", "type": "quantitative", "title": "Salaries"} in spec["layer"][
         0
     ]["encoding"]["tooltip"]
+
+
+def test_salary_heatmap_text_follows_the_cell_colour_and_the_legend_is_in_dollars() -> None:
+    """Regression (QA P0-5): one or two cells gave dark text on a dark cell and a legend of
+    "180.000000"."""
+
+    def script() -> None:
+        import pandas as pd
+
+        from jobpulse.app_ui import salary_chart
+
+        salary_chart(
+            pd.DataFrame(
+                {
+                    "Role family": ["A", "A", "B"],
+                    "Seniority": ["Mid-level", "Senior", "Senior"],
+                    "Median": [100.0, 150.0, 200.0],
+                }
+            )
+        )
+
+    spec = _spec_of(script)
+    legend = spec["layer"][0]["encoding"]["color"]["legend"]
+    assert legend["values"] == pytest.approx([100, 120, 140, 160, 180])  # lower end of each step
+    assert legend["labelExpr"] == "'$' + format(datum.value, '.0f') + 'K'"
+    assert spec["layer"][1]["encoding"]["text"]["field"] == "label"
+    assert spec["layer"][1]["encoding"]["color"]["condition"]["test"] == "datum.dark"
+
+
+def test_heat_bins_always_give_a_readable_colour_step() -> None:
+    from jobpulse.app_ui import heat_bins
+
+    assert heat_bins([100.0, 150.0, 200.0], 5) == [0, 2, 4]
+    assert heat_bins([180.0], 5) == [2]  # a single cell is a mid step, not the dark end
+    assert heat_bins([180.0, 180.0], 5) == [2, 2]
+
+
+def test_salary_heatmap_under_three_cells_is_a_table() -> None:
+    """Regression (QA P0-5): City = Boston gave a thin bar. Under three cells, a table."""
+
+    def script() -> None:
+        import pandas as pd
+
+        from jobpulse.app_ui import salary_chart
+
+        salary_chart(
+            pd.DataFrame(
+                {
+                    "Role family": ["ML/AI Engineer"],
+                    "Seniority": ["Senior"],
+                    "Median": [172.5],
+                    "n_annualized": [5],
+                }
+            )
+        )
+
+    at = AppTest.from_function(script, default_timeout=20).run()
+    assert not at.exception, at.exception
+    assert not at.get("vega_lite_chart")
+    shown = at.dataframe[0].value
+    assert list(shown.columns) == ["Role family", "Seniority", "Median", "Salaries"]
+    assert shown["Median"].tolist() == ["$173K"]
 
 
 def test_skill_names_show_proper_casing_but_data_stays_canonical() -> None:

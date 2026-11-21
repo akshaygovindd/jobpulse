@@ -347,3 +347,21 @@ def test_market_overview_filtered_view_uses_only_the_filtered_set(
         for total in re.findall(r"of (?:all )?the?\s*([\d,]+)", sentence):
             assert int(total.replace(",", "")) <= matching, sentence
     assert "of open postings; the rest" not in text  # the unfiltered city caption is not shown
+
+
+def test_lca_wages_default_to_data_roles_and_toggle_is_honoured(
+    full_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """QA P1-15: the LCA tab opens on data and AI roles ('Other roles' is opt-in) and Salary has
+    no dead 'fewer than five' toggle (P0-4: it changed nothing the visitor could see)."""
+    monkeypatch.setenv(LOCAL_DB_ENV, str(full_db))
+    at = AppTest.from_file(str(APP), default_timeout=20).run()
+    at.switch_page("app_pages/salary.py").run()
+    assert not at.exception, at.exception
+    roles = at.multiselect(key="lca_roles")
+    assert "other" not in roles.value
+    assert all(v != "other" for v in roles.value)
+    assert not [t for t in at.toggle if t.key == "sal_thin"]
+    assert "Median offered wage by role and worksite" in [s.value for s in at.subheader]
+    assert "highest median offered wage" in _page_text(at)
+    assert not at.exception  # the chart gets only its two columns (duplicate names broke it once)

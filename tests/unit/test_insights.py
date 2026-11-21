@@ -68,6 +68,24 @@ def test_skill_salary_and_sponsor_insights() -> None:
     assert "not that any posting is sponsored" in text  # the evidence caveat travels with it
 
 
+def test_salary_insight_names_the_highest_chart_row_even_when_small() -> None:
+    """Regression (QA P0-3): the sentence skipped groups under 10 salaries that the heatmap drew,
+    so it named Staff $276K while the chart showed Principal $329K (5 salaries)."""
+    rows = [("Staff ML/AI", 276.0, 24), ("Principal ML/AI", 328.5, 5), ("Manager X", 304.0, 6)]
+    text = i.salary_insight(rows, small_below=10) or ""
+    assert text.startswith("The highest median advertised pay is Principal ML/AI: $329K (from 5")
+    assert "small sample" in text
+    assert "small sample" not in (i.salary_insight(rows[:1], small_below=10) or "")
+
+
+def test_k_text_rounds_half_up_like_the_chart() -> None:
+    assert i.k_text(172.5) == "$173K"  # Python's own rounding would give $172K
+    assert i.k_text(173.49) == "$173K"
+    assert i.k_text(None) == "—"
+    assert i.k_text(float("nan")) == "—"
+    assert i.k_text(12.0, sign="CAD ") == "CAD 12K"
+
+
 def test_nothing_is_said_without_data() -> None:
     assert i.company_insight([], 10) is None
     assert i.company_insight([("A", 1.0)], 0) is None

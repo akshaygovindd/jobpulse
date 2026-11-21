@@ -2,10 +2,13 @@ import streamlit as st
 
 from jobpulse import insights
 from jobpulse.app_ui import (
+    DATA_ROLES,
     SENIORITY_LABELS,
     app_config,
+    bar,
     dash,
     human,
+    k_text,
     key_insight,
     load,
     pct,
@@ -102,18 +105,20 @@ with advertised_tab:
                 ("p75_annual", "P75"),
             ):
                 table[dst] = table[src].map(usd_k)
-            show_thin = st.toggle(
-                "Include groups with fewer than five salaries (no percentiles)", key="sal_thin"
-            )
-            if not show_thin:
-                table = table[table["Median"].notna()]
-            chart = table.dropna(subset=["Median"]).copy()
+            sign = "$" if cur == "USD" else f"{cur} "
+            chart = table.dropna(subset=["Median"]).copy()  # the groups with five or more salaries
             st.subheader(f"Median advertised salary ({cur})")
             if chart.empty:
+                n_thin = int(table["n_annualized"].sum())
                 st.info(
-                    "Not enough salaries yet for a median (at least five per group are needed)."
+                    f"No median for {cur} yet: {n_thin:,} yearly "
+                    f"salar{'y' if n_thin == 1 else 'ies'} across {len(table)} "
+                    f"group{'' if len(table) == 1 else 's'}, and a median needs at least five in "
+                    "one group (role family and seniority). The table below lists the groups.",
+                    icon=":material/info:",
                 )
             else:
+                # The sentence is computed from exactly the rows the chart draws below.
                 key_insight(
                     insights.salary_insight(
                         [
@@ -124,10 +129,11 @@ with advertised_tab:
                             )
                             for _, r in chart.iterrows()
                         ],
-                        app_config().samples.min_group_n,
+                        small_below=app_config().samples.min_group_n,
+                        sign=sign,
                     )
                 )
-                salary_chart(chart)
+                salary_chart(chart, sign=sign)
                 st.caption(
                     "Midpoint of the advertised range, converted to a yearly figure, for groups "
                     "with at least five salaries; a blank cell means fewer than five. Hourly and "
@@ -136,7 +142,9 @@ with advertised_tab:
                 )
             shown = table.copy()
             for col in ("P25", "Median", "P75"):
-                shown[col] = shown[col].map(lambda v: dash(v, "${:,.0f}K"))  # "—", never "None"
+                shown[col] = shown[col].map(
+                    lambda v: k_text(v, sign)
+                )  # "—", never "None"; rounds like the chart
             with st.expander(
                 "Show data: salary percentiles",
                 icon=":material/table:",
@@ -174,7 +182,10 @@ with advertised_tab:
                     },
                     alt="Advertised yearly salary percentiles by role family and seniority",
                 )
-            st.caption("Percentiles appear only where at least five yearly salaries exist.")
+            st.caption(
+                "Percentiles appear only where at least five yearly salaries exist; smaller "
+                "groups are listed with a dash."
+            )
 
     st.subheader("Internship pay (as posted)")
     intern = load(
@@ -224,6 +235,23 @@ with lca_tab:
     if wages.empty:
         st.info("No LCA data loaded yet.")
     else:
+        # Data and AI role families are the point of this site; "Other roles" (8,000 filings for
+        # titles that match no data role) would drown them, so it is opt-in.
+        families = [r for r in DATA_ROLES if r in set(wages["role_family"])]
+        if "other" in set(wages["role_family"]):
+            families.append("other")
+        picked = st.multiselect(
+            "Role family",
+            families,
+            default=[r for r in families if r != "other"],
+            format_func=role_label,
+            key="lca_roles",
+            help="Data and AI roles by default. Add 'Other roles' to see every certified filing.",
+        )
+        wages = wages[wages["role_family"].isin(picked)]
+        if wages.empty:
+            st.info("Pick at least one role family.")
+            st.stop()
         total = int(wages["n_certified"].sum())
         used = int(wages["n_with_wage"].sum())
         excluded = int(wages["n_wage_excluded"].sum())
@@ -240,12 +268,48 @@ with lca_tab:
             wages[dst] = wages[src].map(usd_k)
         wages["State"] = wages["worksite_state"].replace("unspecified", "Not stated")
         wages["City"] = wages["worksite_city"].replace("unspecified", "Not stated")
+
+        st.subheader("Median offered wage by role and worksite")
+        by_site = (
+            wages.dropna(subset=["Median"])
+            .sort_values(["n_with_wage", "Median"], ascending=False)
+            .head(15)
+        )
+        if by_site.empty:
+            st.info(
+                "No role and worksite has the five wages a median needs yet.",
+                icon=":material/info:",
+            )
+        else:
+            by_site = by_site.assign(
+                Worksite=by_site["Role family"] + ", " + by_site["City"] + ", " + by_site["State"]
+            )
+            top = by_site.loc[by_site["Median"].idxmax()]
+            key_insight(
+                f"{top['Worksite']} has the highest median offered wage among the "
+                f"{len(by_site)} busiest worksites shown: {k_text(top['Median'])} "
+                f"(from {int(top['n_with_wage'])} filings)."
+            )
+            bar(
+                by_site[["Worksite", "Median"]].rename(
+                    columns={"Median": "Median offered wage ($K)"}
+                ),
+                x="Worksite",
+                y="Median offered wage ($K)",
+                horizontal=True,
+                sort="-Median offered wage ($K)",
+            )
+            st.caption(
+                "The 15 role and worksite pairs with the most usable wages that have at least five "
+                "(lower bound of the filed range, per year). Employers' stated offers on public "
+                "filings, not what a posting advertises, and not a market survey."
+            )
         show_all = st.toggle(
             "Include groups with fewer than five wages (no percentiles)", key="lca_thin"
         )
         wages = wages if show_all else wages[wages["Median"].notna()]
         for col in ("P25", "Median", "P75"):
-            wages[col] = wages[col].map(lambda v: dash(v, "${:,.0f}K"))
+            wages[col] = wages[col].map(k_text)
         with st.expander(
             "Show data: LCA wages",
             icon=":material/table:",

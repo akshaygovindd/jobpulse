@@ -17,6 +17,7 @@ import streamlit as st
 
 from jobpulse.app_data import GOLD_URL_ENV, LOCAL_DB_ENV, AppDataError, connect, read_gold
 from jobpulse.config import AppConfig, load_app, load_city_coords, load_skill_display
+from jobpulse.insights import k_text
 
 VISA_DISCLAIMER = (
     "Evidence from public filings, not a promise of sponsorship. LCAs are employer filings with "
@@ -460,17 +461,47 @@ def date_chart(
     _chart(data, {"mark": mark, "encoding": enc}, 280)
 
 
-def salary_chart(data: Any) -> None:
+def heat_bins(values: Sequence[float], steps: int) -> list[int]:
+    """The colour step (0 to steps-1) of each value on a quantized scale over [min, max]. All
+    values equal puts them in the middle step, so a single cell still gets a readable colour."""
+    lo, hi = min(values), max(values)
+    if hi == lo:
+        return [steps // 2 for _ in values]
+    return [min(steps - 1, int(steps * (v - lo) / (hi - lo))) for v in values]
+
+
+def salary_chart(data: Any, min_cells: int = 3, sign: str = "$") -> None:
     """Heatmap of median advertised pay: role family by seniority, '$NNNK' in every cell, darker
     for higher pay. `data` has columns Role family, Seniority and Median (thousands of dollars),
-    and optionally n_annualized (shown in the tooltip). Cells with no group stay empty."""
+    and optionally n_annualized (shown in the tooltip). Cells with no group stay empty. Fewer than
+    `min_cells` cells would draw one thin, hard-to-read bar: those are listed in a small table."""
     if data is None or len(data) == 0:
         st.caption("Nothing to show yet.")
         return
+    data = data.copy()
+    data["label"] = data["Median"].map(lambda v: k_text(v, sign))
+    if len(data) < min_cells:
+        cols = ["Role family", "Seniority", "label"]
+        names = {"label": "Median"}
+        if "n_annualized" in data.columns:
+            cols.append("n_annualized")
+            names["n_annualized"] = "Salaries"
+        st.dataframe(
+            data[cols].rename(columns=names),
+            hide_index=True,
+            alt="Median advertised salary by role family and seniority",
+        )
+        return
     present = set(data["Seniority"])
     order = [v for v in SENIORITY_LABELS.values() if v in present]
+    # The text colour follows the cell's colour step, computed here so it always agrees with the
+    # scale (the last two of the five steps are dark, so they get white text).
+    data["dark"] = [b >= len(HEATMAP_RAMP) - 2 for b in heat_bins(list(data["Median"]), 5)]
     lo, hi = float(data["Median"].min()), float(data["Median"].max())
-    switch = lo + 0.6 * (hi - lo)  # the top two of five steps are dark: white text
+    step = (hi - lo) / len(HEATMAP_RAMP)
+    legend_values = [
+        lo + i * step for i in range(len(HEATMAP_RAMP))
+    ]  # exact, so each is its own step
     tooltip = [
         {"field": "Role family", "type": "nominal"},
         {"field": "Seniority", "type": "nominal"},
@@ -479,7 +510,6 @@ def salary_chart(data: Any) -> None:
     if "n_annualized" in data.columns:
         tooltip.append({"field": "n_annualized", "type": "quantitative", "title": "Salaries"})
     spec = {
-        "transform": [{"calculate": "'$' + format(datum.Median, '.0f') + 'K'", "as": "label"}],
         "encoding": {
             "x": {
                 "field": "Seniority",
@@ -501,8 +531,15 @@ def salary_chart(data: Any) -> None:
                     "color": {
                         "field": "Median",
                         "type": "quantitative",
-                        "scale": {"type": "quantize", "range": HEATMAP_RAMP},
-                        "legend": {"title": "Median ($K)", "orient": "bottom"},
+                        "scale": {"type": "quantize", "range": HEATMAP_RAMP, "nice": False},
+                        "legend": {
+                            "title": "Median",
+                            "orient": "bottom",
+                            # the lower end of each colour step; a quantize legend would
+                            # otherwise start with "-Infinity"
+                            "values": legend_values,
+                            "labelExpr": f"'{sign}' + format(datum.value, '.0f') + 'K'",
+                        },
                     },
                     "tooltip": tooltip,
                 },
@@ -512,7 +549,7 @@ def salary_chart(data: Any) -> None:
                 "encoding": {
                     "text": {"field": "label", "type": "nominal"},
                     "color": {
-                        "condition": {"test": f"datum.Median > {switch}", "value": TEXT_ON_DARK},
+                        "condition": {"test": "datum.dark", "value": TEXT_ON_DARK},
                         "value": TEXT_ON_LIGHT,
                     },
                 },
@@ -520,7 +557,7 @@ def salary_chart(data: Any) -> None:
         ],
     }
     with st.container(key="wide_chart"):  # scrolls sideways on a phone (see app/style.css)
-        _chart(data, spec, max(160, 44 * data["Role family"].nunique() + 90))
+        _chart(data, spec, max(200, 52 * data["Role family"].nunique() + 100))
 
 
 def salary_range(low: Any, high: Any, currency: Any) -> str:
@@ -529,9 +566,9 @@ def salary_range(low: Any, high: Any, currency: Any) -> str:
     if lo is None and hi is None:
         return "Not advertised"
     sign = "$" if currency == "USD" else f"{currency} " if isinstance(currency, str) else ""
-    if lo is not None and hi is not None and round(lo) != round(hi):
-        return f"{sign}{lo:.0f}K to {sign}{hi:.0f}K"
-    return f"{sign}{(lo if lo is not None else hi):.0f}K"
+    if lo is not None and hi is not None and k_text(lo, sign) != k_text(hi, sign):
+        return f"{k_text(lo, sign)} to {k_text(hi, sign)}"
+    return k_text(lo if lo is not None else hi, sign)
 
 
 @functools.lru_cache(maxsize=1)
