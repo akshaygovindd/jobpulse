@@ -18,7 +18,7 @@ from jobpulse.config import load_extraction, load_pipeline
 from jobpulse.extract.store import ensure_extract_tables
 from jobpulse.gold import build_gold
 from jobpulse.ingest.storage import LocalStorage
-from tests.warehouse_helpers import gh_job, ingest_day, query, run_pipeline
+from tests.warehouse_helpers import ashby_job, gh_job, ingest_day, query, run_pipeline
 
 D1, D2, D3 = date(2026, 11, 10), date(2026, 11, 11), date(2026, 11, 12)  # all in week of Nov 9
 
@@ -518,3 +518,46 @@ def test_company_domains_come_from_the_employers_file() -> None:
     domains = company_domains()
     assert domains["stripe"] == ["stripe.com"]
     assert "lyft" not in domains  # its links are on a shared vendor host
+
+
+def test_ats_structured_workplace_and_pay_beat_the_ai_reading(
+    storage: LocalStorage, db: Path
+) -> None:
+    """Ashby and Lever state workplace type and pay as structured fields that the AI never sees.
+    Gold prefers them; where the ATS states nothing the AI's reading stays (Greenhouse has none)."""
+    comp = {"summaryComponents": [
+        {"compensationType": "EquityPercentage", "interval": "NONE", "currencyCode": None,
+         "minValue": None, "maxValue": None},
+        {"compensationType": "Salary", "interval": "1 YEAR", "currencyCode": "USD",
+         "minValue": 176400, "maxValue": 226800},
+    ]}  # fmt: skip
+    ashby = [
+        {**ashby_job("A1"), "workplaceType": "Hybrid", "compensation": comp},
+        {**ashby_job("A2", desc="two"), "workplaceType": "Remote"},  # no pay stated
+    ]
+    lever = [
+        {"id": "L1", "text": "Data Engineer", "categories": {"location": "NYC"},
+         "descriptionPlain": "x", "hostedUrl": "https://example.test/l1", "workplaceType": "remote",
+         "salaryRange": {"min": 50, "max": 60, "currency": "USD", "interval": "per-hour-wage"}},
+    ]  # fmt: skip
+    ingest_day(storage, D1, "ashby", {"plaid": ashby})
+    ingest_day(storage, D1, "lever", {"spotify": lever})
+    ingest_day(storage, D1, "greenhouse", {"acme": [gh_job("G1")]})
+    run_pipeline(storage, db)
+    for pid in ("A1", "A2", "L1", "G1"):  # the AI read: on-site, and a different salary
+        add_extraction(db, pid, salary_min=1.0, salary_max=2.0, salary_currency="EUR",
+                       salary_period="year")  # fmt: skip
+    gold(db)
+    rows = query(
+        db,
+        "SELECT p.external_posting_id, f.remote_policy, f.salary_min, f.salary_max, "
+        "f.salary_currency, f.salary_period, f.salary_period_inferred FROM gold.fct_postings f "
+        "JOIN silver.dim_postings p USING (posting_key) ORDER BY 1",
+    )
+    got = {r[0]: r[1:] for r in rows}
+    assert got["A1"] == ("hybrid", 176400.0, 226800.0, "USD", "year", False)
+    assert got["A2"][0] == "remote"
+    assert got["A2"][1:5] == (1.0, 2.0, "EUR", "year")
+    assert got["L1"] == ("remote", 50.0, 60.0, "USD", "hour", False)
+    assert got["G1"][0] == "onsite"
+    assert got["G1"][1] == 1.0

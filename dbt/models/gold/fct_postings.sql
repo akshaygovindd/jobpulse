@@ -24,21 +24,33 @@ base as (
         e.content_hash is not null as has_extraction,
         e.role_family,
         e.seniority,
-        e.remote_policy,
+        -- the ATS's own structured workplace type and pay win over the AI's reading of the text
+        coalesce(sf.remote_policy, e.remote_policy) as remote_policy,
+        sf.remote_policy is not null as remote_from_ats,
+        sf.pay_period is not null as salary_from_ats,
         e.sponsorship_statement,
         e.sponsorship_original_text,
-        e.salary_min,
-        e.salary_max,
-        e.salary_currency,
-        e.salary_period,
-        coalesce(e.salary_period_inferred, false) as salary_period_inferred,
-        case e.salary_period
+        case when sf.pay_period is not null then sf.pay_min else e.salary_min end as salary_min,
+        case when sf.pay_period is not null then sf.pay_max else e.salary_max end as salary_max,
+        case when sf.pay_period is not null then sf.pay_currency else e.salary_currency end
+            as salary_currency,
+        case when sf.pay_period is not null then sf.pay_period else e.salary_period end
+            as salary_period,
+        case when sf.pay_period is not null then false
+            else coalesce(e.salary_period_inferred, false) end as salary_period_inferred,
+        case case when sf.pay_period is not null then sf.pay_period else e.salary_period end
             {% for period, factor in factors.items() %}
             when '{{ period }}' then {{ factor }}
             {% endfor %}
         end as annual_factor
     from {{ ref('dim_postings') }} as p
     left join ext as e on p.content_hash = e.content_hash
+    -- structured fields apply only to analyzed postings (extracted fields stay NULL until then)
+    left join {{ ref('int_structured_fields') }} as sf
+        on e.content_hash is not null
+        and p.source_id = sf.source_id
+        and p.external_posting_id = sf.external_posting_id
+        and p.content_hash = sf.content_hash
 )
 
 select
@@ -71,6 +83,8 @@ select
     b.role_family,
     b.seniority,
     b.remote_policy,
+    b.remote_from_ats,
+    b.salary_from_ats,
     lm.city,
     lm.city_name,
     lm.city_state,

@@ -674,3 +674,14 @@ def test_a_card_without_an_apply_link_falls_back_to_the_careers_page(
     monkeypatch.setattr("jobpulse.app_ui.careers_urls", lambda: {})
     none = _analyze(_open(resume_db, monkeypatch), RESUME)
     assert not [b for b in none.get("link_button") if b.label in ("Apply", "Careers page")]
+
+
+def test_badge_for_a_posting_with_no_stated_place_carries_the_us_only_tooltip(
+    resume_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    at = _analyze(_open(resume_db, monkeypatch), RESUME)
+    assert not at.exception, at.exception
+    helps = [b.proto.help for b in at.get("badge")] if at.get("badge") else []
+    assert "H-1B applies to US roles only" in " ".join(helps) or not helps
+    source = (ROOT / "app/app_pages/resume_match.py").read_text()
+    assert 'visa_help=(\n            "H-1B applies to US roles only"' in source

@@ -947,3 +947,10 @@ Checks: `make check` (see the last run below). Not verified: a real touch swipe 
 4. H-1B badge: postings with no place (remote or multi-location) keep it. Hide it for those too?
 5. Intern pay rule: yearly ranges wider than 2x are hidden (`config/app.yaml` `pay.intern_max_range_ratio`). OK?
 6. `careers_url` is set only for Lyft and Squarespace; the rest fall back to their ATS board page. Add real careers URLs for the others?
+
+
+## 2026-11-20 (late night): ATS structured fields
+
+**What changed and why.** Per the owner's decision, `int_structured_fields` reads Ashby and Lever workplace type and pay from the raw bronze payload; `fct_postings` prefers them over the AI's reading (analyzed postings only) and keeps the AI value where the ATS states nothing. No re-extraction ($0). Coverage of 515 analyzed postings: salary 73% to 79%, remote stated 63% to 73%. The no-place H-1B badge keeps a tooltip "H-1B applies to US roles only".
+**Checks.** `make check` green (583 tests); new gold test with Ashby, Lever and Greenhouse postings. Gold rebuilt (87 dbt checks), exported, uploaded to `gold-latest`.
+**Open questions.** None. Reboot the Streamlit app after the push.

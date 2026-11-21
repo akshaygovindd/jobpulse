@@ -109,6 +109,7 @@ def match_card(
     filings: int,
     apply_url: str,
     apply_label: str = "Apply",
+    visa_help: str | None = None,
     matched_shown: int = 8,
     missing_shown: int = 5,
 ) -> None:
@@ -133,6 +134,7 @@ def match_card(
                 badge_text(visa_label),
                 color=visa_color,  # type: ignore[arg-type]
                 icon=visa_icon,
+                help=visa_help,
             )
             if filings:
                 st.badge(f"{filings:,} certified H-1B filings", color="gray")

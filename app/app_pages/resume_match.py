@@ -429,6 +429,12 @@ for rank, m in enumerate(matches[:shown]):
         filings=info["filings"],
         apply_url=info["apply_url"] or info["careers_url"],
         apply_label="Apply" if info["apply_url"] else "Careers page",
+        # no stated place (remote or multi-location): the badge stays, with the scope in a tooltip
+        visa_help=(
+            "H-1B applies to US roles only"
+            if not info["country"] and info["visa_class"] in ("HISTORICAL_EVIDENCE", "UNKNOWN")
+            else None
+        ),
     )
 if len(matches) > shown:
     st.button(
