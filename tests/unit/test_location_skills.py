@@ -191,7 +191,7 @@ def test_junk_and_misspelled_locations_from_the_qa_audit(raw: str, label: str | 
         ("Hybrid - New York, NY", "New York, New York"),
         ("Remote - New York, NY", "New York, New York"),
         ("On-site - Boston, MA", "Boston, Massachusetts"),
-        ("Onsite – Austin, TX", "Austin, Texas"),
+        ("Onsite \u2013 Austin, TX", "Austin, Texas"),
         ("hybrid: Toronto, ON", "Toronto, Ontario"),
     ],
 )
